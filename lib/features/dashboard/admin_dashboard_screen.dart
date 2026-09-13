@@ -18,6 +18,12 @@ import '../notices/notices_screen.dart';
 import '../events/events_screen.dart';
 import '../admissions/admissions_screen.dart';
 import '../settings/settings_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/network/api_client.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_screen.dart';
+import '../../services/admin_dashboard_service.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -27,6 +33,17 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  final ApiClient _apiClient = ApiClient();
+
+  late final AdminDashboardService _dashboardService;
+
+  bool _isLoadingDashboard = true;
+  String? _dashboardError;
+
+  int _studentCount = 0;
+  int _teacherCount = 0;
+  int _classCount = 0;
+
   int selectedIndex = 0;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -43,6 +60,68 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     // Dashboard is currently the only functional page.
     // Other modules will be connected one by one.
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _dashboardService = AdminDashboardService(_apiClient);
+
+    _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardData() async {
+    setState(() {
+      _isLoadingDashboard = true;
+      _dashboardError = null;
+    });
+
+    try {
+      final data = await _dashboardService.getDashboardCounts();
+
+      if (!mounted) return;
+
+      setState(() {
+        _studentCount = data['students'] ?? 0;
+        _teacherCount = data['teachers'] ?? 0;
+        _classCount = data['classes'] ?? 0;
+
+        _isLoadingDashboard = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingDashboard = false;
+        _dashboardError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      final apiClient = ApiClient();
+      final authService = AuthService(apiClient);
+
+      await authService.logout();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('jwt_token');
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   String _menuName(int index) {
@@ -150,12 +229,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Good Morning, Admin 👋',
+                'Dashboard',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF111827),
                 ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _isLoadingDashboard ? null : _loadDashboardData,
+                    tooltip: 'Refresh dashboard',
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
@@ -225,28 +314,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           children: [
             StatCard(
               title: 'Students',
-              value: '350',
-              subtitle: 'Total Students',
-              icon: Icons.school_outlined,
-              onTap: () => _onMenuSelected(1),
+              value: _isLoadingDashboard ? '...' : _studentCount.toString(),
+              icon: Icons.people,
+              subtitle: 'Total students',
             ),
 
             StatCard(
               title: 'Teachers',
-              value: '28',
-              subtitle: 'Active Teachers',
-              icon: Icons.person_outline,
-              onTap: () => _onMenuSelected(2),
+              value: _isLoadingDashboard ? '...' : _teacherCount.toString(),
+              icon: Icons.person,
+              subtitle: 'Total teachers',
             ),
-
             StatCard(
               title: 'Classes',
-              value: '12',
-              subtitle: 'Active Classes',
-              icon: Icons.class_outlined,
-              onTap: () => _onMenuSelected(3),
+              value: _isLoadingDashboard ? '...' : _classCount.toString(),
+              icon: Icons.class_,
+              subtitle: 'Total classes',
             ),
-
             StatCard(
               title: 'Parents',
               value: '310',
@@ -923,23 +1007,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const SizedBox(width: 12),
 
                 ElevatedButton(
-                  onPressed: () {
-                    // TODO:
-                    // Later we will clear the admin JWT
-                    // and navigate to AdminLoginScreen.
-
-                    setState(() {
-                      selectedIndex = 0;
-                    });
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Logout functionality will be connected later.',
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: _logout,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFDC2626),
                     foregroundColor: Colors.white,

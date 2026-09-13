@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'features/dashboard/admin_dashboard_screen.dart';
+import 'features/auth/register_screen.dart';
 
 void main() {
   runApp(const SmartKidsAdminApp());
@@ -13,12 +13,13 @@ class SmartKidsAdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'SmartKids Patashala Admin',
+      title: 'MySchool Admin',
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Arial',
       ),
-      home: const AdminDashboardScreen(),
+      home:RegisterScreen(),
+      //home: const AdminDashboardScreen(),
     );
   }
 }

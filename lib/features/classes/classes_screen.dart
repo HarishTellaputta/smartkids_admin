@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smartkids_admin/features/classes/models/class_form_model.dart';
+import 'package:smartkids_admin/features/teachers/models/class_model.dart';
+import 'package:smartkids_admin/features/teachers/models/subject_model.dart';
+import 'package:smartkids_admin/features/teachers/services/class_service.dart';
+import 'package:smartkids_admin/features/teachers/services/class_subject_service.dart';
+import 'package:smartkids_admin/features/teachers/services/subject_service.dart';
 
 class ClassesScreen extends StatefulWidget {
   const ClassesScreen({super.key});
@@ -8,92 +15,28 @@ class ClassesScreen extends StatefulWidget {
 }
 
 class _ClassesScreenState extends State<ClassesScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  static const int _schoolId = 1;
+  final Map<int, List<SubjectModel>> _classSubjectsMap = {};
+  ClassService? _classService;
+  ClassSubjectService? _classSubjectService;
+  SubjectService? _subjectService;
 
+  List<SubjectModel> _allSubjects = [];
+  List<SubjectModel> _classSubjects = [];
+  List<SchoolClass> _classes = [];
+  List<SchoolClass> _filteredClasses = [];
+
+  bool _subjectsLoading = false;
+  bool _isLoading = true;
   String _searchQuery = '';
 
-  final List<Map<String, dynamic>> classes = [
-    {
-      'id': 'CLS001',
-      'className': 'Class 1',
-      'section': 'A',
-      'classTeacher': 'Lakshmi Devi',
-      'room': '101',
-      'students': 28,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS002',
-      'className': 'Class 1',
-      'section': 'B',
-      'classTeacher': 'Ravi Kumar',
-      'room': '102',
-      'students': 30,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS003',
-      'className': 'Class 2',
-      'section': 'A',
-      'classTeacher': 'Anitha Reddy',
-      'room': '201',
-      'students': 32,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS004',
-      'className': 'Class 3',
-      'section': 'A',
-      'classTeacher': 'Mahesh Babu',
-      'room': '301',
-      'students': 29,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS005',
-      'className': 'Class 4',
-      'section': 'A',
-      'classTeacher': 'Priya Sharma',
-      'room': '401',
-      'students': 31,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS006',
-      'className': 'Class 5',
-      'section': 'A',
-      'classTeacher': 'Srinivas Rao',
-      'room': '501',
-      'students': 34,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS007',
-      'className': 'Class 6',
-      'section': 'A',
-      'classTeacher': 'Ravi Kumar',
-      'room': '601',
-      'students': 27,
-      'capacity': 35,
-      'status': 'Active',
-    },
-    {
-      'id': 'CLS008',
-      'className': 'Class 7',
-      'section': 'A',
-      'classTeacher': 'Anitha Reddy',
-      'room': '701',
-      'students': 26,
-      'capacity': 35,
-      'status': 'Active',
-    },
-  ];
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
 
   @override
   void dispose() {
@@ -101,44 +44,409 @@ class _ClassesScreenState extends State<ClassesScreen> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get filteredClasses {
-    if (_searchQuery.trim().isEmpty) {
-      return classes;
+  // ============================================================
+  // INITIALIZE
+  // ============================================================
+
+  Future<void> _initialize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        _showMessage('JWT token not found. Please login again.', isError: true);
+
+        return;
+      }
+
+      _classService = ClassService(token);
+      _classSubjectService = ClassSubjectService(token);
+      _subjectService = SubjectService(token);
+      await _loadClasses();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showMessage('Initialization failed: $e', isError: true);
+    }
+  }
+
+  // ============================================================
+  Future<void> _loadClasses() async {
+    if (_classService == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final data = await _classService!.getClassesBySchool(_schoolId);
+
+      if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final classSubjectService = ClassSubjectService(token);
+
+      final Map<int, List<SubjectModel>> subjectMap = {};
+
+      // Load subjects for each class
+      for (final classItem in data) {
+        if (classItem.id == null) {
+          continue;
+        }
+
+        try {
+          final subjects = await classSubjectService.getClassSubjects(
+            classItem.id!,
+          );
+
+          subjectMap[classItem.id!] = subjects;
+        } catch (e) {
+          // Keep class visible even if subject loading fails
+          subjectMap[classItem.id!] = [];
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _classes = data;
+        _filteredClasses = List<SchoolClass>.from(data);
+
+        _classSubjectsMap
+          ..clear()
+          ..addAll(subjectMap);
+
+        _isLoading = false;
+      });
+
+      _applySearch();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showMessage('Failed to load classes: $e', isError: true);
+    }
+  }
+
+  Future<void> _loadClassSubjects(int classId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      setState(() {
+        _subjectsLoading = true;
+      });
+
+      final classSubjectService = ClassSubjectService(token);
+      final subjectService = SubjectService(token);
+
+      final results = await Future.wait([
+        classSubjectService.getClassSubjects(classId),
+        subjectService.getActiveSubjectsBySchool(_schoolId),
+      ]);
+
+      setState(() {
+        _classSubjects = results[0] as List<SubjectModel>;
+        _allSubjects = results[1] as List<SubjectModel>;
+        _subjectsLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _subjectsLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Future<void> _showManageSubjectsDialog(SchoolClass classModel) async {
+    if (classModel.id == null) {
+      _showMessage('Class ID is missing', isError: true);
+      return;
     }
 
-    final query = _searchQuery.toLowerCase().trim();
+    final classId = classModel.id!;
 
-    return classes.where((item) {
-      return item['className'].toString().toLowerCase().contains(query) ||
-          item['section'].toString().toLowerCase().contains(query) ||
-          item['classTeacher'].toString().toLowerCase().contains(query) ||
-          item['room'].toString().toLowerCase().contains(query) ||
-          item['id'].toString().toLowerCase().contains(query);
-    }).toList();
+    await _loadClassSubjects(classId);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('${classModel.name ?? '-'} - Subjects'),
+              content: SizedBox(
+                width: 500,
+                child: _subjectsLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _allSubjects.isEmpty
+                    ? const Text('No active subjects available.')
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _allSubjects.length,
+                        itemBuilder: (context, index) {
+                          final subject = _allSubjects[index];
+
+                          final isAssigned = _classSubjects.any(
+                            (item) => item.id == subject.id,
+                          );
+
+                          return CheckboxListTile(
+                            value: isAssigned,
+                            title: Text(subject.name),
+                            subtitle: Text(
+                              '${subject.code}'
+                              '${subject.description != null ? ' • ${subject.description}' : ''}',
+                            ),
+                            onChanged: (value) async {
+                              try {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+
+                                final token = prefs.getString('jwt_token');
+
+                                if (token == null || token.isEmpty) {
+                                  throw Exception(
+                                    'JWT token not found. Please login again.',
+                                  );
+                                }
+
+                                final service = ClassSubjectService(token);
+
+                                if (value == true) {
+                                  await service.assignSubjectToClass(
+                                    classId,
+                                    subject.id,
+                                  );
+                                } else {
+                                  await service.removeSubjectFromClass(
+                                    classId,
+                                    subject.id,
+                                  );
+                                }
+
+                                final updatedSubjects = await service
+                                    .getClassSubjects(classId);
+
+                                setDialogState(() {
+                                  _classSubjects = updatedSubjects;
+                                });
+
+                                if (mounted) {
+                                  setState(() {
+                                    _classSubjectsMap[classId] =
+                                        updatedSubjects;
+                                  });
+                                }
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        value == true
+                                            ? '${subject.name} assigned successfully'
+                                            : '${subject.name} removed successfully',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(e.toString())),
+                                  );
+                                }
+                              }
+                            },
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } // ============================================================
+  // SEARCH
+  // ============================================================
+
+  void _applySearch() {
+    final query = _searchQuery.trim().toLowerCase();
+
+    setState(() {
+      if (query.isEmpty) {
+        _filteredClasses = List.from(_classes);
+        return;
+      }
+
+      _filteredClasses = _classes.where((classItem) {
+        return (classItem.name ?? '').toLowerCase().contains(query) ||
+            (classItem.code ?? '').toLowerCase().contains(query) ||
+            (classItem.grade ?? '').toLowerCase().contains(query) ||
+            (classItem.description ?? '').toLowerCase().contains(query);
+      }).toList();
+    });
   }
 
-  int get totalStudents {
-    return classes.fold(0, (sum, item) => sum + (item['students'] as int));
+  // ============================================================
+  // CREATE CLASS
+  // ============================================================
+
+  Future<void> _createClass() async {
+    if (_classService == null) return;
+
+    final result = await _showClassDialog();
+
+    if (result == null) return;
+
+    try {
+      await _classService!.createClass(
+        schoolId: _schoolId,
+        name: result.name,
+        code: result.code,
+        grade: result.grade,
+        year: result.year,
+        description: result.description,
+      );
+
+      if (!mounted) return;
+
+      _showMessage('Class created successfully');
+
+      await _loadClasses();
+    } catch (e) {
+      _showMessage('Failed to create class: $e', isError: true);
+    }
   }
 
-  int get totalCapacity {
-    return classes.fold(0, (sum, item) => sum + (item['capacity'] as int));
+  //edit
+
+  Future<void> _editClass(SchoolClass classItem) async {
+    if (_classService == null) return;
+
+    if (classItem.id == null) {
+      _showMessage('Class ID is missing', isError: true);
+      return;
+    }
+
+    final result = await _showClassDialog(existingClass: classItem);
+
+    if (result == null) return;
+
+    try {
+      await _classService!.updateClass(
+        id: classItem.id!,
+        schoolId: _schoolId,
+        name: result.name,
+        code: result.code,
+        grade: result.grade,
+        year: result.year,
+        description: result.description,
+      );
+
+      if (!mounted) return;
+
+      _showMessage('Class updated successfully');
+
+      await _loadClasses();
+    } catch (e) {
+      _showMessage('Failed to update class: $e', isError: true);
+    }
   }
+  // ============================================================
+  // DELETE CLASS
+  // ============================================================
+
+  Future<ClassFormModel?> _showClassDialog({
+  SchoolClass? existingClass,
+}) async {
+  return showDialog<ClassFormModel>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return _ClassFormDialog(
+        existingClass: existingClass,
+        schoolId: _schoolId,
+      );
+    },
+  );
+}
+  // ============================================================
+  // UI
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
+      backgroundColor: const Color(0xfff5f7fb),
+      appBar: AppBar(
+        title: const Text(
+          'Classes',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _isLoading ? null : _loadClasses,
+            icon: const Icon(Icons.refresh),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(),
-            const SizedBox(height: 24),
+
+            const SizedBox(height: 20),
+
             _buildSummaryCards(),
-            const SizedBox(height: 24),
-            _buildClassesTable(),
+
+            const SizedBox(height: 20),
+
+            _buildSearchBar(),
+
+            const SizedBox(height: 20),
+
+            Expanded(child: _buildClassesTable()),
           ],
         ),
       ),
@@ -150,64 +458,31 @@ class _ClassesScreenState extends State<ClassesScreen> {
   // ============================================================
 
   Widget _buildHeader() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isSmall = constraints.maxWidth < 650;
-
-        if (isSmall) {
-          return Column(
+    return Row(
+      children: [
+        const Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeaderText(),
-              const SizedBox(height: 16),
-              _buildAddClassButton(),
+              Text(
+                'Class Management',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 5),
+              Text(
+                'Manage school classes and academic details',
+                style: TextStyle(color: Colors.grey),
+              ),
             ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(child: _buildHeaderText()),
-            _buildAddClassButton(),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildHeaderText() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Classes',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
           ),
         ),
-        const SizedBox(height: 7),
-        Text(
-          'Manage classes, sections, classrooms and class teachers.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+
+        ElevatedButton.icon(
+          onPressed: _createClass,
+          icon: const Icon(Icons.add),
+          label: const Text('Add Class'),
         ),
       ],
-    );
-  }
-
-  Widget _buildAddClassButton() {
-    return ElevatedButton.icon(
-      onPressed: _showAddClassDialog,
-      icon: const Icon(Icons.add, size: 19),
-      label: const Text('Add Class'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
     );
   }
 
@@ -216,51 +491,57 @@ class _ClassesScreenState extends State<ClassesScreen> {
   // ============================================================
 
   Widget _buildSummaryCards() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        int columns;
+    final totalClasses = _classes.length;
 
-        if (constraints.maxWidth >= 1000) {
-          columns = 4;
-        } else if (constraints.maxWidth >= 600) {
-          columns = 2;
-        } else {
-          columns = 1;
-        }
+    final currentYear = _classes.where((item) => item.year == 2026).length;
 
-        final availableSeats = totalCapacity - totalStudents;
+    final grades = _classes
+        .map((item) => item.grade)
+        .whereType<String>()
+        .where((grade) => grade.isNotEmpty)
+        .toSet()
+        .length;
 
-        return GridView.count(
-          crossAxisCount: columns,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: columns == 1 ? 4.0 : 2.5,
-          children: [
-            _summaryCard(
-              title: 'Total Classes',
-              value: '${classes.length}',
-              icon: Icons.class_outlined,
-            ),
-            _summaryCard(
-              title: 'Total Students',
-              value: '$totalStudents',
-              icon: Icons.people_outline,
-            ),
-            _summaryCard(
-              title: 'Classrooms',
-              value: '${classes.length}',
-              icon: Icons.meeting_room_outlined,
-            ),
-            _summaryCard(
-              title: 'Available Seats',
-              value: '$availableSeats',
-              icon: Icons.event_seat_outlined,
-            ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        Expanded(
+          child: _summaryCard(
+            title: 'Total Classes',
+            value: totalClasses.toString(),
+            icon: Icons.school,
+          ),
+        ),
+
+        const SizedBox(width: 15),
+
+        Expanded(
+          child: _summaryCard(
+            title: 'Academic Year 2026',
+            value: currentYear.toString(),
+            icon: Icons.calendar_today,
+          ),
+        ),
+
+        const SizedBox(width: 15),
+
+        Expanded(
+          child: _summaryCard(
+            title: 'Grades',
+            value: grades.toString(),
+            icon: Icons.grade,
+          ),
+        ),
+
+        const SizedBox(width: 15),
+
+        Expanded(
+          child: _summaryCard(
+            title: 'School ID',
+            value: _schoolId.toString(),
+            icon: Icons.business,
+          ),
+        ),
+      ],
     );
   }
 
@@ -269,52 +550,76 @@ class _ClassesScreenState extends State<ClassesScreen> {
     required String value,
     required IconData icon,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(12),
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: Colors.blue),
             ),
-            child: Icon(icon, color: const Color(0xFF2563EB), size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
+
+            const SizedBox(width: 14),
+
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // SEARCH
+  // ============================================================
+
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      onChanged: (value) {
+        _searchQuery = value;
+        _applySearch();
+      },
+      decoration: InputDecoration(
+        hintText: 'Search by class name, code, grade or description...',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                onPressed: () {
+                  _searchController.clear();
+                  _searchQuery = '';
+                  _applySearch();
+                },
+                icon: const Icon(Icons.clear),
+              )
+            : null,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
@@ -322,694 +627,234 @@ class _ClassesScreenState extends State<ClassesScreen> {
   // ============================================================
   // TABLE
   // ============================================================
-
   Widget _buildClassesTable() {
-    final data = filteredClasses;
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _buildTableToolbar(),
-          const SizedBox(height: 20),
-          data.isEmpty ? _buildEmptyState() : _buildTable(data),
-        ],
-      ),
-    );
-  }
+    if (_filteredClasses.isEmpty) {
+      return _buildEmptyState();
+    }
 
-  Widget _buildTableToolbar() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isSmall = constraints.maxWidth < 700;
+    return Card(
+      elevation: 0,
+      child: SingleChildScrollView(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
 
-        final searchBox = Container(
-          height: 44,
-          width: isSmall ? double.infinity : 300,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-            decoration: const InputDecoration(
-              hintText: 'Search classes...',
-              hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-              prefixIcon: Icon(
-                Icons.search,
-                size: 20,
-                color: Color(0xFF6B7280),
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        );
-
-        final filterButton = OutlinedButton.icon(
-          onPressed: _showFilterDialog,
-          icon: const Icon(Icons.filter_list, size: 18),
-          label: const Text('Filter'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF374151),
-            side: const BorderSide(color: Color(0xFFE5E7EB)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
-            ),
-          ),
-        );
-
-        if (isSmall) {
-          return Column(
-            children: [
-              searchBox,
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  filterButton,
-                  const Spacer(),
-                  Text(
-                    '${filteredClasses.length} classes',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            searchBox,
-            const SizedBox(width: 12),
-            filterButton,
-            const Spacer(),
-            Text(
-              '${filteredClasses.length} classes',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTable(List<Map<String, dynamic>> data) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
-        dataRowMinHeight: 65,
-        dataRowMaxHeight: 75,
-        columnSpacing: 28,
-        horizontalMargin: 12,
-        columns: const [
-          DataColumn(label: Text('Class')),
-          DataColumn(label: Text('Section')),
-          DataColumn(label: Text('Class Teacher')),
-          DataColumn(label: Text('Room')),
-          DataColumn(label: Text('Students')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Action')),
-        ],
-        rows: data.map((item) {
-          return DataRow(
-            cells: [
-              DataCell(_classCell(item)),
-              DataCell(_sectionBadge(item['section'])),
-              DataCell(
-                Text(
-                  item['classTeacher'],
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF374151),
-                  ),
+            // ============================================================
+            // TABLE HEADERS - 7 COLUMNS
+            // ============================================================
+            columns: const [
+              DataColumn(
+                label: Text(
+                  'Class',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.meeting_room_outlined,
-                      size: 17,
-                      color: Color(0xFF6B7280),
-                    ),
-                    const SizedBox(width: 6),
+              DataColumn(
+                label: Text(
+                  'Code',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'Grade',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'Year',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'Subjects',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'Description',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'Action',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+
+            // ============================================================
+            // TABLE ROWS
+            // ============================================================
+            rows: _filteredClasses.map((classItem) {
+              final classId = classItem.id;
+
+              // Get subjects assigned to this class
+              final subjects = classId != null
+                  ? (_classSubjectsMap[classId] ?? [])
+                  : <SubjectModel>[];
+
+              return DataRow(
+                cells: [
+                  // ======================================================
+                  // 1. CLASS
+                  // ======================================================
+                  DataCell(
                     Text(
-                      item['room'],
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF374151),
+                      classItem.name ?? '-',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+
+                  // ======================================================
+                  // 2. CODE
+                  // ======================================================
+                  DataCell(Text(classItem.code ?? '-')),
+
+                  // ======================================================
+                  // 3. GRADE
+                  // ======================================================
+                  DataCell(Text(classItem.grade ?? '-')),
+
+                  // ======================================================
+                  // 4. YEAR
+                  // ======================================================
+                  DataCell(Text(classItem.year?.toString() ?? '-')),
+
+                  // ======================================================
+                  // 5. SUBJECTS
+                  // ======================================================
+                  DataCell(
+                    SizedBox(
+                      width: 250,
+                      child: subjects.isEmpty
+                          ? const Text(
+                              'No subjects assigned',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            )
+                          : Text(
+                              subjects
+                                  .map((subject) => subject.name)
+                                  .join(', '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                    ),
+                  ),
+
+                  // ======================================================
+                  // 6. DESCRIPTION
+                  // ======================================================
+                  DataCell(
+                    SizedBox(
+                      width: 250,
+                      child: Text(
+                        classItem.description ?? '-',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              DataCell(_studentCountCell(item)),
-              DataCell(_statusBadge(item['status'])),
-              DataCell(
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    _handleClassAction(value, item);
-                  },
-                  itemBuilder: (context) {
-                    return const [
-                      PopupMenuItem(value: 'view', child: Text('View')),
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ];
-                  },
-                  child: const Icon(Icons.more_vert, color: Color(0xFF6B7280)),
-                ),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
+                  ),
 
-  Widget _classCell(Map<String, dynamic> item) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          height: 40,
-          width: 40,
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(
-            Icons.school_outlined,
-            color: Color(0xFF2563EB),
-            size: 21,
-          ),
-        ),
-        const SizedBox(width: 11),
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item['className'],
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              item['id'],
-              style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _sectionBadge(String section) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3E8FF),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        'Section $section',
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF7E22CE),
-        ),
-      ),
-    );
-  }
-
-  Widget _studentCountCell(Map<String, dynamic> item) {
-    final students = item['students'] as int;
-    final capacity = item['capacity'] as int;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '$students',
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
-          ),
-        ),
-        Text(
-          ' / $capacity',
-          style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-        ),
-      ],
-    );
-  }
-
-  Widget _statusBadge(String status) {
-    final active = status == 'Active';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: active ? const Color(0xFF15803D) : const Color(0xFFDC2626),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 60),
-      child: Column(
-        children: [
-          Icon(Icons.search_off, size: 50, color: Color(0xFFD1D5DB)),
-          SizedBox(height: 12),
-          Text(
-            'No classes found',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF374151),
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Try changing your search.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // ADD CLASS
-  // ============================================================
-
-  void _showAddClassDialog() {
-    final formKey = GlobalKey<FormState>();
-
-    String selectedClass = 'Class 1';
-    String selectedSection = 'A';
-    String selectedTeacher = 'Lakshmi Devi';
-    String selectedStatus = 'Active';
-
-    final roomController = TextEditingController();
-    final capacityController = TextEditingController(text: '35');
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              insetPadding: const EdgeInsets.all(20),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 600,
-                  maxHeight: 650,
-                ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(28),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // ======================================================
+                  // 7. ACTION
+                  // ======================================================
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              height: 46,
-                              width: 46,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEFF6FF),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.add_business_outlined,
-                                color: Color(0xFF2563EB),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Add New Class',
-                                    style: TextStyle(
-                                      fontSize: 21,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF111827),
-                                    ),
-                                  ),
-                                  SizedBox(height: 3),
-                                  Text(
-                                    'Create a class and assign its teacher.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () {
-                                Navigator.pop(dialogContext);
-                              },
-                              icon: const Icon(Icons.close),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 28),
-
-                        _sectionTitle('Class Information'),
-
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedClass,
-                          decoration: _inputDecoration(
-                            label: 'Class',
-                            icon: Icons.school_outlined,
-                          ),
-                          items: List.generate(
-                            10,
-                            (index) => DropdownMenuItem(
-                              value: 'Class ${index + 1}',
-                              child: Text('Class ${index + 1}'),
-                            ),
-                          ),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() {
-                                selectedClass = value;
-                              });
-                            }
+                        // Manage Subjects
+                        IconButton(
+                          tooltip: 'Manage Subjects',
+                          onPressed: () {
+                            _showManageSubjectsDialog(classItem);
                           },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            if (constraints.maxWidth >= 500) {
-                              return Row(
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: selectedSection,
-                                      decoration: _inputDecoration(
-                                        label: 'Section',
-                                        icon: Icons.segment_outlined,
-                                      ),
-                                      items: const ['A', 'B', 'C', 'D'].map((
-                                        value,
-                                      ) {
-                                        return DropdownMenuItem(
-                                          value: value,
-                                          child: Text('Section $value'),
-                                        );
-                                      }).toList(),
-                                      onChanged: (value) {
-                                        if (value != null) {
-                                          setDialogState(() {
-                                            selectedSection = value;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: _textField(
-                                      controller: roomController,
-                                      label: 'Room Number',
-                                      hint: 'e.g. 201',
-                                      icon: Icons.meeting_room_outlined,
-                                      required: true,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-
-                            return Column(
-                              children: [
-                                DropdownButtonFormField<String>(
-                                  initialValue: selectedSection,
-                                  decoration: _inputDecoration(
-                                    label: 'Section',
-                                    icon: Icons.segment_outlined,
-                                  ),
-                                  items: const ['A', 'B', 'C', 'D'].map((
-                                    value,
-                                  ) {
-                                    return DropdownMenuItem(
-                                      value: value,
-                                      child: Text('Section $value'),
-                                    );
-                                  }).toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setDialogState(() {
-                                        selectedSection = value;
-                                      });
-                                    }
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                _textField(
-                                  controller: roomController,
-                                  label: 'Room Number',
-                                  hint: 'e.g. 201',
-                                  icon: Icons.meeting_room_outlined,
-                                  required: true,
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedTeacher,
-                          decoration: _inputDecoration(
-                            label: 'Class Teacher',
-                            icon: Icons.person_outline,
+                          icon: const Icon(
+                            Icons.menu_book_outlined,
+                            color: Colors.blue,
                           ),
-                          items:
-                              [
-                                'Lakshmi Devi',
-                                'Ravi Kumar',
-                                'Anitha Reddy',
-                                'Mahesh Babu',
-                                'Priya Sharma',
-                                'Srinivas Rao',
-                              ].map((value) {
-                                return DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() {
-                                selectedTeacher = value;
-                              });
-                            }
+                        ),
+
+                        // View
+                        IconButton(
+                          tooltip: 'View',
+                          onPressed: () {
+                            _viewClass(classItem);
                           },
+                          icon: const Icon(Icons.visibility_outlined),
                         ),
 
-                        const SizedBox(height: 16),
-
-                        _textField(
-                          controller: capacityController,
-                          label: 'Student Capacity',
-                          hint: 'e.g. 35',
-                          icon: Icons.people_outline,
-                          keyboardType: TextInputType.number,
-                          required: true,
+                        // Edit
+                        IconButton(
+                          tooltip: 'Edit',
+                          onPressed: () {
+                            _editClass(classItem);
+                          },
+                          icon: const Icon(Icons.edit_outlined),
                         ),
 
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedStatus,
-                          decoration: _inputDecoration(
-                            label: 'Status',
-                            icon: Icons.toggle_on_outlined,
+                        // Delete
+                        IconButton(
+                          tooltip: 'Delete',
+                          onPressed: () {
+                            _deleteClass(classItem);
+                          },
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
                           ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Active',
-                              child: Text('Active'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Inactive',
-                              child: Text('Inactive'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() {
-                                selectedStatus = value;
-                              });
-                            }
-                          },
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            OutlinedButton(
-                              onPressed: () {
-                                Navigator.pop(dialogContext);
-                              },
-                              child: const Text('Cancel'),
-                            ),
-                            const SizedBox(width: 12),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                if (!formKey.currentState!.validate()) {
-                                  return;
-                                }
-
-                                final capacity =
-                                    int.tryParse(
-                                      capacityController.text.trim(),
-                                    ) ??
-                                    35;
-
-                                final newClass = {
-                                  'id':
-                                      'CLS${(classes.length + 1).toString().padLeft(3, '0')}',
-                                  'className': selectedClass,
-                                  'section': selectedSection,
-                                  'classTeacher': selectedTeacher,
-                                  'room': roomController.text.trim(),
-                                  'students': 0,
-                                  'capacity': capacity,
-                                  'status': selectedStatus,
-                                };
-
-                                setState(() {
-                                  classes.add(newClass);
-                                });
-
-                                Navigator.pop(dialogContext);
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${newClass['className']} - Section ${newClass['section']} created successfully.',
-                                    ),
-                                    backgroundColor: const Color(0xFF15803D),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.check, size: 18),
-                              label: const Text('Save Class'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2563EB),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ),
     );
   }
 
-  // ============================================================
-  // VIEW / EDIT / DELETE
-  // ============================================================
-
-  void _handleClassAction(String action, Map<String, dynamic> item) {
-    switch (action) {
-      case 'view':
-        _showClassDetails(item);
-        break;
-      case 'edit':
-        _showEditClassDialog(item);
-        break;
-      case 'delete':
-        _showDeleteConfirmation(item);
-        break;
-    }
-  }
-
-  void _showClassDetails(Map<String, dynamic> item) {
+  void _viewClass(SchoolClass classItem) {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('${item['className']} - Section ${item['section']}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _detailRow('Class ID', item['id']),
-              _detailRow('Class Teacher', item['classTeacher']),
-              _detailRow('Room', item['room']),
-              _detailRow('Students', '${item['students']}'),
-              _detailRow('Capacity', '${item['capacity']}'),
-              _detailRow('Available', '${item['capacity'] - item['students']}'),
-              _detailRow('Status', item['status']),
-            ],
+          title: Text(classItem.name ?? '-'),
+          content: SizedBox(
+            width: 450,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _detailRow('Class ID', classItem.id?.toString() ?? '-'),
+                _detailRow('School ID', classItem.schoolId?.toString() ?? '-'),
+                _detailRow('School', classItem.schoolName ?? '-'),
+                _detailRow('Class Name', classItem.name ?? '-'),
+                _detailRow('Code', classItem.code ?? '-'),
+                _detailRow('Grade', classItem.grade ?? '-'),
+                _detailRow('Academic Year', classItem.year?.toString() ?? '-'),
+                _detailRow('Description', classItem.description ?? '-'),
+              ],
+            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+              },
               child: const Text('Close'),
             ),
           ],
@@ -1018,399 +863,375 @@ class _ClassesScreenState extends State<ClassesScreen> {
     );
   }
 
-  Widget _detailRow(String title, String value) {
+  Widget _detailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 105,
+            width: 120,
             child: Text(
-              title,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
-            ),
-          ),
+          Expanded(child: Text(value)),
         ],
       ),
     );
   }
 
-  void _showEditClassDialog(Map<String, dynamic> item) {
-    String selectedTeacher = item['classTeacher'];
+  Future<void> _deleteClass(SchoolClass classItem) async {
+    if (_classService == null) {
+      return;
+    }
 
-    String selectedStatus = item['status'];
+    if (classItem.id == null) {
+      _showMessage('Class ID is missing', isError: true);
+      return;
+    }
 
-    final roomController = TextEditingController(text: item['room']);
-
-    final capacityController = TextEditingController(
-      text: '${item['capacity']}',
-    );
-
-    showDialog(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(
-                'Edit ${item['className']} - Section ${item['section']}',
-              ),
-              content: SizedBox(
-                width: 480,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _textField(
-                      controller: roomController,
-                      label: 'Room Number',
-                      hint: 'e.g. 201',
-                      icon: Icons.meeting_room_outlined,
-                      required: true,
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedTeacher,
-                      decoration: _inputDecoration(
-                        label: 'Class Teacher',
-                        icon: Icons.person_outline,
-                      ),
-                      items:
-                          [
-                            'Lakshmi Devi',
-                            'Ravi Kumar',
-                            'Anitha Reddy',
-                            'Mahesh Babu',
-                            'Priya Sharma',
-                            'Srinivas Rao',
-                          ].map((value) {
-                            return DropdownMenuItem(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedTeacher = value;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    _textField(
-                      controller: capacityController,
-                      label: 'Student Capacity',
-                      hint: 'e.g. 35',
-                      icon: Icons.people_outline,
-                      keyboardType: TextInputType.number,
-                      required: true,
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedStatus,
-                      decoration: _inputDecoration(
-                        label: 'Status',
-                        icon: Icons.toggle_on_outlined,
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Active',
-                          child: Text('Active'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Inactive',
-                          child: Text('Inactive'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedStatus = value;
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final capacity = int.tryParse(
-                      capacityController.text.trim(),
-                    );
-
-                    if (roomController.text.trim().isEmpty ||
-                        capacity == null) {
-                      return;
-                    }
-
-                    setState(() {
-                      item['room'] = roomController.text.trim();
-                      item['capacity'] = capacity;
-                      item['classTeacher'] = selectedTeacher;
-                      item['status'] = selectedStatus;
-                    });
-
-                    Navigator.pop(dialogContext);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Class updated successfully.'),
-                        backgroundColor: Color(0xFF15803D),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Save Changes'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showDeleteConfirmation(Map<String, dynamic> item) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
+      builder: (context) {
         return AlertDialog(
-          title: const Text('Delete Class?'),
+          title: const Text('Delete Class'),
           content: Text(
-            'Are you sure you want to delete ${item['className']} - Section ${item['section']}?',
+            'Are you sure you want to delete '
+            '"${classItem.name ?? '-'}"?',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  classes.remove(item);
-                });
-
-                Navigator.pop(dialogContext);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Class deleted successfully.')),
-                );
-              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
+                backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
               child: const Text('Delete'),
             ),
           ],
         );
       },
     );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await _classService!.deleteClass(classItem.id!);
+
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage('Class deleted successfully');
+
+      await _loadClasses();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage('Failed to delete class: $e', isError: true);
+    }
   }
 
-  // ============================================================
-  // FILTER
-  // ============================================================
 
-  void _showFilterDialog() {
-    String selectedClass = 'All Classes';
-    String selectedSection = 'All Sections';
-    String selectedStatus = 'All';
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Filter Classes'),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedClass,
-                      decoration: const InputDecoration(
-                        labelText: 'Class',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          [
-                            'All Classes',
-                            ...List.generate(
-                              10,
-                              (index) => 'Class ${index + 1}',
-                            ),
-                          ].map((value) {
-                            return DropdownMenuItem(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedClass = value;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedSection,
-                      decoration: const InputDecoration(
-                        labelText: 'Section',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const ['All Sections', 'A', 'B', 'C', 'D'].map((
-                        value,
-                      ) {
-                        return DropdownMenuItem(
-                          value: value,
-                          child: Text(
-                            value == 'All Sections' ? value : 'Section $value',
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedSection = value;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Status',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const ['All', 'Active', 'Inactive'].map((value) {
-                        return DropdownMenuItem(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedStatus = value;
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.school_outlined, size: 70, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            const Text(
+              'No Classes Found',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'No classes match your search.'
+                  : 'No classes have been added yet.',
+              style: TextStyle(color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            if (_searchQuery.isEmpty)
+              ElevatedButton.icon(
+                onPressed: _createClass,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Class'),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Close'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
   // ============================================================
-  // COMMON WIDGETS
+  // DETAIL ROW
+  // ==========================================================
+  // ============================================================
+  // MESSAGE
   // ============================================================
 
-  Widget _sectionTitle(String title) {
-    return Row(
-      children: [
-        Container(
-          height: 5,
-          width: 5,
-          decoration: const BoxDecoration(
-            color: Color(0xFF2563EB),
-            shape: BoxShape.circle,
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
+  }
+}
+class _ClassFormDialog extends StatefulWidget {
+  final SchoolClass? existingClass;
+  final int schoolId;
+
+  const _ClassFormDialog({
+    required this.existingClass,
+    required this.schoolId,
+  });
+
+  @override
+  State<_ClassFormDialog> createState() => _ClassFormDialogState();
+}
+
+class _ClassFormDialogState extends State<_ClassFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _codeController;
+  late final TextEditingController _gradeController;
+  late final TextEditingController _yearController;
+  late final TextEditingController _descriptionController;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _nameController = TextEditingController(
+      text: widget.existingClass?.name ?? '',
+    );
+
+    _codeController = TextEditingController(
+      text: widget.existingClass?.code ?? '',
+    );
+
+    _gradeController = TextEditingController(
+      text: widget.existingClass?.grade ?? '',
+    );
+
+    _yearController = TextEditingController(
+      text: widget.existingClass?.year?.toString() ?? '2026',
+    );
+
+    _descriptionController = TextEditingController(
+      text: widget.existingClass?.description ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _codeController.dispose();
+    _gradeController.dispose();
+    _yearController.dispose();
+    _descriptionController.dispose();
+
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final year = int.tryParse(
+      _yearController.text.trim(),
+    );
+
+    if (year == null) {
+      return;
+    }
+
+    final result = ClassFormModel(
+      id: widget.existingClass?.id ?? 0,
+      schoolId: widget.schoolId,
+      schoolName: widget.existingClass?.schoolName,
+      name: _nameController.text.trim(),
+      code: _codeController.text.trim(),
+      grade: _gradeController.text.trim(),
+      year: year,
+      description: _descriptionController.text.trim().isEmpty
+          ? null
+          : _descriptionController.text.trim(),
+      createdAt: widget.existingClass?.createdAt,
+      updatedAt: widget.existingClass?.updatedAt,
+    );
+
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existingClass != null;
+
+    return AlertDialog(
+      title: Text(
+        isEdit ? 'Edit Class' : 'Add Class',
+      ),
+
+      content: SizedBox(
+        width: 500,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ========================================================
+                // CLASS NAME
+                // ========================================================
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Class Name',
+                    hintText: 'Example: Class 1',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter class name';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // ========================================================
+                // CLASS CODE
+                // ========================================================
+                TextFormField(
+                  controller: _codeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Class Code',
+                    hintText: 'Example: CLS-01',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter class code';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // ========================================================
+                // GRADE
+                // ========================================================
+                TextFormField(
+                  controller: _gradeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Grade',
+                    hintText: 'Example: 1',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter grade';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // ========================================================
+                // ACADEMIC YEAR
+                // ========================================================
+                TextFormField(
+                  controller: _yearController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Academic Year',
+                    hintText: 'Example: 2026',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter academic year';
+                    }
+
+                    final year = int.tryParse(
+                      value.trim(),
+                    );
+
+                    if (year == null) {
+                      return 'Please enter a valid year';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // ========================================================
+                // DESCRIPTION
+                // ========================================================
+                TextFormField(
+                  controller: _descriptionController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'Enter class description',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
+      ),
+
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text('Cancel'),
+        ),
+
+        ElevatedButton(
+          onPressed: _submit,
+          child: Text(
+            isEdit ? 'Update' : 'Create',
           ),
         ),
       ],
-    );
-  }
-
-  Widget _textField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType? keyboardType,
-    bool required = false,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: required
-          ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return '$label is required';
-              }
-
-              return null;
-            }
-          : null,
-      decoration: _inputDecoration(label: label, hint: hint, icon: icon),
-    );
-  }
-
-  InputDecoration _inputDecoration({
-    required String label,
-    String? hint,
-    required IconData icon,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF6B7280)),
-      labelStyle: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-      filled: true,
-      fillColor: const Color(0xFFFAFAFA),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(9),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(9),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(9),
-        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-      ),
     );
   }
 }

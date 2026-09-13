@@ -26,7 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String dateFormat = 'DD MMM YYYY';
 
   final schoolNameController = TextEditingController(
-    text: 'SmartKids Patashala',
+    text: 'MySchool',
   );
 
   final schoolCodeController = TextEditingController(text: 'SKP-001');
@@ -34,7 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final schoolPhoneController = TextEditingController(text: '9876543210');
 
   final schoolEmailController = TextEditingController(
-    text: 'admin@smartkidspatashala.com',
+    text: 'admin@myschool.com',
   );
 
   final schoolAddressController = TextEditingController(
@@ -661,7 +661,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _preferenceItem(
             icon: Icons.help_outline,
             title: 'Help & Support',
-            subtitle: 'Contact SmartKids support for assistance.',
+            subtitle: 'Contact MySchool support for assistance.',
             trailing: TextButton(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(

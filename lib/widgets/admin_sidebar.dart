@@ -150,7 +150,7 @@ class AdminSidebar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SmartKids',
+                  'MySchool',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -158,7 +158,7 @@ class AdminSidebar extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'PATASHALA',
+                  'Global',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,

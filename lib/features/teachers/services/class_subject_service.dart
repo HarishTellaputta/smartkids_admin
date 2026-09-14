@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import '../models/subject_model.dart';
+import '../models/class_subject_model.dart';
 
 class ClassSubjectService {
   final Dio _dio;
@@ -15,24 +15,18 @@ class ClassSubjectService {
           ),
         );
 
-  // ============================================================
-  // GET SUBJECTS ASSIGNED TO A CLASS
-  // GET /api/v1/classes/{classId}/subjects
-  // ============================================================
-
-  Future<List<SubjectModel>> getClassSubjects(
-    int classId,
-  ) async {
+  // Get subjects assigned to a particular class
+  Future<List<ClassSubjectModel>> getClassSubjects(int classId) async {
     try {
       final response = await _dio.get(
-        '/api/v1/classes/$classId/subjects',
+        '/classes/$classId/subjects',
       );
 
       final List<dynamic> data = response.data;
 
       return data
           .map(
-            (json) => SubjectModel.fromJson(
+            (json) => ClassSubjectModel.fromJson(
               json as Map<String, dynamic>,
             ),
           )
@@ -46,18 +40,14 @@ class ClassSubjectService {
     }
   }
 
-  // ============================================================
-  // ASSIGN SUBJECT TO CLASS
-  // POST /api/v1/classes/{classId}/subjects/{subjectId}
-  // ============================================================
-
+  // Assign a subject to a class
   Future<void> assignSubjectToClass(
     int classId,
     int subjectId,
   ) async {
     try {
       await _dio.post(
-        '/api/v1/classes/$classId/subjects/$subjectId',
+        '/classes/$classId/subjects/$subjectId',
       );
     } on DioException catch (e) {
       throw Exception(
@@ -68,18 +58,14 @@ class ClassSubjectService {
     }
   }
 
-  // ============================================================
-  // REMOVE SUBJECT FROM CLASS
-  // DELETE /api/v1/classes/{classId}/subjects/{subjectId}
-  // ============================================================
-
+  // Remove a subject from a class
   Future<void> removeSubjectFromClass(
     int classId,
     int subjectId,
   ) async {
     try {
       await _dio.delete(
-        '/api/v1/classes/$classId/subjects/$subjectId',
+        '/classes/$classId/subjects/$subjectId',
       );
     } on DioException catch (e) {
       throw Exception(

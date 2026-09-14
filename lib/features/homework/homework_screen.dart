@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:smartkids_admin/features/homework/models/homework_model.dart';
+import 'package:smartkids_admin/features/homework/services/homework_service.dart';
 
 class HomeworkScreen extends StatefulWidget {
   const HomeworkScreen({super.key});
@@ -8,75 +12,26 @@ class HomeworkScreen extends StatefulWidget {
 }
 
 class _HomeworkScreenState extends State<HomeworkScreen> {
-  String selectedClass = 'All Classes';
-  String selectedSubject = 'All Subjects';
-  String selectedStatus = 'All';
-  String searchQuery = '';
+  final HomeworkService _service = HomeworkService();
 
   final TextEditingController searchController = TextEditingController();
 
-  final List<Map<String, dynamic>> homeworkList = [
-    {
-      'id': 'HW001',
-      'title': 'Addition and Subtraction',
-      'subject': 'Mathematics',
-      'class': 'Class 1 - A',
-      'teacher': 'Priya Teacher',
-      'assignedDate': '10 Aug 2026',
-      'dueDate': '12 Aug 2026',
-      'status': 'Published',
-      'submissions': 24,
-      'totalStudents': 30,
-    },
-    {
-      'id': 'HW002',
-      'title': 'Read Chapter 3',
-      'subject': 'English',
-      'class': 'Class 2 - A',
-      'teacher': 'Anitha Teacher',
-      'assignedDate': '10 Aug 2026',
-      'dueDate': '13 Aug 2026',
-      'status': 'Published',
-      'submissions': 28,
-      'totalStudents': 32,
-    },
-    {
-      'id': 'HW003',
-      'title': 'Parts of a Plant',
-      'subject': 'Science',
-      'class': 'Class 3 - A',
-      'teacher': 'Rahul Teacher',
-      'assignedDate': '09 Aug 2026',
-      'dueDate': '11 Aug 2026',
-      'status': 'Published',
-      'submissions': 19,
-      'totalStudents': 28,
-    },
-    {
-      'id': 'HW004',
-      'title': 'Telugu Guninthalu',
-      'subject': 'Telugu',
-      'class': 'Class 1 - B',
-      'teacher': 'Lakshmi Teacher',
-      'assignedDate': '08 Aug 2026',
-      'dueDate': '12 Aug 2026',
-      'status': 'Draft',
-      'submissions': 0,
-      'totalStudents': 29,
-    },
-    {
-      'id': 'HW005',
-      'title': 'Shapes Around Us',
-      'subject': 'Mathematics',
-      'class': 'Class 2 - B',
-      'teacher': 'Suresh Teacher',
-      'assignedDate': '07 Aug 2026',
-      'dueDate': '10 Aug 2026',
-      'status': 'Closed',
-      'submissions': 30,
-      'totalStudents': 30,
-    },
-  ];
+  List<HomeworkModel> homeworkList = [];
+
+  bool isLoading = true;
+  bool isSaving = false;
+
+  String selectedClass = 'All Classes';
+  String selectedSubject = 'All Subjects';
+  String selectedStatus = 'All';
+
+  String searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHomework();
+  }
 
   @override
   void dispose() {
@@ -84,66 +39,374 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get filteredHomework {
-    return homeworkList.where((homework) {
-      final query = searchQuery.toLowerCase().trim();
+  // ============================================================
+  // LOAD HOMEWORK
+  // ============================================================
 
+  Future<void> _loadHomework() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found.');
+      }
+
+      _service.setToken(token);
+
+      final data = await _service.getAllHomework();
+
+      if (!mounted) return;
+
+      setState(() {
+        homeworkList = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      _showError(e.toString());
+    }
+  }
+
+  // ============================================================
+  // FILTERED DATA
+  // ============================================================
+
+  List<HomeworkModel> get filteredHomework {
+    final query = searchQuery.toLowerCase().trim();
+
+    return homeworkList.where((homework) {
       final matchesSearch =
           query.isEmpty ||
-          homework['title'].toString().toLowerCase().contains(query) ||
-          homework['subject'].toString().toLowerCase().contains(query) ||
-          homework['class'].toString().toLowerCase().contains(query);
+          (homework.title ?? '').toLowerCase().contains(query) ||
+          (homework.subject ?? '').toLowerCase().contains(query) ||
+          (homework.className ?? '').toLowerCase().contains(query) ||
+          (homework.sectionName ?? '').toLowerCase().contains(query) ||
+          (homework.assignedByTeacherName ?? '').toLowerCase().contains(query);
+
+      final classDisplay = _classDisplay(homework);
 
       final matchesClass =
-          selectedClass == 'All Classes' || homework['class'] == selectedClass;
+          selectedClass == 'All Classes' || classDisplay == selectedClass;
 
       final matchesSubject =
           selectedSubject == 'All Subjects' ||
-          homework['subject'] == selectedSubject;
+          (homework.subject ?? '') == selectedSubject;
 
       final matchesStatus =
-          selectedStatus == 'All' || homework['status'] == selectedStatus;
+          selectedStatus == 'All' ||
+          _displayStatus(homework.status) == selectedStatus;
 
       return matchesSearch && matchesClass && matchesSubject && matchesStatus;
     }).toList();
   }
 
+  // ============================================================
+  // SUMMARY
+  // ============================================================
+
   int get totalHomework => homeworkList.length;
 
-  int get publishedCount =>
-      homeworkList.where((item) => item['status'] == 'Published').length;
+  int get publishedCount {
+    return homeworkList
+        .where((item) => _displayStatus(item.status) == 'Published')
+        .length;
+  }
 
-  int get draftCount =>
-      homeworkList.where((item) => item['status'] == 'Draft').length;
-
-  int get closedCount =>
-      homeworkList.where((item) => item['status'] == 'Closed').length;
+  int get draftCount {
+    return homeworkList
+        .where((item) => _displayStatus(item.status) == 'Draft')
+        .length;
+  }
 
   double get submissionPercentage {
-    int submitted = 0;
-    int total = 0;
-
-    for (final homework in homeworkList) {
-      submitted += homework['submissions'] as int;
-      total += homework['totalStudents'] as int;
-    }
-
-    if (total == 0) return 0;
-
-    return (submitted / total) * 100;
+    // HomeworkResponseDto does not contain submission count.
+    // Therefore we cannot calculate real submission rate
+    // from the current Homework APIs.
+    return 0;
   }
+
+  // ============================================================
+  // CREATE
+  // ============================================================
+
+  Future<void> _createHomework({
+    required int classId,
+    int? sectionId,
+    required int teacherId,
+    required String subject,
+    required String title,
+    required String description,
+    required String dueDate,
+    required String status,
+    required String priority,
+  }) async {
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found.');
+      }
+
+      _service.setToken(token);
+
+      final homework = await _service.createHomework(
+        classId: classId,
+        sectionId: sectionId,
+        teacherId: teacherId,
+        subject: subject,
+        title: title,
+        description: description,
+        dueDate: dueDate,
+        status: status,
+        priority: priority,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        homeworkList.insert(0, homework);
+        isSaving = false;
+      });
+
+      _showSuccess('Homework created successfully.');
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      _showError(e.toString());
+    }
+  }
+
+  // ============================================================
+  // UPDATE
+  // ============================================================
+
+  Future<void> _updateHomework({
+    required int id,
+    required int classId,
+    int? sectionId,
+    required int teacherId,
+    required String subject,
+    required String title,
+    required String description,
+    required String dueDate,
+    required String status,
+    required String priority,
+  }) async {
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found.');
+      }
+
+      _service.setToken(token);
+
+      final updated = await _service.updateHomework(
+        id: id,
+        classId: classId,
+        sectionId: sectionId,
+        teacherId: teacherId,
+        subject: subject,
+        title: title,
+        description: description,
+        dueDate: dueDate,
+        status: status,
+        priority: priority,
+      );
+
+      if (!mounted) return;
+
+      final index = homeworkList.indexWhere((item) => item.id == id);
+
+      if (index != -1) {
+        setState(() {
+          homeworkList[index] = updated;
+        });
+      }
+
+      setState(() {
+        isSaving = false;
+      });
+
+      _showSuccess('Homework updated successfully.');
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      _showError(e.toString());
+    }
+  }
+
+  // ============================================================
+  // DELETE
+  // ============================================================
+
+  Future<void> _deleteHomework(HomeworkModel homework) async {
+    final id = homework.id;
+
+    if (id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Homework?'),
+          content: Text(
+            'Are you sure you want to delete '
+            '"${homework.title ?? ''}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found.');
+      }
+
+      _service.setToken(token);
+
+      await _service.deleteHomework(id);
+
+      if (!mounted) return;
+
+      setState(() {
+        homeworkList.removeWhere((item) => item.id == id);
+      });
+
+      _showSuccess('Homework deleted successfully.');
+    } catch (e) {
+      _showError(e.toString());
+    }
+  }
+
+  // ============================================================
+  // PUBLISH
+  // ============================================================
+
+  Future<void> _publishHomework(HomeworkModel homework) async {
+    if (homework.id == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found.');
+      }
+
+      _service.setToken(token);
+
+      final updated = await _service.updateHomework(
+        id: homework.id!,
+        classId: homework.classId!,
+        sectionId: homework.sectionId,
+        teacherId: homework.assignedByTeacherId!,
+        subject: homework.subject ?? '',
+        title: homework.title ?? '',
+        description: homework.description ?? '',
+        dueDate: homework.dueDate!,
+        status: 'ACTIVE',
+        priority: homework.priority ?? 'MEDIUM',
+      );
+
+      if (!mounted) return;
+
+      final index = homeworkList.indexWhere((item) => item.id == homework.id);
+
+      if (index != -1) {
+        setState(() {
+          homeworkList[index] = updated;
+        });
+      }
+
+      _showSuccess('Homework published successfully.');
+    } catch (e) {
+      _showError(e.toString());
+    }
+  }
+
+  // ============================================================
+  // CREATE DIALOG
+  // ============================================================
 
   void _showAddHomeworkDialog() {
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
 
-    String dialogClass = 'Class 1 - A';
-    String dialogSubject = 'Mathematics';
-    String dialogDueDate = '15 Aug 2026';
+    int? classId;
+    int? sectionId;
+    int? teacherId;
+
+    String subject = 'Mathematics';
+    String dueDate = _todayPlusOne();
+    String status = 'ACTIVE';
+    String priority = 'MEDIUM';
+
+    // Temporary dropdown data until your actual Class,
+    // Section and Teacher API response is connected.
+    final classOptions = <Map<String, dynamic>>[
+      {'id': 1, 'name': 'Class 1'},
+      {'id': 2, 'name': 'Class 2'},
+      {'id': 3, 'name': 'Class 3'},
+      {'id': 4, 'name': 'Class 4'},
+      {'id': 5, 'name': 'Class 5'},
+    ];
+
+    final teacherOptions = <Map<String, dynamic>>[
+      {'id': 10, 'name': 'Teacher 10'},
+    ];
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -152,7 +415,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               content: SizedBox(
-                width: 500,
+                width: 520,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -162,43 +425,73 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                         label: 'Homework Title',
                         hint: 'Enter homework title',
                       ),
+
                       const SizedBox(height: 14),
+
                       _dialogTextField(
                         controller: descriptionController,
                         label: 'Description',
                         hint: 'Enter homework instructions',
                         maxLines: 3,
                       ),
+
                       const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        value: dialogClass,
+
+                      DropdownButtonFormField<int>(
+                        value: classId,
                         decoration: _dialogDecoration('Class'),
-                        items:
-                            const [
-                              'Class 1 - A',
-                              'Class 1 - B',
-                              'Class 2 - A',
-                              'Class 2 - B',
-                              'Class 3 - A',
-                              'Class 4 - A',
-                              'Class 5 - A',
-                            ].map((value) {
-                              return DropdownMenuItem(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }).toList(),
+                        items: classOptions.map((item) {
+                          return DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']),
+                          );
+                        }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              dialogClass = value;
-                            });
-                          }
+                          setDialogState(() {
+                            classId = value;
+                            sectionId = null;
+                          });
                         },
                       ),
+
                       const SizedBox(height: 14),
+
+                      DropdownButtonFormField<int>(
+                        value: sectionId,
+                        decoration: _dialogDecoration('Section (Optional)'),
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('A')),
+                          DropdownMenuItem(value: 2, child: Text('B')),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            sectionId = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      DropdownButtonFormField<int>(
+                        value: teacherId,
+                        decoration: _dialogDecoration('Teacher'),
+                        items: teacherOptions.map((item) {
+                          return DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            teacherId = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
                       DropdownButtonFormField<String>(
-                        value: dialogSubject,
+                        value: subject,
                         decoration: _dialogDecoration('Subject'),
                         items:
                             const [
@@ -208,7 +501,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                               'Telugu',
                               'Social Studies',
                             ].map((value) {
-                              return DropdownMenuItem(
+                              return DropdownMenuItem<String>(
                                 value: value,
                                 child: Text(value),
                               );
@@ -216,15 +509,17 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                         onChanged: (value) {
                           if (value != null) {
                             setDialogState(() {
-                              dialogSubject = value;
+                              subject = value;
                             });
                           }
                         },
                       ),
+
                       const SizedBox(height: 14),
+
                       TextFormField(
                         readOnly: true,
-                        initialValue: dialogDueDate,
+                        controller: TextEditingController(text: dueDate),
                         decoration: _dialogDecoration('Due Date').copyWith(
                           suffixIcon: const Icon(
                             Icons.calendar_today_outlined,
@@ -234,15 +529,59 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: context,
-                            initialDate: DateTime(2026, 8, 15),
-                            firstDate: DateTime(2026),
+                            initialDate: DateTime.now().add(
+                              const Duration(days: 1),
+                            ),
+                            firstDate: DateTime.now(),
                             lastDate: DateTime(2035),
                           );
 
                           if (picked != null) {
                             setDialogState(() {
-                              dialogDueDate =
-                                  '${picked.day} Aug ${picked.year}';
+                              dueDate =
+                                  '${picked.year}-'
+                                  '${picked.month.toString().padLeft(2, '0')}-'
+                                  '${picked.day.toString().padLeft(2, '0')}';
+                            });
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      DropdownButtonFormField<String>(
+                        value: priority,
+                        decoration: _dialogDecoration('Priority'),
+                        items: const ['LOW', 'MEDIUM', 'HIGH'].map((value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              priority = value;
+                            });
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      DropdownButtonFormField<String>(
+                        value: status,
+                        decoration: _dialogDecoration('Status'),
+                        items: const ['ACTIVE', 'DRAFT', 'CLOSED'].map((value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              status = value;
                             });
                           }
                         },
@@ -253,38 +592,44 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    if (titleController.text.trim().isEmpty) {
-                      return;
-                    }
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (titleController.text.trim().isEmpty) {
+                            _showError('Homework title is required.');
+                            return;
+                          }
 
-                    setState(() {
-                      homeworkList.insert(0, {
-                        'id': 'HW${homeworkList.length + 1}'.padLeft(3, '0'),
-                        'title': titleController.text.trim(),
-                        'subject': dialogSubject,
-                        'class': dialogClass,
-                        'teacher': 'Admin',
-                        'assignedDate': '10 Aug 2026',
-                        'dueDate': dialogDueDate,
-                        'status': 'Draft',
-                        'submissions': 0,
-                        'totalStudents': 30,
-                      });
-                    });
+                          if (classId == null) {
+                            _showError('Please select a class.');
+                            return;
+                          }
 
-                    Navigator.pop(context);
+                          if (teacherId == null) {
+                            _showError('Please select a teacher.');
+                            return;
+                          }
 
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Homework created as draft.'),
-                      ),
-                    );
-                  },
+                          Navigator.pop(dialogContext);
+
+                          await _createHomework(
+                            classId: classId!,
+                            sectionId: sectionId,
+                            teacherId: teacherId!,
+                            subject: subject,
+                            title: titleController.text.trim(),
+                            description: descriptionController.text.trim(),
+                            dueDate: dueDate,
+                            status: status,
+                            priority: priority,
+                          );
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
@@ -299,65 +644,64 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  InputDecoration _dialogDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-    );
-  }
+  // ============================================================
+  // DETAILS
+  // ============================================================
 
-  Widget _dialogTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    int maxLines = 1,
-  }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
-      ),
-    );
-  }
+  Future<void> _showHomeworkDetails(HomeworkModel homework) async {
+    HomeworkModel details = homework;
 
-  void _deleteHomework(Map<String, dynamic> homework) {
+    if (homework.id != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+
+        final token = prefs.getString('jwt_token');
+
+        if (token != null && token.isNotEmpty) {
+          _service.setToken(token);
+
+          details = await _service.getHomeworkById(homework.id!);
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete Homework?'),
-          content: Text(
-            'Are you sure you want to delete '
-            '"${homework['title']}"?',
+          title: Text(
+            details.title ?? 'Homework',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: 450,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _detailRow('Class', _classDisplay(details)),
+                  _detailRow('Subject', details.subject ?? '-'),
+                  _detailRow('Teacher', details.assignedByTeacherName ?? '-'),
+                  _detailRow('Employee ID', details.teacherEmployeeId ?? '-'),
+                  _detailRow('Assigned Date', _formatDate(details.createdAt)),
+                  _detailRow('Due Date', _formatDate(details.dueDate)),
+                  _detailRow('Priority', details.priority ?? '-'),
+                  _detailRow('Status', _displayStatus(details.status)),
+                  if ((details.description ?? '').isNotEmpty)
+                    _detailRow('Description', details.description!),
+                  if ((details.attachmentUrl ?? '').isNotEmpty)
+                    _detailRow('Attachment', details.attachmentUrl!),
+                ],
+              ),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  homeworkList.remove(homework);
-                });
-
-                Navigator.pop(context);
-
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Homework deleted successfully.'),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Delete'),
+              child: const Text('Close'),
             ),
           ],
         );
@@ -365,40 +709,39 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  void _publishHomework(Map<String, dynamic> homework) {
-    setState(() {
-      homework['status'] = 'Published';
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Homework published successfully.'),
-        backgroundColor: Color(0xFF15803D),
-      ),
-    );
-  }
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 24),
-            _buildFilters(),
-            const SizedBox(height: 24),
-            _buildSummaryCards(),
-            const SizedBox(height: 24),
-            _buildHomeworkTable(),
-          ],
+      body: RefreshIndicator(
+        onRefresh: _loadHomework,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 24),
+              _buildFilters(),
+              const SizedBox(height: 24),
+              _buildSummaryCards(),
+              const SizedBox(height: 24),
+              _buildHomeworkTable(),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  // ============================================================
+  // HEADER
+  // ============================================================
 
   Widget _buildHeader() {
     return LayoutBuilder(
@@ -455,6 +798,10 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       ),
     );
   }
+
+  // ============================================================
+  // FILTERS
+  // ============================================================
 
   Widget _buildFilters() {
     return Container(
@@ -523,40 +870,50 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   }
 
   Widget _classDropdown() {
+    final classes = <String>{'All Classes'};
+
+    for (final item in homeworkList) {
+      final value = _classDisplay(item);
+
+      if (value != '-') {
+        classes.add(value);
+      }
+    }
+
+    if (!classes.contains(selectedClass)) {
+      selectedClass = 'All Classes';
+    }
+
     return _dropdownContainer(
       value: selectedClass,
-      items: const [
-        'All Classes',
-        'Class 1 - A',
-        'Class 1 - B',
-        'Class 2 - A',
-        'Class 2 - B',
-        'Class 3 - A',
-        'Class 4 - A',
-        'Class 5 - A',
-      ],
+      items: classes.toList(),
       onChanged: (value) {
         setState(() {
-          selectedClass = value!;
+          selectedClass = value ?? 'All Classes';
         });
       },
     );
   }
 
   Widget _subjectDropdown() {
+    final subjects = <String>{'All Subjects'};
+
+    for (final item in homeworkList) {
+      if ((item.subject ?? '').trim().isNotEmpty) {
+        subjects.add(item.subject!.trim());
+      }
+    }
+
+    if (!subjects.contains(selectedSubject)) {
+      selectedSubject = 'All Subjects';
+    }
+
     return _dropdownContainer(
       value: selectedSubject,
-      items: const [
-        'All Subjects',
-        'Mathematics',
-        'English',
-        'Science',
-        'Telugu',
-        'Social Studies',
-      ],
+      items: subjects.toList(),
       onChanged: (value) {
         setState(() {
-          selectedSubject = value!;
+          selectedSubject = value ?? 'All Subjects';
         });
       },
     );
@@ -568,7 +925,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       items: const ['All', 'Published', 'Draft', 'Closed'],
       onChanged: (value) {
         setState(() {
-          selectedStatus = value!;
+          selectedStatus = value ?? 'All';
         });
       },
     );
@@ -603,6 +960,10 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       ),
     );
   }
+
+  // ============================================================
+  // SUMMARY
+  // ============================================================
 
   Widget _buildSummaryCards() {
     return LayoutBuilder(
@@ -648,7 +1009,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
             ),
             _summaryCard(
               'Submission Rate',
-              '${submissionPercentage.toStringAsFixed(0)}%',
+              'N/A',
               Icons.bar_chart_outlined,
               const Color(0xFF7C3AED),
               const Color(0xFFF5F3FF),
@@ -709,6 +1070,10 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
+  // ============================================================
+  // TABLE
+  // ============================================================
+
   Widget _buildHomeworkTable() {
     final data = filteredHomework;
 
@@ -741,13 +1106,21 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          data.isEmpty ? _emptyState() : _table(data),
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 60),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (data.isEmpty)
+            _emptyState()
+          else
+            _table(data),
         ],
       ),
     );
   }
 
-  Widget _table(List<Map<String, dynamic>> data) {
+  Widget _table(List<HomeworkModel> data) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -761,7 +1134,8 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
           DataColumn(label: Text('Class')),
           DataColumn(label: Text('Subject')),
           DataColumn(label: Text('Due Date')),
-          DataColumn(label: Text('Submissions')),
+          DataColumn(label: Text('Teacher')),
+          DataColumn(label: Text('Priority')),
           DataColumn(label: Text('Status')),
           DataColumn(label: Text('Actions')),
         ],
@@ -770,14 +1144,26 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
             cells: [
               DataCell(_homeworkCell(homework)),
               DataCell(
-                Text(homework['class'], style: const TextStyle(fontSize: 12)),
+                Text(
+                  _classDisplay(homework),
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
-              DataCell(_subjectBadge(homework['subject'])),
+              DataCell(_subjectBadge(homework.subject ?? '-')),
               DataCell(
-                Text(homework['dueDate'], style: const TextStyle(fontSize: 12)),
+                Text(
+                  _formatDate(homework.dueDate),
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
-              DataCell(_submissionCell(homework)),
-              DataCell(_statusBadge(homework['status'])),
+              DataCell(
+                Text(
+                  homework.assignedByTeacherName ?? '-',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              DataCell(_priorityBadge(homework.priority)),
+              DataCell(_statusBadge(homework.status)),
               DataCell(_actionButtons(homework)),
             ],
           );
@@ -786,7 +1172,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  Widget _homeworkCell(Map<String, dynamic> homework) {
+  Widget _homeworkCell(HomeworkModel homework) {
     return SizedBox(
       width: 210,
       child: Row(
@@ -811,7 +1197,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  homework['title'],
+                  homework.title ?? '-',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -821,7 +1207,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  homework['teacher'],
+                  homework.assignedByTeacherName ?? '-',
                   style: const TextStyle(
                     fontSize: 10,
                     color: Color(0xFF9CA3AF),
@@ -853,50 +1239,26 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  Widget _submissionCell(Map<String, dynamic> homework) {
-    final submitted = homework['submissions'] as int;
-    final total = homework['totalStudents'] as int;
+  Widget _priorityBadge(String? priority) {
+    final value = priority ?? '-';
 
-    final percentage = total == 0 ? 0 : (submitted / total * 100);
-
-    return SizedBox(
-      width: 120,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$submitted / $total',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(5),
-            child: LinearProgressIndicator(
-              value: percentage / 100,
-              minHeight: 5,
-              backgroundColor: const Color(0xFFE5E7EB),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF2563EB)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusBadge(String status) {
     Color color;
     Color background;
 
-    switch (status) {
-      case 'Published':
-        color = const Color(0xFF15803D);
-        background = const Color(0xFFDCFCE7);
+    switch (value.toUpperCase()) {
+      case 'HIGH':
+        color = const Color(0xFFDC2626);
+        background = const Color(0xFFFEE2E2);
         break;
 
-      case 'Draft':
+      case 'MEDIUM':
         color = const Color(0xFFD97706);
         background = const Color(0xFFFEF3C7);
+        break;
+
+      case 'LOW':
+        color = const Color(0xFF15803D);
+        background = const Color(0xFFDCFCE7);
         break;
 
       default:
@@ -911,7 +1273,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        value,
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
@@ -921,7 +1283,51 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  Widget _actionButtons(Map<String, dynamic> homework) {
+  Widget _statusBadge(String? status) {
+    final display = _displayStatus(status);
+
+    Color color;
+    Color background;
+
+    switch (display) {
+      case 'Published':
+        color = const Color(0xFF15803D);
+        background = const Color(0xFFDCFCE7);
+        break;
+
+      case 'Draft':
+        color = const Color(0xFFD97706);
+        background = const Color(0xFFFEF3C7);
+        break;
+
+      case 'Closed':
+        color = const Color(0xFF6B7280);
+        background = const Color(0xFFF3F4F6);
+        break;
+
+      default:
+        color = const Color(0xFF2563EB);
+        background = const Color(0xFFEFF6FF);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        display,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButtons(HomeworkModel homework) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -932,7 +1338,8 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
           },
           icon: const Icon(Icons.visibility_outlined, size: 18),
         ),
-        if (homework['status'] == 'Draft')
+
+        if ((homework.status ?? '').toUpperCase() == 'DRAFT')
           IconButton(
             tooltip: 'Publish',
             onPressed: () {
@@ -944,6 +1351,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
               color: Color(0xFF15803D),
             ),
           ),
+
         IconButton(
           tooltip: 'Delete',
           onPressed: () {
@@ -959,43 +1367,88 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  void _showHomeworkDetails(Map<String, dynamic> homework) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            homework['title'],
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: SizedBox(
-            width: 430,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _detailRow('Class', homework['class']),
-                _detailRow('Subject', homework['subject']),
-                _detailRow('Teacher', homework['teacher']),
-                _detailRow('Assigned Date', homework['assignedDate']),
-                _detailRow('Due Date', homework['dueDate']),
-                _detailRow(
-                  'Submissions',
-                  '${homework['submissions']} / '
-                      '${homework['totalStudents']}',
-                ),
-                _detailRow('Status', homework['status']),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+  // ============================================================
+  // HELPERS
+  // ============================================================
+
+  String _classDisplay(HomeworkModel item) {
+    final className = item.className?.trim() ?? '';
+
+    final section = item.sectionName?.trim() ?? '';
+
+    if (className.isEmpty && section.isEmpty) {
+      return '-';
+    }
+
+    if (section.isEmpty) {
+      return className;
+    }
+
+    return '$className - $section';
+  }
+
+  String _displayStatus(String? status) {
+    switch ((status ?? '').toUpperCase()) {
+      case 'ACTIVE':
+        return 'Published';
+
+      case 'DRAFT':
+        return 'Draft';
+
+      case 'CLOSED':
+        return 'Closed';
+
+      default:
+        return status ?? '-';
+    }
+  }
+
+  String _formatDate(String? value) {
+    if (value == null || value.isEmpty) {
+      return '-';
+    }
+
+    try {
+      final date = DateTime.parse(value);
+
+      return '${date.day.toString().padLeft(2, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.year}';
+    } catch (_) {
+      return value;
+    }
+  }
+
+  String _todayPlusOne() {
+    final date = DateTime.now().add(const Duration(days: 1));
+
+    return '${date.year}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  InputDecoration _dialogDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    );
+  }
+
+  Widget _dialogTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+      ),
     );
   }
 
@@ -1003,6 +1456,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 110,
@@ -1045,6 +1499,32 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // SNACKBARS
+  // ============================================================
+
+  void _showSuccess(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF15803D),
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message.replaceFirst('Exception: ', '')),
+        backgroundColor: const Color(0xFFDC2626),
       ),
     );
   }

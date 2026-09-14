@@ -5,15 +5,15 @@ class StudentService {
   final Dio dio;
 
   StudentService(String token)
-      : dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-          ),
-        ) {
+    : dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://localhost:8080',
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      ) {
     print('========================================');
     print('STUDENT SERVICE CREATED');
     print('BASE URL: ${dio.options.baseUrl}');
@@ -113,9 +113,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.get(
-        '/students/$id',
-      );
+      final response = await dio.get('/students/$id');
 
       print('STATUS CODE: ${response.statusCode}');
       print('RESPONSE DATA: ${response.data}');
@@ -141,9 +139,7 @@ class StudentService {
   // CREATE STUDENT
   // =========================
 
-  Future<Student> createStudent(
-    Map<String, dynamic> data,
-  ) async {
+  Future<Student> createStudent(Map<String, dynamic> data) async {
     print('');
     print('========================================');
     print('CREATE STUDENT');
@@ -151,10 +147,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.post(
-        '/students',
-        data: data,
-      );
+      final response = await dio.post('/students', data: data);
 
       print('CREATE STATUS: ${response.statusCode}');
       print('CREATE RESPONSE: ${response.data}');
@@ -180,10 +173,7 @@ class StudentService {
   // UPDATE STUDENT
   // =========================
 
-  Future<Student> updateStudent(
-    int id,
-    Map<String, dynamic> data,
-  ) async {
+  Future<Student> updateStudent(int id, Map<String, dynamic> data) async {
     print('');
     print('========================================');
     print('UPDATE STUDENT');
@@ -192,10 +182,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.put(
-        '/students/$id',
-        data: data,
-      );
+      final response = await dio.put('/students/$id', data: data);
 
       print('UPDATE STATUS: ${response.statusCode}');
       print('UPDATE RESPONSE: ${response.data}');
@@ -229,9 +216,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.delete(
-        '/students/$id',
-      );
+      final response = await dio.delete('/students/$id');
 
       print('DELETE STATUS: ${response.statusCode}');
       print('DELETE RESPONSE: ${response.data}');
@@ -242,6 +227,51 @@ class StudentService {
       print('ERROR: ${e.message}');
       print('STATUS: ${e.response?.statusCode}');
       print('DATA: ${e.response?.data}');
+
+      rethrow;
+    }
+  }
+
+  // =========================
+  // GET STUDENTS BY CLASS
+  // =========================
+
+  Future<List<Student>> getStudentsByClassId(int classId) async {
+    print('');
+    print('========================================');
+    print('GET STUDENTS BY CLASS');
+    print('CLASS ID: $classId');
+    print('========================================');
+
+    try {
+      final response = await dio.get('/students/class/$classId');
+
+      print('STATUS CODE: ${response.statusCode}');
+      print('RESPONSE DATA: ${response.data}');
+
+      final data = response.data;
+
+      if (data is List) {
+        final students = data
+            .map((json) => Student.fromJson(Map<String, dynamic>.from(json)))
+            .toList();
+
+        print('STUDENTS FOUND: ${students.length}');
+
+        return students;
+      }
+
+      return [];
+    } on DioException catch (e) {
+      print('!!!!!!!! GET STUDENTS BY CLASS ERROR !!!!!!!!');
+      print('ERROR: ${e.message}');
+      print('STATUS: ${e.response?.statusCode}');
+      print('DATA: ${e.response?.data}');
+
+      rethrow;
+    } catch (e) {
+      print('!!!!!!!! STUDENT PARSING ERROR !!!!!!!!');
+      print('ERROR: $e');
 
       rethrow;
     }

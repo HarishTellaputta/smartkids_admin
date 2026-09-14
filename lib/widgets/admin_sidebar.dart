@@ -16,7 +16,9 @@ class AdminSidebar extends StatelessWidget {
       width: 260,
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE5E7EB))),
+        border: Border(
+          right: BorderSide(color: Color(0xFFE5E7EB)),
+        ),
       ),
       child: Column(
         children: [
@@ -41,18 +43,29 @@ class AdminSidebar extends StatelessWidget {
                   icon: Icons.school_outlined,
                   title: 'Students',
                 ),
+
                 _buildMenuItem(
                   index: 2,
                   icon: Icons.person_outline,
                   title: 'Teachers',
                 ),
+
                 _buildMenuItem(
                   index: 3,
                   icon: Icons.class_outlined,
                   title: 'Classes',
                 ),
+
+                // Subjects
                 _buildMenuItem(
                   index: 4,
+                  icon: Icons.menu_book_outlined,
+                  title: 'Subjects',
+                ),
+
+                // Parents
+                _buildMenuItem(
+                  index: 5,
                   icon: Icons.family_restroom_outlined,
                   title: 'Parents',
                 ),
@@ -62,37 +75,43 @@ class AdminSidebar extends StatelessWidget {
                 _buildSectionTitle('ACADEMICS'),
 
                 _buildMenuItem(
-                  index: 5,
+                  index: 6,
                   icon: Icons.calendar_month_outlined,
                   title: 'Attendance',
                 ),
+
                 _buildMenuItem(
-                  index: 6,
+                  index: 7,
                   icon: Icons.menu_book_outlined,
                   title: 'Homework',
                 ),
+
                 _buildMenuItem(
-                  index: 7,
+                  index: 8,
                   icon: Icons.schedule_outlined,
                   title: 'Timetable',
                 ),
+
                 _buildMenuItem(
-                  index: 8,
+                  index: 9,
                   icon: Icons.currency_rupee,
                   title: 'Fees',
                 ),
+
                 _buildMenuItem(
-                  index: 9,
+                  index: 10,
                   icon: Icons.assignment_outlined,
                   title: 'Exams',
                 ),
+
                 _buildMenuItem(
-                  index: 10,
+                  index: 11,
                   icon: Icons.psychology_outlined,
                   title: 'MCQ Tests',
                 ),
+
                 _buildMenuItem(
-                  index: 11,
+                  index: 12,
                   icon: Icons.bar_chart_outlined,
                   title: 'Results',
                 ),
@@ -102,17 +121,19 @@ class AdminSidebar extends StatelessWidget {
                 _buildSectionTitle('COMMUNICATION'),
 
                 _buildMenuItem(
-                  index: 12,
+                  index: 13,
                   icon: Icons.campaign_outlined,
                   title: 'Notices',
                 ),
+
                 _buildMenuItem(
-                  index: 13,
+                  index: 14,
                   icon: Icons.celebration_outlined,
                   title: 'Events',
                 ),
+
                 _buildMenuItem(
-                  index: 14,
+                  index: 15,
                   icon: Icons.how_to_reg_outlined,
                   title: 'Admissions',
                 ),
@@ -139,7 +160,11 @@ class AdminSidebar extends StatelessWidget {
               color: const Color(0xFF2563EB),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.school, color: Colors.white, size: 26),
+            child: const Icon(
+              Icons.school,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -176,7 +201,11 @@ class AdminSidebar extends StatelessWidget {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
+      padding: const EdgeInsets.only(
+        left: 14,
+        top: 8,
+        bottom: 8,
+      ),
       child: Text(
         title,
         style: const TextStyle(
@@ -208,9 +237,14 @@ class AdminSidebar extends StatelessWidget {
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFEFF6FF) : Colors.transparent,
+              color: isSelected
+                  ? const Color(0xFFEFF6FF)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -272,16 +306,18 @@ class AdminSidebar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       child: Column(
         children: [
-          const Divider(color: Color(0xFFE5E7EB)),
+          const Divider(
+            color: Color(0xFFE5E7EB),
+          ),
 
           _buildMenuItem(
-            index: 15,
+            index: 16,
             icon: Icons.settings_outlined,
             title: 'Settings',
           ),
 
           _buildMenuItem(
-            index: 16,
+            index: 17,
             icon: Icons.logout_outlined,
             title: 'Logout',
           ),

@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smartkids_admin/features/exams/models/examination_model.dart';
+import 'package:smartkids_admin/features/exams/services/examination_service.dart';
+
 
 class ExamsScreen extends StatefulWidget {
   const ExamsScreen({super.key});
@@ -8,115 +12,198 @@ class ExamsScreen extends StatefulWidget {
 }
 
 class _ExamsScreenState extends State<ExamsScreen> {
-  String selectedClass = 'All Classes';
+  ExaminationService? _service;
+
+  List<ExaminationModel> exams = [];
+  List<ExamScheduleModel> selectedSchedules = [];
+
+  bool isLoading = true;
+  bool isSaving = false;
+  bool isLoadingSchedules = false;
+
   String selectedStatus = 'All';
+  String selectedExamType = 'All';
 
-  final List<Map<String, dynamic>> exams = [
-    {
-      'id': 'EX001',
-      'name': 'Unit Test - 1',
-      'class': 'Class 1 - A',
-      'startDate': '18 Aug 2026',
-      'endDate': '22 Aug 2026',
-      'subjects': 5,
-      'students': 28,
-      'status': 'Upcoming',
-    },
-    {
-      'id': 'EX002',
-      'name': 'Unit Test - 1',
-      'class': 'Class 2 - A',
-      'startDate': '18 Aug 2026',
-      'endDate': '22 Aug 2026',
-      'subjects': 5,
-      'students': 30,
-      'status': 'Upcoming',
-    },
-    {
-      'id': 'EX003',
-      'name': 'Periodic Test - 1',
-      'class': 'Class 3 - A',
-      'startDate': '25 Aug 2026',
-      'endDate': '30 Aug 2026',
-      'subjects': 6,
-      'students': 32,
-      'status': 'Upcoming',
-    },
-    {
-      'id': 'EX004',
-      'name': 'Mid Term Examination',
-      'class': 'Class 4 - A',
-      'startDate': '10 Sep 2026',
-      'endDate': '17 Sep 2026',
-      'subjects': 7,
-      'students': 35,
-      'status': 'Scheduled',
-    },
-    {
-      'id': 'EX005',
-      'name': 'Annual Examination',
-      'class': 'Class 5 - A',
-      'startDate': '10 Mar 2027',
-      'endDate': '20 Mar 2027',
-      'subjects': 8,
-      'students': 38,
-      'status': 'Scheduled',
-    },
-    {
-      'id': 'EX006',
-      'name': 'Unit Test - 1',
-      'class': 'Class 5 - A',
-      'startDate': '20 Jul 2026',
-      'endDate': '24 Jul 2026',
-      'subjects': 5,
-      'students': 38,
-      'status': 'Completed',
-    },
-  ];
+  String? errorMessage;
 
-  List<Map<String, dynamic>> get filteredExams {
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  // ============================================================
+  // INITIALIZE
+  // ============================================================
+
+  Future<void> _initialize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      print('========================================');
+      print('EXAM SCREEN INITIALIZE');
+      print('TOKEN EXISTS: ${token != null && token.isNotEmpty}');
+      print('========================================');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = 'Authentication token not found.';
+        });
+        return;
+      }
+
+      _service = ExaminationService(token);
+
+      await _loadExaminations();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        errorMessage = e.toString();
+      });
+    }
+  }
+
+  // ============================================================
+  // LOAD EXAMINATIONS
+  // ============================================================
+
+  Future<void> _loadExaminations() async {
+    if (_service == null) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final data = await _service!.getExaminations();
+
+      if (!mounted) return;
+
+      setState(() {
+        exams = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        errorMessage = e.toString().replaceFirst(
+          'Exception: ',
+          '',
+        );
+      });
+    }
+  }
+
+  // ============================================================
+  // FILTERED EXAMS
+  // ============================================================
+
+  List<ExaminationModel> get filteredExams {
     return exams.where((exam) {
-      final classMatch =
-          selectedClass == 'All Classes' || exam['class'] == selectedClass;
-
       final statusMatch =
-          selectedStatus == 'All' || exam['status'] == selectedStatus;
+          selectedStatus == 'All' ||
+          exam.status.toUpperCase() == selectedStatus.toUpperCase();
 
-      return classMatch && statusMatch;
+      final typeMatch =
+          selectedExamType == 'All' ||
+          exam.examType.toUpperCase() ==
+              selectedExamType.toUpperCase();
+
+      return statusMatch && typeMatch;
     }).toList();
   }
 
+  // ============================================================
+  // SUMMARY
+  // ============================================================
+
   int get totalExams => exams.length;
 
-  int get upcomingExams =>
-      exams.where((exam) => exam['status'] == 'Upcoming').length;
+  int get upcomingExams {
+    return exams.where((e) {
+      return e.status.toUpperCase() == 'UPCOMING';
+    }).length;
+  }
 
-  int get scheduledExams =>
-      exams.where((exam) => exam['status'] == 'Scheduled').length;
+  int get scheduledExams {
+    return exams.where((e) {
+      return e.status.toUpperCase() == 'SCHEDULED';
+    }).length;
+  }
 
-  int get completedExams =>
-      exams.where((exam) => exam['status'] == 'Completed').length;
+  int get completedExams {
+    return exams.where((e) {
+      return e.status.toUpperCase() == 'COMPLETED';
+    }).length;
+  }
 
-  void _showAddExamDialog() {
-    final nameController = TextEditingController();
+  // ============================================================
+  // CREATE EXAMINATION
+  // ============================================================
 
-    String examClass = 'Class 1 - A';
-    String examStatus = 'Upcoming';
-    DateTime? startDate;
-    DateTime? endDate;
+  void _showCreateExamDialog() {
+    _showExamDialog();
+  }
+
+  // ============================================================
+  // EDIT EXAMINATION
+  // ============================================================
+
+  void _showEditExamDialog(ExaminationModel exam) {
+    _showExamDialog(exam: exam);
+  }
+
+  // ============================================================
+  // EXAM DIALOG
+  // ============================================================
+
+  void _showExamDialog({
+    ExaminationModel? exam,
+  }) {
+    final nameController = TextEditingController(
+      text: exam?.name ?? '',
+    );
+
+    final descriptionController = TextEditingController(
+      text: exam?.description ?? '',
+    );
+
+    final academicYearController = TextEditingController(
+      text: exam?.academicYearId?.toString() ?? '1',
+    );
+
+    final yearController = TextEditingController(
+      text: exam?.year.toString() ?? DateTime.now().year.toString(),
+    );
+
+    String examType = exam?.examType ?? 'UNIT_TEST';
+    String status = exam?.status ?? 'SCHEDULED';
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text(
-                'Create New Examination',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              title: Text(
+                exam == null
+                    ? 'Create New Examination'
+                    : 'Edit Examination',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               content: SizedBox(
-                width: 480,
+                width: 500,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -128,105 +215,104 @@ class _ExamsScreenState extends State<ExamsScreen> {
                           Icons.assignment_outlined,
                         ),
                       ),
+
                       const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        value: examClass,
+
+                      TextField(
+                        controller: descriptionController,
+                        maxLines: 3,
                         decoration: _inputDecoration(
-                          'Class',
-                          Icons.school_outlined,
+                          'Description',
+                          Icons.description_outlined,
                         ),
-                        items:
-                            const [
-                              'Class 1 - A',
-                              'Class 1 - B',
-                              'Class 2 - A',
-                              'Class 2 - B',
-                              'Class 3 - A',
-                              'Class 4 - A',
-                              'Class 5 - A',
-                            ].map((item) {
-                              return DropdownMenuItem(
-                                value: item,
-                                child: Text(item),
-                              );
-                            }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              examClass = value;
-                            });
-                          }
-                        },
                       ),
+
                       const SizedBox(height: 14),
+
                       Row(
                         children: [
                           Expanded(
-                            child: _dateButton(
-                              label: startDate == null
-                                  ? 'Start Date'
-                                  : _formatDate(startDate!),
-                              icon: Icons.calendar_today_outlined,
-                              onPressed: () async {
-                                final date = await showDatePicker(
-                                  context: context,
-                                  firstDate: DateTime(2026),
-                                  lastDate: DateTime(2030),
-                                  initialDate: DateTime.now(),
-                                );
-
-                                if (date != null) {
-                                  setDialogState(() {
-                                    startDate = date;
-                                  });
-                                }
-                              },
+                            child: TextField(
+                              controller: academicYearController,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration(
+                                'Academic Year ID',
+                                Icons.school_outlined,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _dateButton(
-                              label: endDate == null
-                                  ? 'End Date'
-                                  : _formatDate(endDate!),
-                              icon: Icons.event_outlined,
-                              onPressed: () async {
-                                final date = await showDatePicker(
-                                  context: context,
-                                  firstDate: DateTime(2026),
-                                  lastDate: DateTime(2030),
-                                  initialDate: startDate ?? DateTime.now(),
-                                );
-
-                                if (date != null) {
-                                  setDialogState(() {
-                                    endDate = date;
-                                  });
-                                }
-                              },
+                            child: TextField(
+                              controller: yearController,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration(
+                                'Year',
+                                Icons.calendar_today_outlined,
+                              ),
                             ),
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 14),
+
                       DropdownButtonFormField<String>(
-                        value: examStatus,
+                        value: examType,
+                        decoration: _inputDecoration(
+                          'Exam Type',
+                          Icons.category_outlined,
+                        ),
+                        items: const [
+                          'UNIT_TEST',
+                          'PERIODIC_TEST',
+                          'MID_TERM',
+                          'ANNUAL',
+                          'TERMINAL',
+                          'HALF_YEARLY',
+                          'OTHER',
+                        ].map((item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(
+                              _prettyEnum(item),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              examType = value;
+                            });
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      DropdownButtonFormField<String>(
+                        value: status,
                         decoration: _inputDecoration(
                           'Status',
                           Icons.flag_outlined,
                         ),
-                        items: const ['Upcoming', 'Scheduled', 'Completed'].map(
-                          (item) {
-                            return DropdownMenuItem(
-                              value: item,
-                              child: Text(item),
-                            );
-                          },
-                        ).toList(),
+                        items: const [
+                          'SCHEDULED',
+                          'UPCOMING',
+                          'COMPLETED',
+                          'CANCELLED',
+                        ].map((item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(
+                              _prettyEnum(item),
+                            ),
+                          );
+                        }).toList(),
                         onChanged: (value) {
                           if (value != null) {
                             setDialogState(() {
-                              examStatus = value;
+                              status = value;
                             });
                           }
                         },
@@ -237,50 +323,150 @@ class _ExamsScreenState extends State<ExamsScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext);
+                        },
                   child: const Text('Cancel'),
                 ),
+
                 ElevatedButton(
-                  onPressed: () {
-                    if (nameController.text.trim().isEmpty ||
-                        startDate == null ||
-                        endDate == null) {
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter exam name and dates.'),
-                        ),
-                      );
-                      return;
-                    }
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final name =
+                              nameController.text.trim();
 
-                    setState(() {
-                      exams.add({
-                        'id':
-                            'EX${(exams.length + 1).toString().padLeft(3, '0')}',
-                        'name': nameController.text.trim(),
-                        'class': examClass,
-                        'startDate': _formatDate(startDate!),
-                        'endDate': _formatDate(endDate!),
-                        'subjects': 0,
-                        'students': 0,
-                        'status': examStatus,
-                      });
-                    });
+                          final description =
+                              descriptionController.text.trim();
 
-                    Navigator.pop(dialogContext);
+                          final academicYearId =
+                              int.tryParse(
+                                academicYearController.text.trim(),
+                              );
 
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Examination created successfully.'),
-                        backgroundColor: Color(0xFF15803D),
-                      ),
-                    );
-                  },
+                          final year =
+                              int.tryParse(
+                                yearController.text.trim(),
+                              );
+
+                          if (name.isEmpty) {
+                            _showSnack(
+                              'Please enter exam name.',
+                            );
+                            return;
+                          }
+
+                          if (academicYearId == null) {
+                            _showSnack(
+                              'Please enter valid Academic Year ID.',
+                            );
+                            return;
+                          }
+
+                          if (year == null) {
+                            _showSnack(
+                              'Please enter valid year.',
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSaving = true;
+                          });
+
+                          try {
+                            ExaminationModel result;
+
+                            if (exam == null) {
+                              result = await _service!
+                                  .createExamination(
+                                academicYearId:
+                                    academicYearId,
+                                name: name,
+                                description: description,
+                                examType: examType,
+                                year: year,
+                                status: status,
+                              );
+                            } else {
+                              result = await _service!
+                                  .updateExamination(
+                                id: exam.id!,
+                                academicYearId:
+                                    academicYearId,
+                                name: name,
+                                description: description,
+                                examType: examType,
+                                year: year,
+                                status: status,
+                              );
+                            }
+
+                            if (!mounted) return;
+
+                            Navigator.pop(dialogContext);
+
+                            if (exam == null) {
+                              setState(() {
+                                exams.insert(0, result);
+                              });
+
+                              _showSnack(
+                                'Examination created successfully.',
+                              );
+                            } else {
+                              setState(() {
+                                final index = exams.indexWhere(
+                                  (e) => e.id == exam.id,
+                                );
+
+                                if (index != -1) {
+                                  exams[index] = result;
+                                }
+                              });
+
+                              _showSnack(
+                                'Examination updated successfully.',
+                              );
+                            }
+                          } catch (e) {
+                            if (!mounted) return;
+
+                            setDialogState(() {
+                              isSaving = false;
+                            });
+
+                            _showSnack(
+                              e.toString().replaceFirst(
+                                'Exception: ',
+                                '',
+                              ),
+                            );
+                          } finally {
+                            isSaving = false;
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor:
+                        const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Create Exam'),
+                  child: isSaving
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          exam == null
+                              ? 'Create Exam'
+                              : 'Update Exam',
+                        ),
                 ),
               ],
             );
@@ -290,183 +476,162 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 19),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-    );
-  }
+  // ============================================================
+  // DETAILS
+  // ============================================================
 
-  Widget _dateButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(9),
-      child: Container(
-        height: 54,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFD1D5DB)),
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: const Color(0xFF6B7280)),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: label.contains('Date')
-                      ? const Color(0xFF9CA3AF)
-                      : const Color(0xFF374151),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Future<void> _showExamDetails(
+    ExaminationModel exam,
+  ) async {
+    setState(() {
+      selectedSchedules = [];
+      isLoadingSchedules = true;
+    });
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
+    if (exam.id != null) {
+      try {
+        final schedules = await _service!
+            .getSchedulesByExamination(exam.id!);
 
-    return '${date.day.toString().padLeft(2, '0')} '
-        '${months[date.month - 1]} ${date.year}';
-  }
+        if (!mounted) return;
 
-  void _showExamDetails(Map<String, dynamic> exam) {
+        setState(() {
+          selectedSchedules = schedules;
+          isLoadingSchedules = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+
+        setState(() {
+          isLoadingSchedules = false;
+        });
+
+        _showSnack(
+          e.toString().replaceFirst(
+            'Exception: ',
+            '',
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        isLoadingSchedules = false;
+      });
+    }
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            exam['name'],
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            exam.name,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _detailRow('Exam ID', exam['id']),
-                _detailRow('Class', exam['class']),
-                _detailRow('Start Date', exam['startDate']),
-                _detailRow('End Date', exam['endDate']),
-                _detailRow('Subjects', '${exam['subjects']}'),
-                _detailRow('Students', '${exam['students']}'),
-                _detailRow('Status', exam['status']),
-              ],
+            width: 650,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  _detailRow(
+                    'Exam ID',
+                    '${exam.id ?? '-'}',
+                  ),
+                  _detailRow(
+                    'Academic Year',
+                    '${exam.academicYearId ?? '-'}',
+                  ),
+                  _detailRow(
+                    'Exam Type',
+                    _prettyEnum(exam.examType),
+                  ),
+                  _detailRow(
+                    'Year',
+                    '${exam.year}',
+                  ),
+                  _detailRow(
+                    'Status',
+                    _prettyEnum(exam.status),
+                  ),
+                  _detailRow(
+                    'Description',
+                    exam.description.isEmpty
+                        ? '-'
+                        : exam.description,
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  const Text(
+                    'Exam Schedules',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  if (isLoadingSchedules)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(25),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (selectedSchedules.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius:
+                            BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'No exam schedules found.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    )
+                  else
+                    _scheduleTable(),
+                ],
+              ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
               child: const Text('Close'),
             ),
-            if (exam['status'] != 'Completed')
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showSnack('Exam schedule editor will be connected later.');
-                },
-                icon: const Icon(Icons.edit_outlined, size: 17),
-                label: const Text('Edit'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 105,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _deleteExam(Map<String, dynamic> exam) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text(
-            'Delete Examination?',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Text('Are you sure you want to delete "${exam['name']}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: () {
-                setState(() {
-                  exams.remove(exam);
-                });
+                Navigator.pop(dialogContext);
 
-                Navigator.pop(context);
-
-                _showSnack('Examination deleted.');
+                _showEditExamDialog(exam);
               },
+              icon: const Icon(
+                Icons.edit_outlined,
+                size: 17,
+              ),
+              label: const Text('Edit'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
+                backgroundColor:
+                    const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Delete'),
             ),
           ],
         );
@@ -474,34 +639,133 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 24),
-            _buildFilters(),
-            const SizedBox(height: 24),
-            _buildSummaryCards(),
-            const SizedBox(height: 24),
-            _buildExamList(),
+  // ============================================================
+  // SCHEDULE TABLE
+  // ============================================================
+
+  Widget _scheduleTable() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 22,
+          headingRowColor:
+              const WidgetStatePropertyAll(
+            Color(0xFFF9FAFB),
+          ),
+          columns: const [
+            DataColumn(
+              label: Text('Subject'),
+            ),
+            DataColumn(
+              label: Text('Class'),
+            ),
+            DataColumn(
+              label: Text('Date'),
+            ),
+            DataColumn(
+              label: Text('Time'),
+            ),
+            DataColumn(
+              label: Text('Marks'),
+            ),
+            DataColumn(
+              label: Text('Room'),
+            ),
+            DataColumn(
+              label: Text('Status'),
+            ),
           ],
+          rows: selectedSchedules.map((schedule) {
+            return DataRow(
+              cells: [
+                DataCell(
+                  Text(
+                    schedule.subject,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    '${schedule.classId ?? '-'}'
+                    '${schedule.sectionId != null ? ' / ${schedule.sectionId}' : ''}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    _formatApiDate(
+                      schedule.examDate,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    _formatTime(
+                      schedule.startTime,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    '${schedule.maxMarks}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    schedule.roomNumber.isEmpty
+                        ? '-'
+                        : schedule.roomNumber,
+                    style: const TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  _statusBadge(
+                    schedule.status,
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
         ),
       ),
     );
   }
+
+  // ============================================================
+  // HEADER
+  // ============================================================
 
   Widget _buildHeader() {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 650) {
           return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               _headerText(),
               const SizedBox(height: 16),
@@ -512,7 +776,9 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
         return Row(
           children: [
-            Expanded(child: _headerText()),
+            Expanded(
+              child: _headerText(),
+            ),
             _addExamButton(),
           ],
         );
@@ -522,7 +788,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   Widget _headerText() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
         const Text(
           'Examinations',
@@ -535,7 +802,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
         const SizedBox(height: 7),
         Text(
           'Create and manage school examinations and schedules.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade600,
+          ),
         ),
       ],
     );
@@ -543,18 +813,34 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   Widget _addExamButton() {
     return ElevatedButton.icon(
-      onPressed: _showAddExamDialog,
-      icon: const Icon(Icons.add, size: 19),
-      label: const Text('Create Examination'),
+      onPressed: _showCreateExamDialog,
+      icon: const Icon(
+        Icons.add,
+        size: 19,
+      ),
+      label: const Text(
+        'Create Examination',
+      ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2563EB),
+        backgroundColor:
+            const Color(0xFF2563EB),
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 15,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.circular(10),
+        ),
       ),
     );
   }
+
+  // ============================================================
+  // FILTERS
+  // ============================================================
 
   Widget _buildFilters() {
     return Container(
@@ -562,26 +848,43 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius:
+            BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth < 700) {
             return Column(
               children: [
-                _classDropdown(),
-                const SizedBox(height: 12),
                 _statusDropdown(),
+                const SizedBox(height: 12),
+                _examTypeDropdown(),
               ],
             );
           }
 
           return Row(
             children: [
-              SizedBox(width: 250, child: _classDropdown()),
+              SizedBox(
+                width: 220,
+                child: _statusDropdown(),
+              ),
               const SizedBox(width: 12),
-              SizedBox(width: 220, child: _statusDropdown()),
+              SizedBox(
+                width: 220,
+                child: _examTypeDropdown(),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: _loadExaminations,
+                icon: const Icon(
+                  Icons.refresh_outlined,
+                ),
+              ),
             ],
           );
         },
@@ -589,34 +892,44 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
   }
 
-  Widget _classDropdown() {
+  Widget _statusDropdown() {
     return _dropdown(
-      value: selectedClass,
+      value: selectedStatus,
       items: const [
-        'All Classes',
-        'Class 1 - A',
-        'Class 1 - B',
-        'Class 2 - A',
-        'Class 2 - B',
-        'Class 3 - A',
-        'Class 4 - A',
-        'Class 5 - A',
+        'All',
+        'UPCOMING',
+        'SCHEDULED',
+        'COMPLETED',
+        'CANCELLED',
       ],
       onChanged: (value) {
+        if (value == null) return;
+
         setState(() {
-          selectedClass = value!;
+          selectedStatus = value;
         });
       },
     );
   }
 
-  Widget _statusDropdown() {
+  Widget _examTypeDropdown() {
     return _dropdown(
-      value: selectedStatus,
-      items: const ['All', 'Upcoming', 'Scheduled', 'Completed'],
+      value: selectedExamType,
+      items: const [
+        'All',
+        'UNIT_TEST',
+        'PERIODIC_TEST',
+        'MID_TERM',
+        'ANNUAL',
+        'TERMINAL',
+        'HALF_YEARLY',
+        'OTHER',
+      ],
       onChanged: (value) {
+        if (value == null) return;
+
         setState(() {
-          selectedStatus = value!;
+          selectedExamType = value;
         });
       },
     );
@@ -629,21 +942,35 @@ class _ExamsScreenState extends State<ExamsScreen> {
   }) {
     return Container(
       height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 11),
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 11,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius:
+            BorderRadius.circular(9),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 19),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            size: 19,
+          ),
           items: items.map((item) {
-            return DropdownMenuItem(
+            return DropdownMenuItem<String>(
               value: item,
-              child: Text(item, style: const TextStyle(fontSize: 12)),
+              child: Text(
+                _prettyEnum(item),
+                style: const TextStyle(
+                  fontSize: 12,
+                ),
+              ),
             );
           }).toList(),
           onChanged: onChanged,
@@ -651,6 +978,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
       ),
     );
   }
+
+  // ============================================================
+  // SUMMARY
+  // ============================================================
 
   Widget _buildSummaryCards() {
     return LayoutBuilder(
@@ -670,8 +1001,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: columns == 1 ? 4 : 2.5,
+          physics:
+              const NeverScrollableScrollPhysics(),
+          childAspectRatio:
+              columns == 1 ? 4 : 2.5,
           children: [
             _summaryCard(
               'Total Exams',
@@ -718,8 +1051,11 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius:
+            BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
       ),
       child: Row(
         children: [
@@ -728,18 +1064,27 @@ class _ExamsScreenState extends State<ExamsScreen> {
             width: 48,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius:
+                  BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(
+              icon,
+              color: color,
+            ),
           ),
           const SizedBox(width: 14),
           Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment:
+                MainAxisAlignment.center,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -757,6 +1102,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
   }
 
+  // ============================================================
+  // EXAM LIST
+  // ============================================================
+
   Widget _buildExamList() {
     final data = filteredExams;
 
@@ -765,11 +1114,15 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius:
+            BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -784,63 +1137,100 @@ class _ExamsScreenState extends State<ExamsScreen> {
               const Spacer(),
               Text(
                 '${data.length} exams',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          data.isEmpty ? _emptyState() : _examTable(data),
+          data.isEmpty
+              ? _emptyState()
+              : _examTable(data),
         ],
       ),
     );
   }
 
-  Widget _examTable(List<Map<String, dynamic>> data) {
+  Widget _examTable(
+    List<ExaminationModel> data,
+  ) {
     return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+      scrollDirection:
+          Axis.horizontal,
       child: DataTable(
         columnSpacing: 30,
         horizontalMargin: 8,
         dataRowMinHeight: 72,
         dataRowMaxHeight: 82,
-        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
+        headingRowColor:
+            const WidgetStatePropertyAll(
+          Color(0xFFF9FAFB),
+        ),
         columns: const [
-          DataColumn(label: Text('Examination')),
-          DataColumn(label: Text('Class')),
-          DataColumn(label: Text('Start Date')),
-          DataColumn(label: Text('End Date')),
-          DataColumn(label: Text('Subjects')),
-          DataColumn(label: Text('Students')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Actions')),
+          DataColumn(
+            label: Text('Examination'),
+          ),
+          DataColumn(
+            label: Text('Exam Type'),
+          ),
+          DataColumn(
+            label: Text('Year'),
+          ),
+          DataColumn(
+            label: Text('Academic Year'),
+          ),
+          DataColumn(
+            label: Text('Status'),
+          ),
+          DataColumn(
+            label: Text('Actions'),
+          ),
         ],
         rows: data.map((exam) {
           return DataRow(
             cells: [
-              DataCell(_examNameCell(exam)),
               DataCell(
-                Text(exam['class'], style: const TextStyle(fontSize: 12)),
-              ),
-              DataCell(
-                Text(exam['startDate'], style: const TextStyle(fontSize: 11)),
-              ),
-              DataCell(
-                Text(exam['endDate'], style: const TextStyle(fontSize: 11)),
+                _examNameCell(exam),
               ),
               DataCell(
                 Text(
-                  '${exam['subjects']}',
-                  style: const TextStyle(fontSize: 12),
+                  _prettyEnum(
+                    exam.examType,
+                  ),
+                  style:
+                      const TextStyle(
+                    fontSize: 12,
+                  ),
                 ),
               ),
               DataCell(
                 Text(
-                  '${exam['students']}',
-                  style: const TextStyle(fontSize: 12),
+                  '${exam.year}',
+                  style:
+                      const TextStyle(
+                    fontSize: 12,
+                  ),
                 ),
               ),
-              DataCell(_statusBadge(exam['status'])),
-              DataCell(_actionButtons(exam)),
+              DataCell(
+                Text(
+                  '${exam.academicYearId ?? '-'}',
+                  style:
+                      const TextStyle(
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              DataCell(
+                _statusBadge(
+                  exam.status,
+                ),
+              ),
+              DataCell(
+                _actionButtons(exam),
+              ),
             ],
           );
         }).toList(),
@@ -848,17 +1238,21 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
   }
 
-  Widget _examNameCell(Map<String, dynamic> exam) {
+  Widget _examNameCell(
+    ExaminationModel exam,
+  ) {
     return SizedBox(
-      width: 210,
+      width: 240,
       child: Row(
         children: [
           Container(
             height: 40,
             width: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(10),
+              color:
+                  const Color(0xFFEFF6FF),
+              borderRadius:
+                  BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.assignment_outlined,
@@ -869,24 +1263,29 @@ class _ExamsScreenState extends State<ExamsScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Text(
-                  exam['name'],
+                  exam.name,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  overflow:
+                      TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight:
+                        FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  exam['id'],
+                  'EX${exam.id ?? '-'}',
                   style: const TextStyle(
                     fontSize: 10,
-                    color: Color(0xFF9CA3AF),
+                    color:
+                        Color(0xFF9CA3AF),
                   ),
                 ),
               ],
@@ -901,93 +1300,370 @@ class _ExamsScreenState extends State<ExamsScreen> {
     Color color;
     Color background;
 
-    switch (status) {
-      case 'Upcoming':
-        color = const Color(0xFF2563EB);
-        background = const Color(0xFFDBEAFE);
+    switch (status.toUpperCase()) {
+      case 'UPCOMING':
+        color =
+            const Color(0xFF2563EB);
+        background =
+            const Color(0xFFDBEAFE);
         break;
 
-      case 'Scheduled':
-        color = const Color(0xFFD97706);
-        background = const Color(0xFFFEF3C7);
+      case 'SCHEDULED':
+        color =
+            const Color(0xFFD97706);
+        background =
+            const Color(0xFFFEF3C7);
         break;
 
-      case 'Completed':
-        color = const Color(0xFF15803D);
-        background = const Color(0xFFDCFCE7);
+      case 'COMPLETED':
+        color =
+            const Color(0xFF15803D);
+        background =
+            const Color(0xFFDCFCE7);
+        break;
+
+      case 'CANCELLED':
+        color =
+            const Color(0xFFDC2626);
+        background =
+            const Color(0xFFFEE2E2);
         break;
 
       default:
-        color = const Color(0xFF6B7280);
-        background = const Color(0xFFF3F4F6);
+        color =
+            const Color(0xFF6B7280);
+        background =
+            const Color(0xFFF3F4F6);
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius:
+            BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        _prettyEnum(status),
         style: TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w600,
+          fontWeight:
+              FontWeight.w600,
           color: color,
         ),
       ),
     );
   }
 
-  Widget _actionButtons(Map<String, dynamic> exam) {
+  Widget _actionButtons(
+    ExaminationModel exam,
+  ) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
         IconButton(
           tooltip: 'View Details',
           onPressed: () {
             _showExamDetails(exam);
           },
-          icon: const Icon(Icons.visibility_outlined, size: 18),
+          icon: const Icon(
+            Icons.visibility_outlined,
+            size: 18,
+          ),
         ),
         IconButton(
-          tooltip: 'Delete',
+          tooltip: 'Edit',
           onPressed: () {
-            _deleteExam(exam);
+            _showEditExamDialog(exam);
           },
           icon: const Icon(
-            Icons.delete_outline,
+            Icons.edit_outlined,
             size: 18,
-            color: Color(0xFFDC2626),
+            color: Color(0xFF2563EB),
           ),
         ),
       ],
     );
   }
 
+  // ============================================================
+  // EMPTY STATE
+  // ============================================================
+
   Widget _emptyState() {
     return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 60),
+      padding:
+          EdgeInsets.symmetric(
+        vertical: 60,
+      ),
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.assignment_outlined, size: 52, color: Color(0xFFD1D5DB)),
+            Icon(
+              Icons.assignment_outlined,
+              size: 52,
+              color: Color(0xFFD1D5DB),
+            ),
             SizedBox(height: 12),
             Text(
               'No examinations found',
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
+                fontWeight:
+                    FontWeight.w600,
+                color:
+                    Color(0xFF374151),
               ),
             ),
             SizedBox(height: 5),
             Text(
-              'Try changing your filters.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+              'Try changing your filters or create a new examination.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color:
+                    Color(0xFF9CA3AF),
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // INPUT DECORATION
+  // ============================================================
+
+  InputDecoration _inputDecoration(
+    String label,
+    IconData icon,
+  ) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(
+        icon,
+        size: 19,
+      ),
+      border: OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(9),
+      ),
+      contentPadding:
+          const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 13,
+      ),
+    );
+  }
+
+  // ============================================================
+  // DETAIL ROW
+  // ============================================================
+
+  Widget _detailRow(
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(
+        vertical: 7,
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color:
+                    Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style:
+                  const TextStyle(
+                fontSize: 12,
+                fontWeight:
+                    FontWeight.w600,
+                color:
+                    Color(0xFF111827),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+
+  String _prettyEnum(String value) {
+    if (value.isEmpty) return '-';
+
+    return value
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map(
+          (word) {
+            if (word.isEmpty) return '';
+
+            return word[0].toUpperCase() +
+                word.substring(1).toLowerCase();
+          },
+        )
+        .join(' ');
+  }
+
+  String _formatApiDate(String value) {
+    if (value.isEmpty) return '-';
+
+    try {
+      final date = DateTime.parse(value);
+
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+
+      return '${date.day.toString().padLeft(2, '0')} '
+          '${months[date.month - 1]} '
+          '${date.year}';
+    } catch (_) {
+      return value;
+    }
+  }
+
+  String _formatTime(String value) {
+    if (value.isEmpty) return '-';
+
+    if (value.length >= 5) {
+      return value.substring(0, 5);
+    }
+
+    return value;
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor:
+          const Color(0xFFF5F7FB),
+      body: isLoading
+          ? const Center(
+              child:
+                  CircularProgressIndicator(),
+            )
+          : SingleChildScrollView(
+              padding:
+                  const EdgeInsets.all(28),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+
+                  const SizedBox(height: 24),
+
+                  if (errorMessage != null)
+                    _errorBanner(),
+
+                  if (errorMessage != null)
+                    const SizedBox(height: 16),
+
+                  _buildFilters(),
+
+                  const SizedBox(height: 24),
+
+                  _buildSummaryCards(),
+
+                  const SizedBox(height: 24),
+
+                  _buildExamList(),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _errorBanner() {
+    return Container(
+      width: double.infinity,
+      padding:
+          const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            const Color(0xFFFEF2F2),
+        borderRadius:
+            BorderRadius.circular(10),
+        border: Border.all(
+          color:
+              const Color(0xFFFECACA),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color:
+                Color(0xFFDC2626),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              errorMessage!,
+              style:
+                  const TextStyle(
+                fontSize: 12,
+                color:
+                    Color(0xFF991B1B),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Retry',
+            onPressed:
+                _loadExaminations,
+            icon: const Icon(
+              Icons.refresh,
+              size: 18,
+            ),
+          ),
+        ],
       ),
     );
   }

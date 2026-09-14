@@ -24,6 +24,8 @@ import '../../core/network/api_client.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../../services/admin_dashboard_service.dart';
+import '../teachers/services/subject_service.dart';
+import '../subjects/subjects_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -130,6 +132,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'Students',
       'Teachers',
       'Classes',
+      'Subjects',
       'Parents',
       'Attendance',
       'Homework',
@@ -325,18 +328,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               icon: Icons.person,
               subtitle: 'Total teachers',
             ),
+
             StatCard(
               title: 'Classes',
               value: _isLoadingDashboard ? '...' : _classCount.toString(),
               icon: Icons.class_,
               subtitle: 'Total classes',
             ),
+
             StatCard(
               title: 'Parents',
               value: '310',
               subtitle: 'Registered Parents',
               icon: Icons.family_restroom_outlined,
-              onTap: () => _onMenuSelected(4),
+              onTap: () => _onMenuSelected(5),
             ),
           ],
         );
@@ -875,42 +880,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return const ClassesScreen();
 
       case 4:
-        return const ParentsScreen();
+        return const SubjectsScreen(schoolId: 1);
 
       case 5:
-        return const AttendanceScreen();
+        return const ParentsScreen();
 
       case 6:
-        return const HomeworkScreen();
+        return const AttendanceScreen();
 
       case 7:
-        return const TimetableScreen();
+        return const HomeworkScreen();
 
       case 8:
-        return const FeesScreen();
+        return const TimetableScreen();
 
       case 9:
-        return const ExamsScreen();
+        return const FeesScreen();
 
       case 10:
-        return const McqScreen();
+        return const ExamsScreen();
 
       case 11:
-        return const ResultsScreen();
+        return const McqScreen();
 
       case 12:
-        return const NoticesScreen();
+        return const ResultsScreen();
 
       case 13:
-        return const EventsScreen();
+        return const NoticesScreen();
 
       case 14:
-        return const AdmissionsScreen();
+        return const EventsScreen();
 
       case 15:
-        return const SettingsScreen();
+        return const AdmissionsScreen();
 
       case 16:
+        return const SettingsScreen();
+
+      case 17:
         return _buildLogoutScreen();
 
       default:

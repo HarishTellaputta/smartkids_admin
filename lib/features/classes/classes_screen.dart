@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smartkids_admin/features/classes/models/class_form_model.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
+import 'package:smartkids_admin/features/teachers/models/class_subject_model.dart';
 import 'package:smartkids_admin/features/teachers/models/subject_model.dart';
 import 'package:smartkids_admin/features/teachers/services/class_service.dart';
 import 'package:smartkids_admin/features/teachers/services/class_subject_service.dart';
@@ -16,13 +17,13 @@ class ClassesScreen extends StatefulWidget {
 
 class _ClassesScreenState extends State<ClassesScreen> {
   static const int _schoolId = 1;
-  final Map<int, List<SubjectModel>> _classSubjectsMap = {};
+  final Map<int, List<ClassSubjectModel>> _classSubjectsMap = {};
   ClassService? _classService;
   ClassSubjectService? _classSubjectService;
   SubjectService? _subjectService;
 
   List<SubjectModel> _allSubjects = [];
-  List<SubjectModel> _classSubjects = [];
+  List<ClassSubjectModel> _classSubjects = [];
   List<SchoolClass> _classes = [];
   List<SchoolClass> _filteredClasses = [];
 
@@ -99,7 +100,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
 
       final classSubjectService = ClassSubjectService(token);
 
-      final Map<int, List<SubjectModel>> subjectMap = {};
+      final Map<int, List<ClassSubjectModel>> subjectMap = {};
 
       // Load subjects for each class
       for (final classItem in data) {
@@ -166,7 +167,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
       ]);
 
       setState(() {
-        _classSubjects = results[0] as List<SubjectModel>;
+        _classSubjects = results[0] as List<ClassSubjectModel>;
         _allSubjects = results[1] as List<SubjectModel>;
         _subjectsLoading = false;
       });
@@ -215,7 +216,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
                           final subject = _allSubjects[index];
 
                           final isAssigned = _classSubjects.any(
-                            (item) => item.id == subject.id,
+                            (item) => item.subjectId == subject.id,
                           );
 
                           return CheckboxListTile(
@@ -393,20 +394,18 @@ class _ClassesScreenState extends State<ClassesScreen> {
   // DELETE CLASS
   // ============================================================
 
-  Future<ClassFormModel?> _showClassDialog({
-  SchoolClass? existingClass,
-}) async {
-  return showDialog<ClassFormModel>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) {
-      return _ClassFormDialog(
-        existingClass: existingClass,
-        schoolId: _schoolId,
-      );
-    },
-  );
-}
+  Future<ClassFormModel?> _showClassDialog({SchoolClass? existingClass}) async {
+    return showDialog<ClassFormModel>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return _ClassFormDialog(
+          existingClass: existingClass,
+          schoolId: _schoolId,
+        );
+      },
+    );
+  }
   // ============================================================
   // UI
   // ============================================================
@@ -701,8 +700,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
               // Get subjects assigned to this class
               final subjects = classId != null
                   ? (_classSubjectsMap[classId] ?? [])
-                  : <SubjectModel>[];
-
+                  : <ClassSubjectModel>[];
               return DataRow(
                 cells: [
                   // ======================================================
@@ -746,7 +744,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
                             )
                           : Text(
                               subjects
-                                  .map((subject) => subject.name)
+                                  .map((subject) => subject.subjectName)
                                   .join(', '),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -946,8 +944,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
     }
   }
 
-
-
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -1000,14 +996,12 @@ class _ClassesScreenState extends State<ClassesScreen> {
     );
   }
 }
+
 class _ClassFormDialog extends StatefulWidget {
   final SchoolClass? existingClass;
   final int schoolId;
 
-  const _ClassFormDialog({
-    required this.existingClass,
-    required this.schoolId,
-  });
+  const _ClassFormDialog({required this.existingClass, required this.schoolId});
 
   @override
   State<_ClassFormDialog> createState() => _ClassFormDialogState();
@@ -1063,9 +1057,7 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
       return;
     }
 
-    final year = int.tryParse(
-      _yearController.text.trim(),
-    );
+    final year = int.tryParse(_yearController.text.trim());
 
     if (year == null) {
       return;
@@ -1094,9 +1086,7 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
     final isEdit = widget.existingClass != null;
 
     return AlertDialog(
-      title: Text(
-        isEdit ? 'Edit Class' : 'Add Class',
-      ),
+      title: Text(isEdit ? 'Edit Class' : 'Add Class'),
 
       content: SizedBox(
         width: 500,
@@ -1185,9 +1175,7 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
                       return 'Please enter academic year';
                     }
 
-                    final year = int.tryParse(
-                      value.trim(),
-                    );
+                    final year = int.tryParse(value.trim());
 
                     if (year == null) {
                       return 'Please enter a valid year';
@@ -1227,9 +1215,7 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
 
         ElevatedButton(
           onPressed: _submit,
-          child: Text(
-            isEdit ? 'Update' : 'Create',
-          ),
+          child: Text(isEdit ? 'Update' : 'Create'),
         ),
       ],
     );

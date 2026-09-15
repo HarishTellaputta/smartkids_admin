@@ -6,18 +6,18 @@ class TeacherAssignmentService {
   final Dio _dio;
 
   TeacherAssignmentService(String token)
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          ),
-        );
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://localhost:8080',
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 15),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        ),
+      );
 
   // ============================================================
   // CREATE TEACHER CLASS ASSIGNMENT
@@ -35,13 +35,13 @@ class TeacherAssignmentService {
   Future<TeacherAssignment> createAssignment({
     required int teacherId,
     required int classId,
-    required String subject,
+    required int subjectId,
   }) async {
     try {
       final body = {
         'teacherId': teacherId,
         'classId': classId,
-        'subject': subject,
+        'subjectId': subjectId,
       };
 
       final response = await _dio.post(
@@ -55,25 +55,18 @@ class TeacherAssignmentService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to assign teacher: $e',
-      );
+      throw Exception('Failed to assign teacher: $e');
     }
   }
-
   // ============================================================
   // GET ASSIGNMENT BY ID
   //
   // GET /api/v1/teacher-class-assignments/{id}
   // ============================================================
 
-  Future<TeacherAssignment> getAssignmentById(
-    int id,
-  ) async {
+  Future<TeacherAssignment> getAssignmentById(int id) async {
     try {
-      final response = await _dio.get(
-        '/api/v1/teacher-class-assignments/$id',
-      );
+      final response = await _dio.get('/api/v1/teacher-class-assignments/$id');
 
       return TeacherAssignment.fromJson(
         Map<String, dynamic>.from(response.data),
@@ -81,9 +74,7 @@ class TeacherAssignmentService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to load assignment: $e',
-      );
+      throw Exception('Failed to load assignment: $e');
     }
   }
 
@@ -93,9 +84,7 @@ class TeacherAssignmentService {
   // GET /api/v1/teacher-class-assignments/teacher/{teacherId}
   // ============================================================
 
-  Future<List<TeacherAssignment>> getAssignmentsByTeacher(
-    int teacherId,
-  ) async {
+  Future<List<TeacherAssignment>> getAssignmentsByTeacher(int teacherId) async {
     try {
       final response = await _dio.get(
         '/api/v1/teacher-class-assignments/teacher/$teacherId',
@@ -105,9 +94,7 @@ class TeacherAssignmentService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to load teacher assignments: $e',
-      );
+      throw Exception('Failed to load teacher assignments: $e');
     }
   }
 
@@ -117,9 +104,7 @@ class TeacherAssignmentService {
   // GET /api/v1/teacher-class-assignments/class/{classId}
   // ============================================================
 
-  Future<List<TeacherAssignment>> getAssignmentsByClass(
-    int classId,
-  ) async {
+  Future<List<TeacherAssignment>> getAssignmentsByClass(int classId) async {
     try {
       final response = await _dio.get(
         '/api/v1/teacher-class-assignments/class/$classId',
@@ -129,9 +114,7 @@ class TeacherAssignmentService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to load class assignments: $e',
-      );
+      throw Exception('Failed to load class assignments: $e');
     }
   }
 
@@ -141,26 +124,22 @@ class TeacherAssignmentService {
   // GET
   // /api/v1/teacher-class-assignments/teacher/{teacherId}/subject/{subject}
   // ============================================================
-
   Future<List<TeacherAssignment>> getAssignmentsByTeacherAndSubject({
     required int teacherId,
-    required String subject,
+    required int subjectId,
   }) async {
     try {
       final response = await _dio.get(
-        '/api/v1/teacher-class-assignments/teacher/$teacherId/subject/${Uri.encodeComponent(subject)}',
+        '/api/v1/teacher-class-assignments/teacher/$teacherId/subject/$subjectId',
       );
 
       return _parseAssignmentList(response.data);
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to load subject assignments: $e',
-      );
+      throw Exception('Failed to load subject assignments: $e');
     }
   }
-
   // ============================================================
   // GET SUBJECTS ASSIGNED TO TEACHER
   //
@@ -170,9 +149,7 @@ class TeacherAssignmentService {
   // ["Mathematics", "Science"]
   // ============================================================
 
-  Future<List<String>> getSubjectsByTeacher(
-    int teacherId,
-  ) async {
+  Future<List<String>> getSubjectsByTeacher(int teacherId) async {
     try {
       final response = await _dio.get(
         '/api/v1/teacher-class-assignments/teacher/$teacherId/subjects',
@@ -181,18 +158,14 @@ class TeacherAssignmentService {
       final data = response.data;
 
       if (data is List) {
-        return data
-            .map((item) => item.toString())
-            .toList();
+        return data.map((item) => item.toString()).toList();
       }
 
       return [];
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to load teacher subjects: $e',
-      );
+      throw Exception('Failed to load teacher subjects: $e');
     }
   }
 
@@ -204,15 +177,11 @@ class TeacherAssignmentService {
 
   Future<void> deleteAssignment(int id) async {
     try {
-      await _dio.delete(
-        '/api/v1/teacher-class-assignments/$id',
-      );
+      await _dio.delete('/api/v1/teacher-class-assignments/$id');
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw Exception(
-        'Failed to remove assignment: $e',
-      );
+      throw Exception('Failed to remove assignment: $e');
     }
   }
 
@@ -220,15 +189,12 @@ class TeacherAssignmentService {
   // PARSE ASSIGNMENT LIST
   // ============================================================
 
-  List<TeacherAssignment> _parseAssignmentList(
-    dynamic data,
-  ) {
+  List<TeacherAssignment> _parseAssignmentList(dynamic data) {
     if (data is List) {
       return data
           .map(
-            (json) => TeacherAssignment.fromJson(
-              Map<String, dynamic>.from(json),
-            ),
+            (json) =>
+                TeacherAssignment.fromJson(Map<String, dynamic>.from(json)),
           )
           .toList();
     }
@@ -239,13 +205,11 @@ class TeacherAssignmentService {
     //   "content": [...]
     // }
 
-    if (data is Map<String, dynamic> &&
-        data['content'] is List) {
+    if (data is Map<String, dynamic> && data['content'] is List) {
       return (data['content'] as List)
           .map(
-            (json) => TeacherAssignment.fromJson(
-              Map<String, dynamic>.from(json),
-            ),
+            (json) =>
+                TeacherAssignment.fromJson(Map<String, dynamic>.from(json)),
           )
           .toList();
     }
@@ -287,8 +251,7 @@ class TeacherAssignmentService {
         return 'Server error. Please try again later.';
       }
 
-      if (response.data is Map &&
-          response.data['message'] != null) {
+      if (response.data is Map && response.data['message'] != null) {
         return response.data['message'].toString();
       }
     }

@@ -4,7 +4,9 @@ class TeacherAssignment {
   final String? teacherName;
   final int? classId;
   final String? className;
-  final String? subject;
+  final int? subjectId;
+  final String? subjectName;
+  final String? subjectCode;
   final DateTime? assignedAt;
 
   const TeacherAssignment({
@@ -13,31 +15,25 @@ class TeacherAssignment {
     this.teacherName,
     this.classId,
     this.className,
-    this.subject,
+    this.subjectId,
+    this.subjectName,
+    this.subjectCode,
     this.assignedAt,
   });
 
-  // ============================================================
-  // FROM JSON
-  // ============================================================
-
-  factory TeacherAssignment.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory TeacherAssignment.fromJson(Map<String, dynamic> json) {
     return TeacherAssignment(
       id: _parseInt(json['id']),
       teacherId: _parseInt(json['teacherId']),
       teacherName: _parseString(json['teacherName']),
       classId: _parseInt(json['classId']),
       className: _parseString(json['className']),
-      subject: _parseString(json['subject']),
+      subjectId: _parseInt(json['subjectId']),
+      subjectName: _parseString(json['subjectName']),
+      subjectCode: _parseString(json['subjectCode']),
       assignedAt: _parseDateTime(json['assignedAt']),
     );
   }
-
-  // ============================================================
-  // TO JSON
-  // ============================================================
 
   Map<String, dynamic> toJson() {
     return {
@@ -46,14 +42,12 @@ class TeacherAssignment {
       'teacherName': teacherName,
       'classId': classId,
       'className': className,
-      'subject': subject,
+      'subjectId': subjectId,
+      'subjectName': subjectName,
+      'subjectCode': subjectCode,
       'assignedAt': assignedAt?.toIso8601String(),
     };
   }
-
-  // ============================================================
-  // COPY WITH
-  // ============================================================
 
   TeacherAssignment copyWith({
     int? id,
@@ -61,7 +55,9 @@ class TeacherAssignment {
     String? teacherName,
     int? classId,
     String? className,
-    String? subject,
+    int? subjectId,
+    String? subjectName,
+    String? subjectCode,
     DateTime? assignedAt,
   }) {
     return TeacherAssignment(
@@ -70,7 +66,9 @@ class TeacherAssignment {
       teacherName: teacherName ?? this.teacherName,
       classId: classId ?? this.classId,
       className: className ?? this.className,
-      subject: subject ?? this.subject,
+      subjectId: subjectId ?? this.subjectId,
+      subjectName: subjectName ?? this.subjectName,
+      subjectCode: subjectCode ?? this.subjectCode,
       assignedAt: assignedAt ?? this.assignedAt,
     );
   }
@@ -83,23 +81,17 @@ class TeacherAssignment {
         'teacherName: $teacherName, '
         'classId: $classId, '
         'className: $className, '
-        'subject: $subject, '
+        'subjectId: $subjectId, '
+        'subjectName: $subjectName, '
+        'subjectCode: $subjectCode, '
         'assignedAt: $assignedAt'
         ')';
   }
 }
 
-// ============================================================
-// HELPERS
-// ============================================================
-
 int? _parseInt(dynamic value) {
   if (value == null) return null;
-
-  if (value is int) {
-    return value;
-  }
-
+  if (value is int) return value;
   return int.tryParse(value.toString());
 }
 

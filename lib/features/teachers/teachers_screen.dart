@@ -11,9 +11,10 @@ import 'services/teacher_assignment_service.dart';
 
 import 'dialogs/add_teacher_dialog.dart';
 import 'dialogs/edit_teacher_dialog.dart';
+import 'dialogs/teacher_filter_dialog.dart';
 import 'dialogs/teacher_details_dialog.dart';
 import 'dialogs/assign_class_dialog.dart';
-import 'dialogs/teacher_filter_dialog.dart';
+import 'dialogs/assign_class_dialog.dart';
 
 class TeachersScreen extends StatefulWidget {
   const TeachersScreen({super.key});
@@ -41,8 +42,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
   String _searchQuery = '';
   String _selectedStatus = 'All';
 
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -71,10 +71,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         _isLoading = false;
       });
 
-      _showMessage(
-        'Authentication token not found.',
-        isError: true,
-      );
+      _showMessage('Authentication token not found.', isError: true);
 
       return;
     }
@@ -111,10 +108,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         _isLoading = false;
       });
 
-      _showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
     }
   }
 
@@ -128,8 +122,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     }
 
     try {
-      final classes =
-          await _classService!.getClassesBySchool(_schoolId);
+      final classes = await _classService!.getClassesBySchool(_schoolId);
 
       if (!mounted) return;
 
@@ -144,10 +137,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         _isLoadingClasses = false;
       });
 
-      _showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
     }
   }
 
@@ -161,8 +151,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     }
 
     try {
-      final users =
-          await _teacherService!.getAvailableTeacherUsers();
+      final users = await _teacherService!.getAvailableTeacherUsers();
 
       if (!mounted) return;
 
@@ -177,10 +166,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         _isLoadingAvailableUsers = false;
       });
 
-      _showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
     }
   }
 
@@ -196,23 +182,16 @@ class _TeachersScreenState extends State<TeachersScreen> {
         final matchesSearch =
             query.isEmpty ||
             (teacher.name ?? '').toLowerCase().contains(query) ||
-            (teacher.employeeId ?? '')
-                .toLowerCase()
-                .contains(query) ||
+            (teacher.employeeId ?? '').toLowerCase().contains(query) ||
             (teacher.phone ?? '').toLowerCase().contains(query) ||
             (teacher.email ?? '').toLowerCase().contains(query) ||
-            (teacher.designation ?? '')
-                .toLowerCase()
-                .contains(query) ||
-            (teacher.qualification ?? '')
-                .toLowerCase()
-                .contains(query);
+            (teacher.designation ?? '').toLowerCase().contains(query) ||
+            (teacher.qualification ?? '').toLowerCase().contains(query);
 
         final status = (teacher.status ?? '').toUpperCase();
 
         final matchesStatus =
-            _selectedStatus == 'All' ||
-            status == _selectedStatus;
+            _selectedStatus == 'All' || status == _selectedStatus;
 
         return matchesSearch && matchesStatus;
       }).toList();
@@ -337,6 +316,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
           teacher: teacher,
           classes: _classes,
           assignmentService: _assignmentService!,
+          classService: _classService!, // ADD THIS
           isLoadingClasses: _isLoadingClasses,
         );
       },
@@ -400,10 +380,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
     }
   }
 
@@ -415,9 +392,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (_) {
-        return TeacherFilterDialog(
-          selectedStatus: _selectedStatus,
-        );
+        return TeacherFilterDialog(selectedStatus: _selectedStatus);
       },
     );
 
@@ -445,12 +420,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  24,
-                  24,
-                  24,
-                  0,
-                ),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
                 child: _buildHeader(),
               ),
             ),
@@ -462,9 +432,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _buildToolbar(),
               ),
             ),
@@ -495,10 +463,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
             children: [
               _headerText(),
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: _addTeacherButton(),
-              ),
+              SizedBox(width: double.infinity, child: _addTeacherButton()),
             ],
           );
         }
@@ -528,10 +493,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         SizedBox(height: 6),
         Text(
           'Manage teachers and professional information',
-          style: TextStyle(
-            fontSize: 14,
-            color: Color(0xFF667085),
-          ),
+          style: TextStyle(fontSize: 14, color: Color(0xFF667085)),
         ),
       ],
     );
@@ -545,13 +507,8 @@ class _TeachersScreenState extends State<TeachersScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 15,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -581,12 +538,11 @@ class _TeachersScreenState extends State<TeachersScreen> {
       builder: (context, constraints) {
         const spacing = 12.0;
 
-        final width =
-            constraints.maxWidth >= 900
-                ? (constraints.maxWidth - 36) / 4
-                : constraints.maxWidth >= 600
-                    ? (constraints.maxWidth - 12) / 2
-                    : constraints.maxWidth;
+        final width = constraints.maxWidth >= 900
+            ? (constraints.maxWidth - 36) / 4
+            : constraints.maxWidth >= 600
+            ? (constraints.maxWidth - 12) / 2
+            : constraints.maxWidth;
 
         return Wrap(
           spacing: spacing,
@@ -635,9 +591,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFE7EAF0),
-          ),
+          border: Border.all(color: const Color(0xFFE7EAF0)),
         ),
         child: Row(
           children: [
@@ -648,16 +602,12 @@ class _TeachersScreenState extends State<TeachersScreen> {
                 color: const Color(0xFFEFF4FF),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.people_outline,
-                color: Color(0xFF2563EB),
-              ),
+              child: const Icon(Icons.people_outline, color: Color(0xFF2563EB)),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -696,9 +646,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE7EAF0),
-        ),
+        border: Border.all(color: const Color(0xFFE7EAF0)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -755,8 +703,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
       controller: _searchController,
       onChanged: _onSearchChanged,
       decoration: InputDecoration(
-        hintText:
-            'Search by name, employee ID, phone, email...',
+        hintText: 'Search by name, employee ID, phone, email...',
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
@@ -776,19 +723,10 @@ class _TeachersScreenState extends State<TeachersScreen> {
     return OutlinedButton.icon(
       onPressed: _showFilterDialog,
       icon: const Icon(Icons.filter_list),
-      label: Text(
-        _selectedStatus == 'All'
-            ? 'Filter'
-            : _selectedStatus,
-      ),
+      label: Text(_selectedStatus == 'All' ? 'Filter' : _selectedStatus),
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 15,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(11),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
       ),
     );
   }
@@ -815,27 +753,18 @@ class _TeachersScreenState extends State<TeachersScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.people_outline,
-              size: 56,
-              color: Colors.grey.shade400,
-            ),
+            Icon(Icons.people_outline, size: 56, color: Colors.grey.shade400),
             const SizedBox(height: 12),
             const Text(
               'No teachers found',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 5),
             Text(
               _searchQuery.isNotEmpty
                   ? 'Try a different search term.'
                   : 'Add your first teacher to get started.',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(color: Colors.grey.shade600),
             ),
           ],
         ),
@@ -869,34 +798,12 @@ class _TeachersScreenState extends State<TeachersScreen> {
             return DataRow(
               cells: [
                 DataCell(_teacherCell(teacher)),
-                DataCell(
-                  Text(
-                    teacher.employeeId ?? '-',
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    teacher.designation ?? '-',
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    teacher.qualification ?? '-',
-                  ),
-                ),
-                DataCell(
-                  Text(
-                    teacher.phone ?? '-',
-                  ),
-                ),
-                DataCell(
-                  _statusBadge(
-                    teacher.status ?? 'UNKNOWN',
-                  ),
-                ),
-                DataCell(
-                  _actionButtons(teacher),
-                ),
+                DataCell(Text(teacher.employeeId ?? '-')),
+                DataCell(Text(teacher.designation ?? '-')),
+                DataCell(Text(teacher.qualification ?? '-')),
+                DataCell(Text(teacher.phone ?? '-')),
+                DataCell(_statusBadge(teacher.status ?? 'UNKNOWN')),
+                DataCell(_actionButtons(teacher)),
               ],
             );
           }).toList(),
@@ -909,9 +816,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     return BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: const Color(0xFFE7EAF0),
-      ),
+      border: Border.all(color: const Color(0xFFE7EAF0)),
     );
   }
 
@@ -966,14 +871,9 @@ class _TeachersScreenState extends State<TeachersScreen> {
     final isActive = normalized == 'ACTIVE';
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isActive
-            ? const Color(0xFFECFDF3)
-            : const Color(0xFFFFF1F2),
+        color: isActive ? const Color(0xFFECFDF3) : const Color(0xFFFFF1F2),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -981,9 +881,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w700,
-          color: isActive
-              ? const Color(0xFF027A48)
-              : const Color(0xFFB42318),
+          color: isActive ? const Color(0xFF027A48) : const Color(0xFFB42318),
         ),
       ),
     );
@@ -1002,41 +900,28 @@ class _TeachersScreenState extends State<TeachersScreen> {
           onPressed: () {
             _showTeacherDetails(teacher);
           },
-          icon: const Icon(
-            Icons.visibility_outlined,
-            size: 20,
-          ),
+          icon: const Icon(Icons.visibility_outlined, size: 20),
         ),
         IconButton(
           tooltip: 'Edit',
           onPressed: () {
             _showEditTeacherDialog(teacher);
           },
-          icon: const Icon(
-            Icons.edit_outlined,
-            size: 20,
-          ),
+          icon: const Icon(Icons.edit_outlined, size: 20),
         ),
         IconButton(
           tooltip: 'Assign Class',
           onPressed: () {
             _showAssignClassDialog(teacher);
           },
-          icon: const Icon(
-            Icons.class_outlined,
-            size: 20,
-          ),
+          icon: const Icon(Icons.class_outlined, size: 20),
         ),
         IconButton(
           tooltip: 'Delete',
           onPressed: () {
             _deleteTeacher(teacher);
           },
-          icon: const Icon(
-            Icons.delete_outline,
-            size: 20,
-            color: Colors.red,
-          ),
+          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
         ),
       ],
     );
@@ -1056,10 +941,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     return value.substring(0, 1).toUpperCase();
   }
 
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
+  void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -1067,8 +949,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor:
-              isError ? Colors.red.shade700 : null,
+          backgroundColor: isError ? Colors.red.shade700 : null,
           behavior: SnackBarBehavior.floating,
         ),
       );

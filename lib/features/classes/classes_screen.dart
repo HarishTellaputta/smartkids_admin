@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:smartkids_admin/features/classes/models/class_form_model.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 import 'package:smartkids_admin/features/teachers/models/class_subject_model.dart';
@@ -17,7 +18,9 @@ class ClassesScreen extends StatefulWidget {
 
 class _ClassesScreenState extends State<ClassesScreen> {
   static const int _schoolId = 1;
+
   final Map<int, List<ClassSubjectModel>> _classSubjectsMap = {};
+
   ClassService? _classService;
   ClassSubjectService? _classSubjectService;
   SubjectService? _subjectService;
@@ -52,10 +55,11 @@ class _ClassesScreenState extends State<ClassesScreen> {
   Future<void> _initialize() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final token = prefs.getString('jwt_token');
 
       if (token == null || token.isEmpty) {
+        if (!mounted) return;
+
         setState(() {
           _isLoading = false;
         });
@@ -68,8 +72,11 @@ class _ClassesScreenState extends State<ClassesScreen> {
       _classService = ClassService(token);
       _classSubjectService = ClassSubjectService(token);
       _subjectService = SubjectService(token);
+
       await _loadClasses();
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _isLoading = false;
       });
@@ -79,6 +86,9 @@ class _ClassesScreenState extends State<ClassesScreen> {
   }
 
   // ============================================================
+  // LOAD CLASSES
+  // ============================================================
+
   Future<void> _loadClasses() async {
     if (_classService == null) return;
 
@@ -102,7 +112,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
 
       final Map<int, List<ClassSubjectModel>> subjectMap = {};
 
-      // Load subjects for each class
       for (final classItem in data) {
         if (classItem.id == null) {
           continue;
@@ -114,8 +123,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
           );
 
           subjectMap[classItem.id!] = subjects;
-        } catch (e) {
-          // Keep class visible even if subject loading fails
+        } catch (_) {
           subjectMap[classItem.id!] = [];
         }
       }
@@ -145,6 +153,10 @@ class _ClassesScreenState extends State<ClassesScreen> {
     }
   }
 
+  // ============================================================
+  // LOAD CLASS SUBJECTS
+  // ============================================================
+
   Future<void> _loadClassSubjects(int classId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -154,9 +166,11 @@ class _ClassesScreenState extends State<ClassesScreen> {
         throw Exception('JWT token not found. Please login again.');
       }
 
-      setState(() {
-        _subjectsLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _subjectsLoading = true;
+        });
+      }
 
       final classSubjectService = ClassSubjectService(token);
       final subjectService = SubjectService(token);
@@ -166,23 +180,29 @@ class _ClassesScreenState extends State<ClassesScreen> {
         subjectService.getActiveSubjectsBySchool(_schoolId),
       ]);
 
+      if (!mounted) return;
+
       setState(() {
         _classSubjects = results[0] as List<ClassSubjectModel>;
+
         _allSubjects = results[1] as List<SubjectModel>;
+
         _subjectsLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _subjectsLoading = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+      _showMessage(e.toString(), isError: true);
     }
   }
+
+  // ============================================================
+  // MANAGE SUBJECTS
+  // ============================================================
 
   Future<void> _showManageSubjectsDialog(SchoolClass classModel) async {
     if (classModel.id == null) {
@@ -268,21 +288,15 @@ class _ClassesScreenState extends State<ClassesScreen> {
                                 }
 
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        value == true
-                                            ? '${subject.name} assigned successfully'
-                                            : '${subject.name} removed successfully',
-                                      ),
-                                    ),
+                                  _showMessage(
+                                    value == true
+                                        ? '${subject.name} assigned successfully'
+                                        : '${subject.name} removed successfully',
                                   );
                                 }
                               } catch (e) {
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(e.toString())),
-                                  );
+                                  _showMessage(e.toString(), isError: true);
                                 }
                               }
                             },
@@ -303,7 +317,9 @@ class _ClassesScreenState extends State<ClassesScreen> {
         );
       },
     );
-  } // ============================================================
+  }
+
+  // ============================================================
   // SEARCH
   // ============================================================
 
@@ -337,7 +353,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
     if (result == null) return;
 
     try {
-      await _classService!.createClass(
+      final createdClass = await _classService!.createClass(
         schoolId: _schoolId,
         name: result.name,
         code: result.code,
@@ -348,15 +364,49 @@ class _ClassesScreenState extends State<ClassesScreen> {
 
       if (!mounted) return;
 
-      _showMessage('Class created successfully');
+      // --------------------------------------------------------
+      // ASSIGN SELECTED SUBJECTS AFTER CLASS CREATION
+      // --------------------------------------------------------
+
+      if (result.subjectIds.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+
+        final token = prefs.getString('jwt_token');
+
+        if (token == null || token.isEmpty) {
+          throw Exception('JWT token not found. Please login again.');
+        }
+
+        final classId = createdClass.id;
+
+        if (classId == null) {
+          throw Exception('Class created but class ID was not returned.');
+        }
+
+        final classSubjectService = ClassSubjectService(token);
+
+        for (final subjectId in result.subjectIds) {
+          await classSubjectService.assignSubjectToClass(classId, subjectId);
+        }
+      }
+
+      _showMessage(
+        result.subjectIds.isEmpty
+            ? 'Class created successfully'
+            : 'Class created and subjects assigned successfully',
+      );
 
       await _loadClasses();
     } catch (e) {
+      if (!mounted) return;
+
       _showMessage('Failed to create class: $e', isError: true);
     }
   }
 
-  //edit
+  // ============================================================
+  // EDIT CLASS
+  // ============================================================
 
   Future<void> _editClass(SchoolClass classItem) async {
     if (_classService == null) return;
@@ -381,17 +431,78 @@ class _ClassesScreenState extends State<ClassesScreen> {
         description: result.description,
       );
 
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final classSubjectService = ClassSubjectService(token);
+
+      // --------------------------------------------------------
+      // GET CURRENT SUBJECT ASSIGNMENTS
+      // --------------------------------------------------------
+
+      final currentSubjects = await classSubjectService.getClassSubjects(
+        classItem.id!,
+      );
+
+      final currentSubjectIds = currentSubjects
+          .map((item) => item.subjectId)
+          .toSet();
+
+      final selectedSubjectIds = result.subjectIds.toSet();
+
+      // --------------------------------------------------------
+      // SUBJECTS TO ADD
+      // --------------------------------------------------------
+
+      final subjectsToAdd = selectedSubjectIds.difference(currentSubjectIds);
+
+      // --------------------------------------------------------
+      // SUBJECTS TO REMOVE
+      // --------------------------------------------------------
+
+      final subjectsToRemove = currentSubjectIds.difference(selectedSubjectIds);
+
+      // --------------------------------------------------------
+      // ADD SUBJECTS
+      // --------------------------------------------------------
+
+      for (final subjectId in subjectsToAdd) {
+        await classSubjectService.assignSubjectToClass(
+          classItem.id!,
+          subjectId,
+        );
+      }
+
+      // --------------------------------------------------------
+      // REMOVE SUBJECTS
+      // --------------------------------------------------------
+
+      for (final subjectId in subjectsToRemove) {
+        await classSubjectService.removeSubjectFromClass(
+          classItem.id!,
+          subjectId,
+        );
+      }
+
       if (!mounted) return;
 
-      _showMessage('Class updated successfully');
+      _showMessage('Class and subjects updated successfully');
 
       await _loadClasses();
     } catch (e) {
+      if (!mounted) return;
+
       _showMessage('Failed to update class: $e', isError: true);
     }
   }
+
   // ============================================================
-  // DELETE CLASS
+  // SHOW CLASS FORM
   // ============================================================
 
   Future<ClassFormModel?> _showClassDialog({SchoolClass? existingClass}) async {
@@ -406,8 +517,9 @@ class _ClassesScreenState extends State<ClassesScreen> {
       },
     );
   }
+
   // ============================================================
-  // UI
+  // BUILD
   // ============================================================
 
   @override
@@ -434,17 +546,11 @@ class _ClassesScreenState extends State<ClassesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(),
-
             const SizedBox(height: 20),
-
             _buildSummaryCards(),
-
             const SizedBox(height: 20),
-
             _buildSearchBar(),
-
             const SizedBox(height: 20),
-
             Expanded(child: _buildClassesTable()),
           ],
         ),
@@ -469,13 +575,12 @@ class _ClassesScreenState extends State<ClassesScreen> {
               ),
               SizedBox(height: 5),
               Text(
-                'Manage school classes and academic details',
+                'Manage school classes, subjects and academic details',
                 style: TextStyle(color: Colors.grey),
               ),
             ],
           ),
         ),
-
         ElevatedButton.icon(
           onPressed: _createClass,
           icon: const Icon(Icons.add),
@@ -510,9 +615,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
             icon: Icons.school,
           ),
         ),
-
         const SizedBox(width: 15),
-
         Expanded(
           child: _summaryCard(
             title: 'Academic Year 2026',
@@ -520,9 +623,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
             icon: Icons.calendar_today,
           ),
         ),
-
         const SizedBox(width: 15),
-
         Expanded(
           child: _summaryCard(
             title: 'Grades',
@@ -530,9 +631,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
             icon: Icons.grade,
           ),
         ),
-
         const SizedBox(width: 15),
-
         Expanded(
           child: _summaryCard(
             title: 'School ID',
@@ -563,9 +662,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
               ),
               child: Icon(icon, color: Colors.blue),
             ),
-
             const SizedBox(width: 14),
-
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -626,6 +723,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
   // ============================================================
   // TABLE
   // ============================================================
+
   Widget _buildClassesTable() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -642,10 +740,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
           scrollDirection: Axis.horizontal,
           child: DataTable(
             headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
-
-            // ============================================================
-            // TABLE HEADERS - 7 COLUMNS
-            // ============================================================
             columns: const [
               DataColumn(
                 label: Text(
@@ -690,47 +784,24 @@ class _ClassesScreenState extends State<ClassesScreen> {
                 ),
               ),
             ],
-
-            // ============================================================
-            // TABLE ROWS
-            // ============================================================
             rows: _filteredClasses.map((classItem) {
               final classId = classItem.id;
 
-              // Get subjects assigned to this class
               final subjects = classId != null
                   ? (_classSubjectsMap[classId] ?? [])
                   : <ClassSubjectModel>[];
+
               return DataRow(
                 cells: [
-                  // ======================================================
-                  // 1. CLASS
-                  // ======================================================
                   DataCell(
                     Text(
                       classItem.name ?? '-',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
-
-                  // ======================================================
-                  // 2. CODE
-                  // ======================================================
                   DataCell(Text(classItem.code ?? '-')),
-
-                  // ======================================================
-                  // 3. GRADE
-                  // ======================================================
                   DataCell(Text(classItem.grade ?? '-')),
-
-                  // ======================================================
-                  // 4. YEAR
-                  // ======================================================
                   DataCell(Text(classItem.year?.toString() ?? '-')),
-
-                  // ======================================================
-                  // 5. SUBJECTS
-                  // ======================================================
                   DataCell(
                     SizedBox(
                       width: 250,
@@ -751,10 +822,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
                             ),
                     ),
                   ),
-
-                  // ======================================================
-                  // 6. DESCRIPTION
-                  // ======================================================
                   DataCell(
                     SizedBox(
                       width: 250,
@@ -765,15 +832,10 @@ class _ClassesScreenState extends State<ClassesScreen> {
                       ),
                     ),
                   ),
-
-                  // ======================================================
-                  // 7. ACTION
-                  // ======================================================
                   DataCell(
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Manage Subjects
                         IconButton(
                           tooltip: 'Manage Subjects',
                           onPressed: () {
@@ -784,8 +846,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
                             color: Colors.blue,
                           ),
                         ),
-
-                        // View
                         IconButton(
                           tooltip: 'View',
                           onPressed: () {
@@ -793,8 +853,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
                           },
                           icon: const Icon(Icons.visibility_outlined),
                         ),
-
-                        // Edit
                         IconButton(
                           tooltip: 'Edit',
                           onPressed: () {
@@ -802,8 +860,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
                           },
                           icon: const Icon(Icons.edit_outlined),
                         ),
-
-                        // Delete
                         IconButton(
                           tooltip: 'Delete',
                           onPressed: () {
@@ -826,26 +882,50 @@ class _ClassesScreenState extends State<ClassesScreen> {
     );
   }
 
+  // ============================================================
+  // VIEW
+  // ============================================================
+
   void _viewClass(SchoolClass classItem) {
+    final subjects = classItem.id != null
+        ? (_classSubjectsMap[classItem.id!] ?? [])
+        : <ClassSubjectModel>[];
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: Text(classItem.name ?? '-'),
           content: SizedBox(
-            width: 450,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _detailRow('Class ID', classItem.id?.toString() ?? '-'),
-                _detailRow('School ID', classItem.schoolId?.toString() ?? '-'),
-                _detailRow('School', classItem.schoolName ?? '-'),
-                _detailRow('Class Name', classItem.name ?? '-'),
-                _detailRow('Code', classItem.code ?? '-'),
-                _detailRow('Grade', classItem.grade ?? '-'),
-                _detailRow('Academic Year', classItem.year?.toString() ?? '-'),
-                _detailRow('Description', classItem.description ?? '-'),
-              ],
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _detailRow('Class ID', classItem.id?.toString() ?? '-'),
+                  _detailRow(
+                    'School ID',
+                    classItem.schoolId?.toString() ?? '-',
+                  ),
+                  _detailRow('School', classItem.schoolName ?? '-'),
+                  _detailRow('Class Name', classItem.name ?? '-'),
+                  _detailRow('Code', classItem.code ?? '-'),
+                  _detailRow('Grade', classItem.grade ?? '-'),
+                  _detailRow(
+                    'Academic Year',
+                    classItem.year?.toString() ?? '-',
+                  ),
+                  _detailRow(
+                    'Subjects',
+                    subjects.isEmpty
+                        ? 'No subjects assigned'
+                        : subjects
+                              .map((subject) => subject.subjectName)
+                              .join(', '),
+                  ),
+                  _detailRow('Description', classItem.description ?? '-'),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -879,6 +959,10 @@ class _ClassesScreenState extends State<ClassesScreen> {
       ),
     );
   }
+
+  // ============================================================
+  // DELETE
+  // ============================================================
 
   Future<void> _deleteClass(SchoolClass classItem) async {
     if (_classService == null) {
@@ -928,21 +1012,21 @@ class _ClassesScreenState extends State<ClassesScreen> {
     try {
       await _classService!.deleteClass(classItem.id!);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       _showMessage('Class deleted successfully');
 
       await _loadClasses();
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       _showMessage('Failed to delete class: $e', isError: true);
     }
   }
+
+  // ============================================================
+  // EMPTY STATE
+  // ============================================================
 
   Widget _buildEmptyState() {
     return Center(
@@ -979,9 +1063,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
   }
 
   // ============================================================
-  // DETAIL ROW
-  // ==========================================================
-  // ============================================================
   // MESSAGE
   // ============================================================
 
@@ -990,12 +1071,16 @@ class _ClassesScreenState extends State<ClassesScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(message.replaceFirst('Exception: ', '')),
         backgroundColor: isError ? Colors.red : Colors.green,
       ),
     );
   }
 }
+
+// ============================================================================
+// CLASS FORM DIALOG
+// ============================================================================
 
 class _ClassFormDialog extends StatefulWidget {
   final SchoolClass? existingClass;
@@ -1011,10 +1096,21 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
+
   late final TextEditingController _codeController;
+
   late final TextEditingController _gradeController;
+
   late final TextEditingController _yearController;
+
   late final TextEditingController _descriptionController;
+
+  List<SubjectModel> _allSubjects = [];
+
+  final Set<int> _selectedSubjectIds = {};
+
+  bool _subjectsLoading = true;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -1039,6 +1135,8 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
     _descriptionController = TextEditingController(
       text: widget.existingClass?.description ?? '',
     );
+
+    _loadSubjects();
   }
 
   @override
@@ -1052,7 +1150,79 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
     super.dispose();
   }
 
+  // ============================================================
+  // LOAD SUBJECTS
+  // ============================================================
+
+  Future<void> _loadSubjects() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final subjectService = SubjectService(token);
+
+      final subjects = await subjectService.getActiveSubjectsBySchool(
+        widget.schoolId,
+      );
+
+      if (!mounted) return;
+
+      List<int> existingSubjectIds = [];
+
+      // --------------------------------------------------------
+      // EDIT MODE:
+      // Load subjects already assigned to class
+      // --------------------------------------------------------
+
+      if (widget.existingClass?.id != null) {
+        final classSubjectService = ClassSubjectService(token);
+
+        final assignedSubjects = await classSubjectService.getClassSubjects(
+          widget.existingClass!.id!,
+        );
+
+        existingSubjectIds = assignedSubjects
+            .map((item) => item.subjectId)
+            .toList();
+      }
+
+      setState(() {
+        _allSubjects = subjects;
+
+        _selectedSubjectIds
+          ..clear()
+          ..addAll(existingSubjectIds);
+
+        _subjectsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _subjectsLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // SUBMIT
+  // ============================================================
+
   void _submit() {
+    if (_submitting) return;
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -1060,6 +1230,13 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
     final year = int.tryParse(_yearController.text.trim());
 
     if (year == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid academic year'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
       return;
     }
 
@@ -1076,10 +1253,15 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
           : _descriptionController.text.trim(),
       createdAt: widget.existingClass?.createdAt,
       updatedAt: widget.existingClass?.updatedAt,
+      subjectIds: _selectedSubjectIds.toList(),
     );
 
     Navigator.of(context).pop(result);
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -1087,18 +1269,18 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
 
     return AlertDialog(
       title: Text(isEdit ? 'Edit Class' : 'Add Class'),
-
       content: SizedBox(
-        width: 500,
+        width: 550,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ========================================================
+                // ==================================================
                 // CLASS NAME
-                // ========================================================
+                // ==================================================
+
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(
@@ -1117,9 +1299,9 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
 
                 const SizedBox(height: 16),
 
-                // ========================================================
+                // ==================================================
                 // CLASS CODE
-                // ========================================================
+                // ==================================================
                 TextFormField(
                   controller: _codeController,
                   decoration: const InputDecoration(
@@ -1138,9 +1320,9 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
 
                 const SizedBox(height: 16),
 
-                // ========================================================
+                // ==================================================
                 // GRADE
-                // ========================================================
+                // ==================================================
                 TextFormField(
                   controller: _gradeController,
                   decoration: const InputDecoration(
@@ -1159,9 +1341,9 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
 
                 const SizedBox(height: 16),
 
-                // ========================================================
+                // ==================================================
                 // ACADEMIC YEAR
-                // ========================================================
+                // ==================================================
                 TextFormField(
                   controller: _yearController,
                   keyboardType: TextInputType.number,
@@ -1187,9 +1369,9 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
 
                 const SizedBox(height: 16),
 
-                // ========================================================
+                // ==================================================
                 // DESCRIPTION
-                // ========================================================
+                // ==================================================
                 TextFormField(
                   controller: _descriptionController,
                   maxLines: 3,
@@ -1199,25 +1381,125 @@ class _ClassFormDialogState extends State<_ClassFormDialog> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+
+                const SizedBox(height: 22),
+
+                // ==================================================
+                // SUBJECTS
+                // ==================================================
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Assign Subjects',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Select the subjects that belong to this class.',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _buildSubjectsSection(),
+                ),
               ],
             ),
           ),
         ),
       ),
-
       actions: [
         TextButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
+          onPressed: _submitting
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                },
           child: const Text('Cancel'),
         ),
-
-        ElevatedButton(
-          onPressed: _submit,
-          child: Text(isEdit ? 'Update' : 'Create'),
+        ElevatedButton.icon(
+          onPressed: _submitting || _subjectsLoading ? null : _submit,
+          icon: _submitting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(isEdit ? Icons.save : Icons.add),
+          label: Text(isEdit ? 'Update' : 'Create'),
         ),
       ],
+    );
+  }
+
+  // ============================================================
+  // SUBJECT SECTION
+  // ============================================================
+
+  Widget _buildSubjectsSection() {
+    if (_subjectsLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(25),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_allSubjects.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: Text('No active subjects available for this school.'),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 260),
+      child: ListView.separated(
+        shrinkWrap: true,
+        itemCount: _allSubjects.length,
+        separatorBuilder: (context, index) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final subject = _allSubjects[index];
+
+          final isSelected = _selectedSubjectIds.contains(subject.id);
+
+          return CheckboxListTile(
+            value: isSelected,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(
+              subject.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              '${subject.code}'
+              '${subject.description != null ? ' • ${subject.description}' : ''}',
+            ),
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedSubjectIds.add(subject.id);
+                } else {
+                  _selectedSubjectIds.remove(subject.id);
+                }
+              });
+            },
+          );
+        },
+      ),
     );
   }
 }

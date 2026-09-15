@@ -5,8 +5,6 @@ import '../models/teacher_assignment_model.dart';
 import '../models/teacher_model.dart';
 import '../services/teacher_assignment_service.dart';
 
-
-
 class TeacherDetailsDialog extends StatefulWidget {
   final Teacher teacher;
   final TeacherAssignmentService assignmentService;
@@ -73,7 +71,10 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         _isLoading = false;
       });
 
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
+      _showMessage(
+        e.toString().replaceFirst('Exception: ', ''),
+        isError: true,
+      );
     }
   }
 
@@ -81,9 +82,14 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   // DELETE ASSIGNMENT
   // ============================================================
 
-  Future<void> _deleteAssignment(TeacherAssignment assignment) async {
+  Future<void> _deleteAssignment(
+    TeacherAssignment assignment,
+  ) async {
     if (assignment.id == null) {
-      _showMessage('Assignment ID is missing.', isError: true);
+      _showMessage(
+        'Assignment ID is missing.',
+        isError: true,
+      );
       return;
     }
 
@@ -95,11 +101,13 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         return AlertDialog(
           title: const Text(
             'Remove Assignment',
-            style: TextStyle(fontWeight: FontWeight.w800),
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+            ),
           ),
           content: const Text(
             'Are you sure you want to remove this '
-            'class assignment from the teacher?',
+            'class and subject assignment from the teacher?',
           ),
           actions: [
             TextButton(
@@ -130,17 +138,24 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
     });
 
     try {
-      await widget.assignmentService.deleteAssignment(assignment.id!);
+      await widget.assignmentService.deleteAssignment(
+        assignment.id!,
+      );
 
       if (!mounted) return;
 
-      _showMessage('Class assignment removed successfully.');
+      _showMessage(
+        'Class and subject assignment removed successfully.',
+      );
 
       await _loadAssignments();
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
+      _showMessage(
+        e.toString().replaceFirst('Exception: ', ''),
+        isError: true,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -173,10 +188,28 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
     final screenHeight = MediaQuery.sizeOf(context).height;
 
     return AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-      contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 24,
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(
+        24,
+        20,
+        24,
+        8,
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(
+        24,
+        8,
+        24,
+        8,
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(
+        24,
+        8,
+        24,
+        16,
+      ),
       title: _buildHeader(),
       content: SizedBox(
         width: 650,
@@ -205,12 +238,18 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         ),
         ElevatedButton.icon(
           onPressed: _isDeleting ? null : _assignClass,
-          icon: const Icon(Icons.add, size: 18),
+          icon: const Icon(
+            Icons.add,
+            size: 18,
+          ),
           label: const Text('Assign Class'),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF2563EB),
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -225,7 +264,10 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   // ============================================================
 
   Widget _buildHeader() {
-    final name = _displayValue(widget.teacher.name, fallback: 'Teacher');
+    final name = _displayValue(
+      widget.teacher.name,
+      fallback: 'Teacher',
+    );
 
     return Row(
       children: [
@@ -258,10 +300,16 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                _displayValue(widget.teacher.designation, fallback: 'Teacher'),
+                _displayValue(
+                  widget.teacher.designation,
+                  fallback: 'Teacher',
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF667085)),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF667085),
+                ),
               ),
             ],
           ),
@@ -299,7 +347,9 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
             'Status',
             widget.teacher.status,
             Icons.toggle_on_outlined,
-            valueWidget: _statusBadge(widget.teacher.status),
+            valueWidget: _statusBadge(
+              widget.teacher.status,
+            ),
           ),
         ]),
       ],
@@ -316,8 +366,16 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       icon: Icons.contact_phone_outlined,
       children: [
         _infoGrid([
-          _infoItem('Phone', widget.teacher.phone, Icons.phone_outlined),
-          _infoItem('Email', widget.teacher.email, Icons.email_outlined),
+          _infoItem(
+            'Phone',
+            widget.teacher.phone,
+            Icons.phone_outlined,
+          ),
+          _infoItem(
+            'Email',
+            widget.teacher.email,
+            Icons.email_outlined,
+          ),
           _infoItem(
             'Address',
             widget.teacher.address,
@@ -339,7 +397,11 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       icon: Icons.person_outline,
       children: [
         _infoGrid([
-          _infoItem('Gender', widget.teacher.gender, Icons.wc_outlined),
+          _infoItem(
+            'Gender',
+            widget.teacher.gender,
+            Icons.wc_outlined,
+          ),
           _infoItem(
             'Date of Birth',
             widget.teacher.dateOfBirth,
@@ -361,7 +423,7 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
 
   Widget _buildAssignmentsSection() {
     return _sectionCard(
-      title: 'Assigned Classes',
+      title: 'Assigned Classes & Subjects',
       icon: Icons.class_outlined,
       trailing: _assignmentCountBadge(),
       children: [
@@ -369,26 +431,41 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         if (_isLoading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 30),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
           )
         else if (_assignments.isEmpty)
           _emptyAssignments()
         else
           Column(
             children: _assignments
-                .map((assignment) => _assignmentCard(assignment))
+                .map(
+                  (assignment) => _assignmentCard(
+                    assignment,
+                  ),
+                )
                 .toList(),
           ),
       ],
     );
   }
 
-  Widget _assignmentCard(TeacherAssignment assignment) {
-    final className = _getAssignmentClassName(assignment);
+  Widget _assignmentCard(
+    TeacherAssignment assignment,
+  ) {
+    final className = _getAssignmentClassName(
+      assignment,
+    );
 
-    final subject = _displayValue(
-      assignment.subject,
+    final subjectName = _displayValue(
+      assignment.subjectName,
       fallback: 'Subject not specified',
+    );
+
+    final subjectCode = _displayValue(
+      assignment.subjectCode,
+      fallback: '',
     );
 
     return Container(
@@ -398,7 +475,9 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: Border.all(
+          color: const Color(0xFFE4E7EC),
+        ),
       ),
       child: Row(
         children: [
@@ -440,7 +519,9 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        subject,
+                        subjectCode.isNotEmpty
+                            ? '$subjectName ($subjectCode)'
+                            : subjectName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -460,9 +541,15 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
             onPressed: _isDeleting
                 ? null
                 : () {
-                    _deleteAssignment(assignment);
+                    _deleteAssignment(
+                      assignment,
+                    );
                   },
-            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 21),
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Colors.red,
+              size: 21,
+            ),
           ),
         ],
       ),
@@ -472,14 +559,17 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   Widget _emptyAssignments() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+      padding: const EdgeInsets.symmetric(
+        vertical: 28,
+        horizontal: 16,
+      ),
       child: Column(
         children: [
           Container(
             width: 54,
             height: 54,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2F4F7),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF2F4F7),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -501,7 +591,10 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
             'Use "Assign Class" to assign a class '
             'and subject to this teacher.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF667085),
+            ),
           ),
         ],
       ),
@@ -510,7 +603,10 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
 
   Widget _assignmentCountBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF4FF),
         borderRadius: BorderRadius.circular(20),
@@ -542,7 +638,9 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: Border.all(
+          color: const Color(0xFFE4E7EC),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,7 +654,11 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
                   color: const Color(0xFFF2F4F7),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(icon, size: 18, color: const Color(0xFF475467)),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: const Color(0xFF475467),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -583,7 +685,9 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   // INFO GRID
   // ============================================================
 
-  Widget _infoGrid(List<_TeacherInfoItem> items) {
+  Widget _infoGrid(
+    List<_TeacherInfoItem> items,
+  ) {
     final rows = <Widget>[];
 
     for (int i = 0; i < items.length; i++) {
@@ -599,16 +703,22 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         continue;
       }
 
-      if (i + 1 < items.length && !items[i + 1].fullWidth) {
+      if (i + 1 < items.length &&
+          !items[i + 1].fullWidth) {
         rows.add(
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
-                Expanded(child: _infoBox(item)),
+                Expanded(
+                  child: _infoBox(item),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _infoBox(items[i + 1])),
+                Expanded(
+                  child: _infoBox(items[i + 1]),
+                ),
               ],
             ),
           ),
@@ -625,10 +735,14 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       }
     }
 
-    return Column(children: rows);
+    return Column(
+      children: rows,
+    );
   }
 
-  Widget _infoBox(_TeacherInfoItem item) {
+  Widget _infoBox(
+    _TeacherInfoItem item,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(11),
@@ -637,13 +751,19 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
-          Icon(item.icon, size: 17, color: const Color(0xFF667085)),
+          Icon(
+            item.icon,
+            size: 17,
+            color: const Color(0xFF667085),
+          ),
           const SizedBox(width: 9),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Text(
                   item.label,
@@ -656,9 +776,14 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
                 const SizedBox(height: 4),
                 item.valueWidget ??
                     Text(
-                      _displayValue(item.value, fallback: '-'),
-                      maxLines: item.fullWidth ? 3 : 2,
-                      overflow: TextOverflow.ellipsis,
+                      _displayValue(
+                        item.value,
+                        fallback: '-',
+                      ),
+                      maxLines:
+                          item.fullWidth ? 3 : 2,
+                      overflow:
+                          TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13,
                         color: Color(0xFF344054),
@@ -678,14 +803,20 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   // ============================================================
 
   Widget _statusBadge(String? status) {
-    final normalized = (status ?? '').toUpperCase();
+    final normalized =
+        (status ?? '').toUpperCase();
 
     final isActive = normalized == 'ACTIVE';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
       decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFECFDF3) : const Color(0xFFFEF3F2),
+        color: isActive
+            ? const Color(0xFFECFDF3)
+            : const Color(0xFFFEF3F2),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -693,7 +824,9 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: isActive ? const Color(0xFF027A48) : const Color(0xFFB42318),
+          color: isActive
+              ? const Color(0xFF027A48)
+              : const Color(0xFFB42318),
         ),
       ),
     );
@@ -703,25 +836,25 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   // ASSIGNMENT CLASS NAME
   // ============================================================
 
-  String _getAssignmentClassName(TeacherAssignment assignment) {
-    /*
-     * First try className from assignment response.
-     * If your backend does not return className,
-     * find the class from the loaded classes list.
-     */
+  String _getAssignmentClassName(
+    TeacherAssignment assignment,
+  ) {
+    final assignmentClassName =
+        assignment.className;
 
-    final assignmentClassName = assignment.className;
-
-    if (assignmentClassName != null && assignmentClassName.trim().isNotEmpty) {
+    if (assignmentClassName != null &&
+        assignmentClassName.trim().isNotEmpty) {
       return assignmentClassName.trim();
     }
 
     if (assignment.classId != null) {
       for (final schoolClass in widget.classes) {
-        if (schoolClass.id == assignment.classId) {
+        if (schoolClass.id ==
+            assignment.classId) {
           final name = schoolClass.name;
 
-          if (name != null && name.trim().isNotEmpty) {
+          if (name != null &&
+              name.trim().isNotEmpty) {
             return name.trim();
           }
         }
@@ -739,24 +872,28 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
   // HELPERS
   // ============================================================
 
- _TeacherInfoItem _infoItem(
-  String label,
-  String? value,
-  IconData icon, {
-  Widget? valueWidget,
-  bool fullWidth = false,
-}) {
-  return _TeacherInfoItem(
-    label: label,
-    value: value,
-    icon: icon,
-    valueWidget: valueWidget,
-    fullWidth: fullWidth,
-  );
-}
+  _TeacherInfoItem _infoItem(
+    String label,
+    String? value,
+    IconData icon, {
+    Widget? valueWidget,
+    bool fullWidth = false,
+  }) {
+    return _TeacherInfoItem(
+      label: label,
+      value: value,
+      icon: icon,
+      valueWidget: valueWidget,
+      fullWidth: fullWidth,
+    );
+  }
 
-  String _displayValue(String? value, {String fallback = '-'}) {
-    if (value == null || value.trim().isEmpty) {
+  String _displayValue(
+    String? value, {
+    String fallback = '-',
+  }) {
+    if (value == null ||
+        value.trim().isEmpty) {
       return fallback;
     }
 
@@ -770,10 +907,15 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       return '?';
     }
 
-    return value.substring(0, 1).toUpperCase();
+    return value
+        .substring(0, 1)
+        .toUpperCase();
   }
 
-  void _showMessage(String message, {bool isError = false}) {
+  void _showMessage(
+    String message, {
+    bool isError = false,
+  }) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -781,8 +923,10 @@ class _TeacherDetailsDialogState extends State<TeacherDetailsDialog> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: isError ? Colors.red.shade700 : null,
-          behavior: SnackBarBehavior.floating,
+          backgroundColor:
+              isError ? Colors.red.shade700 : null,
+          behavior:
+              SnackBarBehavior.floating,
         ),
       );
   }

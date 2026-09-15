@@ -1,6 +1,8 @@
+
 import 'package:dio/dio.dart';
 
 import '../models/class_model.dart';
+import '../models/class_subject_model.dart';
 
 class ClassService {
   final Dio _dio;
@@ -30,7 +32,7 @@ class ClassService {
 
       return _parseClassList(response.data);
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      throw Exception(_handleDioError(e));
     } catch (e) {
       throw Exception('Failed to load classes: $e');
     }
@@ -51,7 +53,7 @@ class ClassService {
         Map<String, dynamic>.from(response.data),
       );
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      throw Exception(_handleDioError(e));
     } catch (e) {
       throw Exception('Failed to load class: $e');
     }
@@ -72,7 +74,7 @@ class ClassService {
 
       return _parseClassList(response.data);
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      throw Exception(_handleDioError(e));
     } catch (e) {
       throw Exception(
         'Failed to load school classes: $e',
@@ -112,7 +114,7 @@ class ClassService {
         Map<String, dynamic>.from(response.data),
       );
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      throw Exception(_handleDioError(e));
     } catch (e) {
       throw Exception(
         'Failed to create class: $e',
@@ -153,7 +155,7 @@ class ClassService {
         Map<String, dynamic>.from(response.data),
       );
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      throw Exception(_handleDioError(e));
     } catch (e) {
       throw Exception(
         'Failed to update class: $e',
@@ -172,10 +174,115 @@ class ClassService {
         '/api/v1/classes/$id',
       );
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      throw Exception(_handleDioError(e));
     } catch (e) {
       throw Exception(
         'Failed to delete class: $e',
+      );
+    }
+  }
+
+  // ============================================================
+  // ============================================================
+  // CLASS → SUBJECT
+  // ============================================================
+  // ============================================================
+
+  // ============================================================
+  // ASSIGN SUBJECT TO CLASS
+  //
+  // POST /classes/{classId}/subjects/{subjectId}
+  //
+  // Example:
+  // POST /classes/5/subjects/3
+  // ============================================================
+
+  Future<ClassSubjectModel> assignSubjectToClass({
+    required int classId,
+    required int subjectId,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/classes/$classId/subjects/$subjectId',
+      );
+
+      return ClassSubjectModel.fromJson(
+        Map<String, dynamic>.from(response.data),
+      );
+    } on DioException catch (e) {
+      throw Exception(
+        _handleClassSubjectError(e),
+      );
+    } catch (e) {
+      throw Exception(
+        'Failed to assign subject to class: $e',
+      );
+    }
+  }
+
+  // ============================================================
+  // GET SUBJECTS ASSIGNED TO CLASS
+  //
+  // GET /classes/{classId}/subjects
+  //
+  // Example:
+  // GET /classes/5/subjects
+  // ============================================================
+
+  Future<List<ClassSubjectModel>> getSubjectsByClass(
+    int classId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '/classes/$classId/subjects',
+      );
+
+      if (response.data is List) {
+        return (response.data as List)
+            .map(
+              (json) => ClassSubjectModel.fromJson(
+                Map<String, dynamic>.from(json),
+              ),
+            )
+            .toList();
+      }
+
+      return [];
+    } on DioException catch (e) {
+      throw Exception(
+        _handleClassSubjectError(e),
+      );
+    } catch (e) {
+      throw Exception(
+        'Failed to load class subjects: $e',
+      );
+    }
+  }
+
+  // ============================================================
+  // REMOVE SUBJECT FROM CLASS
+  //
+  // DELETE /classes/{classId}/subjects/{subjectId}
+  //
+  // Example:
+  // DELETE /classes/5/subjects/3
+  // ============================================================
+
+  Future<void> removeSubjectFromClass({
+    required int classId,
+    required int subjectId,
+  }) async {
+    try {
+      await _dio.delete(
+        '/classes/$classId/subjects/$subjectId',
+      );
+    } on DioException catch (e) {
+      throw Exception(
+        _handleClassSubjectError(e),
+      );
+    } catch (e) {
+      throw Exception(
+        'Failed to remove subject from class: $e',
       );
     }
   }
@@ -213,10 +320,10 @@ class ClassService {
     }
 
     return [];
-  } 
+  }
 
   // ============================================================
-  // ERROR HANDLER
+  // GENERAL ERROR HANDLER
   // ============================================================
 
   String _handleDioError(DioException error) {
@@ -252,6 +359,74 @@ class ClassService {
       if (response.data is Map &&
           response.data['message'] != null) {
         return response.data['message'].toString();
+      }
+    }
+
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+        return 'Connection timeout. Please check the server.';
+
+      case DioExceptionType.sendTimeout:
+        return 'Request timeout. Please try again.';
+
+      case DioExceptionType.receiveTimeout:
+        return 'Server response timeout.';
+
+      case DioExceptionType.connectionError:
+        return 'Cannot connect to server. Make sure Spring Boot is running.';
+
+      case DioExceptionType.badResponse:
+        return 'Server returned an error.';
+
+      default:
+        return error.message ?? 'Something went wrong.';
+    }
+  }
+
+  // ============================================================
+  // CLASS → SUBJECT ERROR HANDLER
+  // ============================================================
+
+  String _handleClassSubjectError(DioException error) {
+    final response = error.response;
+
+    if (response != null) {
+      final statusCode = response.statusCode;
+
+      // First try backend message because your Spring service
+      // returns useful messages such as:
+      //
+      // "Subject already assigned to this class"
+      // "Class and Subject belong to different schools"
+      // "Subject is not assigned to this class"
+
+      if (response.data is Map &&
+          response.data['message'] != null) {
+        return response.data['message'].toString();
+      }
+
+      if (statusCode == 400) {
+        return 'Invalid class or subject.';
+      }
+
+      if (statusCode == 401) {
+        return 'Unauthorized. Please login again.';
+      }
+
+      if (statusCode == 403) {
+        return 'Access denied. You do not have permission.';
+      }
+
+      if (statusCode == 404) {
+        return 'Class or subject not found.';
+      }
+
+      if (statusCode == 409) {
+        return 'Subject is already assigned to this class.';
+      }
+
+      if (statusCode != null && statusCode >= 500) {
+        return 'Server error. Please try again later.';
       }
     }
 

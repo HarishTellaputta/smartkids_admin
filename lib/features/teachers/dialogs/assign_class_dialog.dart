@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../models/class_model.dart';
+import '../models/class_subject_model.dart';
 import '../models/teacher_model.dart';
+import '../services/class_service.dart';
 import '../services/teacher_assignment_service.dart';
 
 class AssignClassDialog extends StatefulWidget {
   final Teacher teacher;
   final List<SchoolClass> classes;
   final TeacherAssignmentService assignmentService;
+  final ClassService classService;
   final bool isLoadingClasses;
 
   const AssignClassDialog({
@@ -15,65 +18,93 @@ class AssignClassDialog extends StatefulWidget {
     required this.teacher,
     required this.classes,
     required this.assignmentService,
+    required this.classService,
     required this.isLoadingClasses,
   });
 
   @override
-  State<AssignClassDialog> createState() =>
-      _AssignClassDialogState();
+  State<AssignClassDialog> createState() => _AssignClassDialogState();
 }
 
-class _AssignClassDialogState
-    extends State<AssignClassDialog> {
-  final _formKey = GlobalKey<FormState>();
-
-  final TextEditingController subjectController =
-      TextEditingController();
-
+class _AssignClassDialogState extends State<AssignClassDialog> {
   SchoolClass? selectedClass;
+  ClassSubjectModel? selectedSubject;
 
+  List<ClassSubjectModel> _subjects = [];
+
+  bool _isLoadingSubjects = false;
   bool _isSaving = false;
 
   @override
-  void dispose() {
-    subjectController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+
+    if (widget.classes.isNotEmpty) {
+      selectedClass = widget.classes.first;
+      _loadSubjectsForClass(selectedClass!);
+    }
   }
 
-  // ============================================================
-  // ASSIGN CLASS
-  // ============================================================
+  Future<void> _loadSubjectsForClass(SchoolClass schoolClass) async {
+    if (schoolClass.id == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingSubjects = true;
+      _subjects = [];
+      selectedSubject = null;
+    });
+
+    try {
+      final subjects = await widget.classService.getSubjectsByClass(
+        schoolClass.id!,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _subjects = subjects;
+        _isLoadingSubjects = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _subjects = [];
+        selectedSubject = null;
+        _isLoadingSubjects = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_cleanError(e))));
+    }
+  }
 
   Future<void> _assignClass() async {
-    if (_isSaving) return;
-
-    FocusScope.of(context).unfocus();
-
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
     if (selectedClass == null) {
-      _showMessage(
-        'Please select a class.',
-        isError: true,
-      );
+      _showMessage('Please select a class.');
       return;
     }
 
-    if (widget.teacher.id == null) {
-      _showMessage(
-        'Teacher ID is missing.',
-        isError: true,
-      );
+    if (selectedSubject == null) {
+      _showMessage('Please select a subject.');
       return;
     }
 
     if (selectedClass!.id == null) {
-      _showMessage(
-        'Class ID is missing.',
-        isError: true,
-      );
+      _showMessage('Selected class ID is missing.');
+      return;
+    }
+
+    if (widget.teacher.id == null) {
+      _showMessage('Teacher ID is missing.');
+      return;
+    }
+
+    if (selectedSubject!.subjectId <= 0) {
+      _showMessage('Selected subject ID is invalid.');
       return;
     }
 
@@ -85,7 +116,7 @@ class _AssignClassDialogState
       await widget.assignmentService.createAssignment(
         teacherId: widget.teacher.id!,
         classId: selectedClass!.id!,
-        subject: subjectController.text.trim(),
+        subjectId: selectedSubject!.subjectId,
       );
 
       if (!mounted) return;
@@ -98,58 +129,82 @@ class _AssignClassDialogState
         _isSaving = false;
       });
 
-      _showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
+      _showMessage(_cleanError(e));
     }
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _cleanError(Object error) {
+    final message = error.toString();
+
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+
+    return message;
+  }
+
+  String _className(SchoolClass schoolClass) {
+    final name = schoolClass.name?.trim();
+
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+
+    return 'Class ${schoolClass.id ?? ''}';
+  }
+
+  String _subjectName(ClassSubjectModel subject) {
+    final name = subject.subjectName.trim();
+
+    if (name.isNotEmpty) {
+      return name;
+    }
+
+    return 'Subject ${subject.subjectId}';
+  }
+
+  String _subjectDisplayName(ClassSubjectModel subject) {
+    final name = _subjectName(subject);
+    final code = subject.subjectCode.trim();
+
+    if (code.isNotEmpty) {
+      return '$name ($code)';
+    }
+
+    return name;
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF4FF),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: const Icon(
-              Icons.class_outlined,
-              color: Color(0xFF2563EB),
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Assign Class',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
+      title: const Text(
+        'Assign Class & Subject',
+        style: TextStyle(fontWeight: FontWeight.bold),
       ),
       content: SizedBox(
         width: 430,
-        child: Form(
-          key: _formKey,
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _teacherInfo(),
               const SizedBox(height: 20),
+
               _classDropdown(),
+
               const SizedBox(height: 16),
-              _subjectField(),
-              const SizedBox(height: 10),
+
+              _subjectDropdown(),
+
+              const SizedBox(height: 16),
+
               _backendNote(),
             ],
           ),
@@ -160,106 +215,60 @@ class _AssignClassDialogState
           onPressed: _isSaving
               ? null
               : () {
-                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(false);
                 },
           child: const Text('Cancel'),
         ),
-        ElevatedButton.icon(
-          onPressed:
-              _isSaving ? null : _assignClass,
-          icon: _isSaving
+        ElevatedButton(
+          onPressed: _isSaving || _isLoadingSubjects ? null : _assignClass,
+          child: _isSaving
               ? const SizedBox(
-                  width: 17,
-                  height: 17,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(
-                  Icons.add,
-                  size: 18,
-                ),
-          label: Text(
-            _isSaving
-                ? 'Assigning...'
-                : 'Assign Class',
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor:
-                const Color(0xFF2563EB),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 13,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(10),
-            ),
-          ),
+              : const Text('Assign'),
         ),
       ],
     );
   }
 
-  // ============================================================
-  // TEACHER INFO
-  // ============================================================
-
   Widget _teacherInfo() {
-    final name =
-        widget.teacher.name?.trim().isNotEmpty == true
-            ? widget.teacher.name!.trim()
-            : 'Unknown Teacher';
+    final teacherName = widget.teacher.name?.trim().isNotEmpty == true
+        ? widget.teacher.name!.trim()
+        : 'Teacher';
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFE4E7EC),
-        ),
+        color: Colors.blue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor:
-                const Color(0xFFEFF4FF),
             child: Text(
-              _initial(name),
-              style: const TextStyle(
-                color: Color(0xFF2563EB),
-                fontWeight: FontWeight.w800,
-              ),
+              teacherName.isNotEmpty ? teacherName[0].toUpperCase() : 'T',
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF172033),
-                  ),
+                const Text(
+                  'Teacher',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
-                  widget.teacher.designation ?? '-',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  teacherName,
                   style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF667085),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -270,258 +279,165 @@ class _AssignClassDialogState
     );
   }
 
-  // ============================================================
-  // CLASS DROPDOWN
-  // ============================================================
-
   Widget _classDropdown() {
-    if (widget.isLoadingClasses) {
+    return DropdownButtonFormField<int>(
+      value: selectedClass?.id,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Class',
+        hintText: 'Select Class',
+        prefixIcon: Icon(Icons.class_rounded),
+        border: OutlineInputBorder(),
+      ),
+      items: widget.classes.where((schoolClass) => schoolClass.id != null).map((
+        schoolClass,
+      ) {
+        return DropdownMenuItem<int>(
+          value: schoolClass.id!,
+          child: Text(_className(schoolClass), overflow: TextOverflow.ellipsis),
+        );
+      }).toList(),
+      onChanged: widget.isLoadingClasses || _isSaving
+          ? null
+          : (classId) {
+              if (classId == null) return;
+
+              SchoolClass? selected;
+
+              for (final schoolClass in widget.classes) {
+                if (schoolClass.id == classId) {
+                  selected = schoolClass;
+                  break;
+                }
+              }
+
+              if (selected == null) return;
+
+              setState(() {
+                selectedClass = selected;
+                selectedSubject = null;
+                _subjects = [];
+              });
+
+              _loadSubjectsForClass(selected);
+            },
+    );
+  }
+
+  Widget _subjectDropdown() {
+    if (_isLoadingSubjects) {
       return InputDecorator(
-        decoration: _inputDecoration(
-          label: 'Class',
-          icon: Icons.class_outlined,
+        decoration: const InputDecoration(
+          labelText: 'Subject',
+          prefixIcon: Icon(Icons.menu_book_rounded),
+          border: OutlineInputBorder(),
         ),
-        child: const Row(
-          children: [
+        child: Row(
+          children: const [
             SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            SizedBox(width: 10),
-            Text(
-              'Loading classes...',
-              style: TextStyle(
-                color: Color(0xFF667085),
-              ),
-            ),
+            SizedBox(width: 12),
+            Expanded(child: Text('Loading subjects...')),
           ],
         ),
       );
     }
 
-    if (widget.classes.isEmpty) {
+    if (selectedClass == null) {
       return InputDecorator(
-        decoration: _inputDecoration(
-          label: 'Class',
-          icon: Icons.class_outlined,
+        decoration: const InputDecoration(
+          labelText: 'Subject',
+          prefixIcon: Icon(Icons.menu_book_rounded),
+          border: OutlineInputBorder(),
         ),
         child: const Text(
-          'No classes available',
-          style: TextStyle(
-            color: Color(0xFFB42318),
-          ),
+          'Select a class first',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    if (_subjects.isEmpty) {
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Subject',
+          prefixIcon: Icon(Icons.menu_book_rounded),
+          border: OutlineInputBorder(),
+        ),
+        child: const Text(
+          'No subjects assigned to this class',
+          style: TextStyle(color: Colors.redAccent),
         ),
       );
     }
 
     return DropdownButtonFormField<int>(
-      initialValue: selectedClass?.id,
+      value: selectedSubject?.subjectId,
       isExpanded: true,
-      decoration: _inputDecoration(
-        label: 'Class',
-        icon: Icons.class_outlined,
+      decoration: const InputDecoration(
+        labelText: 'Subject',
+        hintText: 'Select Subject',
+        prefixIcon: Icon(Icons.menu_book_rounded),
+        border: OutlineInputBorder(),
       ),
-      items: widget.classes.map((schoolClass) {
+      items: _subjects.map((subject) {
         return DropdownMenuItem<int>(
-          value: schoolClass.id,
+          value: subject.subjectId,
           child: Text(
-            _className(schoolClass),
-            maxLines: 1,
+            _subjectDisplayName(subject),
             overflow: TextOverflow.ellipsis,
           ),
         );
       }).toList(),
       onChanged: _isSaving
           ? null
-          : (value) {
-              if (value == null) return;
+          : (subjectId) {
+              if (subjectId == null) return;
 
-              final selected =
-                  widget.classes.firstWhere(
-                (item) => item.id == value,
-              );
+              ClassSubjectModel? selected;
+
+              for (final subject in _subjects) {
+                if (subject.subjectId == subjectId) {
+                  selected = subject;
+                  break;
+                }
+              }
+
+              if (selected == null) return;
 
               setState(() {
-                selectedClass = selected;
+                selectedSubject = selected;
               });
             },
-      validator: (value) {
-        if (value == null) {
-          return 'Please select a class';
-        }
-
-        return null;
-      },
     );
   }
-
-  // ============================================================
-  // SUBJECT
-  // ============================================================
-
-  Widget _subjectField() {
-    return TextFormField(
-      controller: subjectController,
-      textCapitalization:
-          TextCapitalization.words,
-      decoration: _inputDecoration(
-        label: 'Subject',
-        hint: 'e.g. Mathematics',
-        icon: Icons.menu_book_outlined,
-      ),
-      validator: (value) {
-        if (value == null ||
-            value.trim().isEmpty) {
-          return 'Subject is required';
-        }
-
-        return null;
-      },
-    );
-  }
-
-  // ============================================================
-  // BACKEND NOTE
-  // ============================================================
 
   Widget _backendNote() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFAEB),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: const Color(0xFFFEC84B),
-        ),
+        color: Colors.grey.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: const Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 18,
-            color: Color(0xFFB54708),
-          ),
+          Icon(Icons.info_outline, size: 20, color: Colors.grey),
           SizedBox(width: 8),
           Expanded(
             child: Text(
-              'This assignment will link the teacher '
-              'to the selected class and subject.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF7A2E0B),
-              ),
+              'Only subjects already assigned to the selected class '
+              'will appear here. The teacher will be assigned to the '
+              'selected class and subject.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
         ],
       ),
     );
-  }
-
-  // ============================================================
-  // INPUT DECORATION
-  // ============================================================
-
-  InputDecoration _inputDecoration({
-    required String label,
-    String? hint,
-    required IconData icon,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: Icon(
-        icon,
-        size: 20,
-      ),
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 15,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFFD0D5DD),
-        ),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFFD0D5DD),
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFF2563EB),
-          width: 1.5,
-        ),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFFD92D20),
-        ),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFFD92D20),
-          width: 1.5,
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // HELPERS
-  // ============================================================
-
-  String _className(SchoolClass schoolClass) {
-    // Adjust this only if your SchoolClass model uses
-    // a different display field.
-    final name = schoolClass.name?.trim();
-
-    if (name != null && name.isNotEmpty) {
-      return name;
-    }
-
-    return 'Class ${schoolClass.id ?? ''}';
-  }
-
-  String _initial(String name) {
-    final value = name.trim();
-
-    if (value.isEmpty) {
-      return '?';
-    }
-
-    return value.substring(0, 1).toUpperCase();
-  }
-
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor:
-              isError ? Colors.red.shade700 : null,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
   }
 }

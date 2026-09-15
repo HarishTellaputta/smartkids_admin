@@ -1,8 +1,20 @@
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:smartkids_admin/models/student_model.dart';
+import 'package:smartkids_admin/models/academic_year_model.dart';
+import 'package:smartkids_admin/models/section_model.dart';
+import 'package:smartkids_admin/models/parent_model.dart';
+
 import 'package:smartkids_admin/services/student_service.dart';
+import 'package:smartkids_admin/services/academic_year_service.dart';
+import 'package:smartkids_admin/services/section_service.dart';
+import 'package:smartkids_admin/services/parent_service.dart';
+
+import 'package:smartkids_admin/features/teachers/services/class_service.dart';
+import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 
 class EditStudentDialog extends StatefulWidget {
   final Student student;
@@ -36,6 +48,25 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   String selectedStatus = 'ACTIVE';
 
   bool isSaving = false;
+  bool isLoadingAcademicData = true;
+  bool isLoadingSections = false;
+
+  String? academicDataError;
+
+  late AcademicYearService _academicYearService;
+  late ClassService _classService;
+  late SectionService _sectionService;
+  late ParentService _parentService;
+
+  List<AcademicYear> academicYears = [];
+  List<SchoolClass> classes = [];
+  List<Section> sections = [];
+  List<Parent> parents = [];
+
+  AcademicYear? selectedAcademicYear;
+  SchoolClass? selectedClass;
+  Section? selectedSection;
+  Parent? selectedParent;
 
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
@@ -74,11 +105,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     );
 
     selectedGender = _validGender(widget.student.gender);
-
-    selectedBloodGroup =
-        _validBloodGroup(widget.student.bloodGroup);
-
+    selectedBloodGroup = _validBloodGroup(widget.student.bloodGroup);
     selectedStatus = _validStatus(widget.student.status);
+
+    _initializeServicesAndLoadData();
   }
 
   @override
@@ -95,6 +125,249 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   }
 
   // ============================================================
+  // INITIALIZE SERVICES
+  // ============================================================
+
+  Future<void> _initializeServicesAndLoadData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          isLoadingAcademicData = false;
+          academicDataError =
+              'Login session expired. Please login again.';
+        });
+
+        return;
+      }
+
+      _academicYearService = AcademicYearService(token);
+      _classService = ClassService(token);
+      _sectionService = SectionService(token);
+      _parentService = ParentService(token);
+
+      await _loadAcademicData();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingAcademicData = false;
+        academicDataError =
+            'Failed to initialize academic information: $e';
+      });
+    }
+  }
+
+  // ============================================================
+  // LOAD ACADEMIC DATA
+  // ============================================================
+
+  Future<void> _loadAcademicData() async {
+    try {
+      final results = await Future.wait([
+        _academicYearService.getAcademicYears(),
+        _classService.getClasses(),
+        _sectionService.getSections(),
+        _parentService.getParents(),
+      ]);
+
+      final loadedAcademicYears =
+          results[0] as List<AcademicYear>;
+
+      final loadedClasses =
+          results[1] as List<SchoolClass>;
+
+      final loadedSections =
+          results[2] as List<Section>;
+
+      final loadedParents =
+          results[3] as List<Parent>;
+
+      AcademicYear? existingAcademicYear;
+
+      for (final academicYear in loadedAcademicYears) {
+        if (academicYear.id ==
+            widget.student.academicYearId) {
+          existingAcademicYear = academicYear;
+          break;
+        }
+      }
+
+      SchoolClass? existingClass;
+      Section? existingSection;
+
+      // Find existing Section
+      for (final section in loadedSections) {
+        if (section.id == widget.student.sectionId) {
+          existingSection = section;
+          break;
+        }
+      }
+
+      // Section contains classId.
+      // Therefore derive the existing Class from Section.
+      if (existingSection != null) {
+        for (final schoolClass in loadedClasses) {
+          if (schoolClass.id == existingSection.classId) {
+            existingClass = schoolClass;
+            break;
+          }
+        }
+      }
+
+      Parent? existingParent;
+
+      if (widget.student.parentId != null) {
+        for (final parent in loadedParents) {
+          if (parent.id == widget.student.parentId) {
+            existingParent = parent;
+            break;
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        academicYears = loadedAcademicYears;
+        classes = loadedClasses;
+        parents = loadedParents;
+
+        selectedAcademicYear = existingAcademicYear;
+        selectedClass = existingClass;
+        selectedParent = existingParent;
+
+        isLoadingAcademicData = false;
+        academicDataError = null;
+      });
+
+      // Load sections for existing class
+      if (existingClass?.id != null) {
+        await _loadSectionsForClass(
+          existingClass!.id!,
+          initialSectionId: existingSection?.id,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingAcademicData = false;
+        academicDataError =
+            'Failed to load academic information: $e';
+      });
+    }
+  }
+
+  // ============================================================
+  // LOAD SECTIONS BY CLASS
+  // ============================================================
+
+  Future<void> _loadSectionsForClass(
+    int classId, {
+    int? initialSectionId,
+  }) async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoadingSections = true;
+      sections = [];
+      selectedSection = null;
+    });
+
+    try {
+      final loadedSections =
+          await _sectionService.getSectionsByClassId(classId);
+
+      Section? existingSection;
+
+      if (initialSectionId != null) {
+        for (final section in loadedSections) {
+          if (section.id == initialSectionId) {
+            existingSection = section;
+            break;
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        sections = loadedSections;
+        selectedSection = existingSection;
+        isLoadingSections = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingSections = false;
+        selectedSection = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load sections: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // ACADEMIC YEAR CHANGE
+  // ============================================================
+
+  void _onAcademicYearChanged(AcademicYear? value) {
+    if (value == null) return;
+
+    setState(() {
+      selectedAcademicYear = value;
+    });
+  }
+
+  // ============================================================
+  // CLASS CHANGE
+  // ============================================================
+
+  Future<void> _onClassChanged(SchoolClass? value) async {
+    if (value == null || value.id == null) return;
+
+    setState(() {
+      selectedClass = value;
+      selectedSection = null;
+      sections = [];
+    });
+
+    await _loadSectionsForClass(value.id!);
+  }
+
+  // ============================================================
+  // SECTION CHANGE
+  // ============================================================
+
+  void _onSectionChanged(Section? value) {
+    setState(() {
+      selectedSection = value;
+    });
+  }
+
+  // ============================================================
+  // PARENT CHANGE
+  // ============================================================
+
+  void _onParentChanged(Parent? value) {
+    setState(() {
+      selectedParent = value;
+    });
+  }
+
+  // ============================================================
   // NAME SPLIT
   // ============================================================
 
@@ -102,7 +375,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     final trimmed = name.trim();
 
     if (trimmed.isEmpty) {
-      return (first: '', second: '');
+      return (
+        first: '',
+        second: '',
+      );
     }
 
     final parts = trimmed.split(RegExp(r'\s+'));
@@ -144,9 +420,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     DateTime initialDate = DateTime.now();
 
     if (controller.text.trim().isNotEmpty) {
-      final parsed = DateTime.tryParse(
-        controller.text.trim(),
-      );
+      final parsed =
+          DateTime.tryParse(controller.text.trim());
 
       if (parsed != null) {
         initialDate = parsed;
@@ -210,7 +485,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
     final normalized = value?.toUpperCase();
 
-    if (normalized != null && values.contains(normalized)) {
+    if (normalized != null &&
+        values.contains(normalized)) {
       return normalized;
     }
 
@@ -237,51 +513,141 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       return;
     }
 
+    if (selectedAcademicYear == null ||
+        selectedAcademicYear!.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select Academic Year'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      return;
+    }
+
+    if (selectedClass == null ||
+        selectedClass!.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select Class'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      return;
+    }
+
+    if (selectedSection == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select Section'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      return;
+    }
+
     setState(() {
       isSaving = true;
     });
 
     try {
-      final firstName = firstNameController.text.trim();
-      final lastName = lastNameController.text.trim();
+      final firstName =
+          firstNameController.text.trim();
+
+      final lastName =
+          lastNameController.text.trim();
 
       final fullName = [
         firstName,
         lastName,
       ].where((name) => name.isNotEmpty).join(' ');
 
+      /*
+       * IMPORTANT:
+       *
+       * Backend expects:
+       * academicYearId
+       * sectionId
+       * parentId
+       *
+       * Class ID is NOT sent because Section already
+       * belongs to the selected Class.
+       */
+
       final data = <String, dynamic>{
-        'admissionNo': _nullable(
-          admissionNoController.text,
-        ),
+        'admissionNo':
+            _nullable(admissionNoController.text),
+
         'name': fullName,
-        'email': _nullable(
-          emailController.text,
-        ),
-        'phone': _nullable(
-          phoneController.text,
-        ),
-        'dateOfBirth': _nullable(
-          dobController.text,
-        ),
+
+        'email':
+            _nullable(emailController.text),
+
+        'phone':
+            _nullable(phoneController.text),
+
+        'dateOfBirth':
+            _nullable(dobController.text),
+
         'gender': selectedGender,
+
         'bloodGroup': selectedBloodGroup,
-        'admissionDate': _nullable(
-          admissionDateController.text,
-        ),
 
-        // Keep existing relationships.
-        'sectionId': widget.student.sectionId,
-        'parentId': widget.student.parentId,
-        'academicYearId': widget.student.academicYearId,
+        'admissionDate':
+            _nullable(admissionDateController.text),
 
-        'status': selectedStatus,
+        'academicYearId':
+            selectedAcademicYear!.id,
+
+        'sectionId':
+            selectedSection!.id,
+
+        // Parent is optional.
+        // null means no parent.
+        'parentId':
+            selectedParent?.id,
+
+        'status':
+            selectedStatus,
+
+        /*
+         * Keep existing values for fields which are not
+         * currently editable in this dialog.
+         *
+         * These two fields are included because your
+         * backend update method explicitly updates them.
+         */
       };
 
-      debugPrint('========== UPDATE STUDENT DATA ==========');
-      debugPrint('ID: ${widget.student.id}');
-      debugPrint('$data');
-      debugPrint('=========================================');
+      debugPrint(
+        '========== UPDATE STUDENT ==========',
+      );
+
+      debugPrint(
+        'Student ID: ${widget.student.id}',
+      );
+
+      debugPrint(
+        'Academic Year ID: ${selectedAcademicYear!.id}',
+      );
+
+      debugPrint(
+        'Class ID: ${selectedClass!.id}',
+      );
+
+      debugPrint(
+        'Section ID: ${selectedSection!.id}',
+      );
+
+      debugPrint(
+        'Parent selected: ${selectedParent != null}',
+      );
+
+      debugPrint(
+        '====================================',
+      );
 
       await widget.studentService.updateStudent(
         widget.student.id!,
@@ -294,7 +660,9 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Student updated successfully'),
+          content: Text(
+            'Student updated successfully',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -430,7 +798,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   }
 
   // ============================================================
-  // DROPDOWN
+  // STRING DROPDOWN
   // ============================================================
 
   Widget _dropdownField({
@@ -441,7 +809,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
+      isExpanded: true,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
@@ -461,7 +830,354 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
           child: Text(item),
         );
       }).toList(),
-      onChanged: isSaving ? null : onChanged,
+      onChanged: isSaving
+          ? null
+          : onChanged,
+    );
+  }
+
+  // ============================================================
+  // ACADEMIC YEAR DROPDOWN
+  // ============================================================
+
+  Widget _academicYearDropdown() {
+    return DropdownButtonFormField<AcademicYear>(
+      initialValue: selectedAcademicYear,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Academic Year',
+        prefixIcon: const Icon(
+          Icons.calendar_month_outlined,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+      ),
+      items: academicYears.map((year) {
+        return DropdownMenuItem<AcademicYear>(
+          value: year,
+          child: Text(
+            year.name ?? 'Academic Year',
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged: isSaving
+          ? null
+          : _onAcademicYearChanged,
+      validator: (value) {
+        if (value == null) {
+          return 'Academic Year is required';
+        }
+
+        return null;
+      },
+    );
+  }
+
+  // ============================================================
+  // CLASS DROPDOWN
+  // ============================================================
+
+  Widget _classDropdown() {
+    return DropdownButtonFormField<SchoolClass>(
+      initialValue: selectedClass,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Class',
+        prefixIcon: const Icon(
+          Icons.school_outlined,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+      ),
+      items: classes.map((schoolClass) {
+        final displayName =
+            schoolClass.name ??
+            schoolClass.grade ??
+            schoolClass.code ??
+            'Class';
+
+        return DropdownMenuItem<SchoolClass>(
+          value: schoolClass,
+          child: Text(
+            displayName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged: isSaving
+          ? null
+          : _onClassChanged,
+      validator: (value) {
+        if (value == null) {
+          return 'Class is required';
+        }
+
+        return null;
+      },
+    );
+  }
+
+  // ============================================================
+  // SECTION DROPDOWN
+  // ============================================================
+
+  Widget _sectionDropdown() {
+    if (isLoadingSections) {
+      return InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Section',
+          prefixIcon: const Icon(
+            Icons.groups_outlined,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            ),
+            SizedBox(width: 10),
+            Text('Loading sections...'),
+          ],
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<Section>(
+      initialValue: selectedSection,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Section',
+        prefixIcon: const Icon(
+          Icons.groups_outlined,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+      ),
+      items: sections.map((section) {
+        return DropdownMenuItem<Section>(
+          value: section,
+          child: Text(
+            section.name,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged:
+          isSaving || selectedClass == null
+              ? null
+              : _onSectionChanged,
+      validator: (value) {
+        if (value == null) {
+          return 'Section is required';
+        }
+
+        return null;
+      },
+    );
+  }
+
+  // ============================================================
+  // PARENT DROPDOWN
+  // ============================================================
+
+  Widget _parentDropdown() {
+    /*
+     * IMPORTANT FIX:
+     *
+     * The dropdown type is Parent? instead of Parent.
+     * This allows the "No Parent" item to have a null value
+     * without causing a type mismatch.
+     */
+    return DropdownButtonFormField<Parent?>(
+      initialValue: selectedParent,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Parent',
+        prefixIcon: const Icon(
+          Icons.family_restroom_outlined,
+        ),
+        hintText: 'Select parent (optional)',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+      ),
+      items: [
+        const DropdownMenuItem<Parent?>(
+          value: null,
+          child: Text('No Parent'),
+        ),
+        ...parents.map(
+          (parent) {
+            return DropdownMenuItem<Parent?>(
+              value: parent,
+              child: Text(
+                parent.displayName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          },
+        ),
+      ],
+      onChanged: isSaving
+          ? null
+          : _onParentChanged,
+    );
+  }
+
+  // ============================================================
+  // ACADEMIC INFORMATION SECTION
+  // ============================================================
+
+  Widget _academicInformationSection() {
+    if (isLoadingAcademicData) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Colors.grey.shade300,
+          ),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Loading academic information...',
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (academicDataError != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Colors.red.shade100,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.error_outline,
+              color: Colors.red.shade700,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                academicDataError!,
+                style: TextStyle(
+                  color: Colors.red.shade800,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: isSaving
+                  ? null
+                  : () {
+                      setState(() {
+                        isLoadingAcademicData = true;
+                        academicDataError = null;
+                      });
+
+                      _initializeServicesAndLoadData();
+                    },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        _academicYearDropdown(),
+
+        const SizedBox(height: 14),
+
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final twoColumns =
+                constraints.maxWidth >= 560;
+
+            if (!twoColumns) {
+              return Column(
+                children: [
+                  _classDropdown(),
+                  const SizedBox(height: 14),
+                  _sectionDropdown(),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(
+                  child: _classDropdown(),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _sectionDropdown(),
+                ),
+              ],
+            );
+          },
+        ),
+
+        const SizedBox(height: 14),
+
+        _parentDropdown(),
+      ],
     );
   }
 
@@ -482,11 +1198,26 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
     return AlertDialog(
       titlePadding:
-          const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          const EdgeInsets.fromLTRB(
+        24,
+        24,
+        24,
+        8,
+      ),
       contentPadding:
-          const EdgeInsets.fromLTRB(24, 8, 24, 8),
+          const EdgeInsets.fromLTRB(
+        24,
+        8,
+        24,
+        8,
+      ),
       actionsPadding:
-          const EdgeInsets.fromLTRB(24, 8, 24, 20),
+          const EdgeInsets.fromLTRB(
+        24,
+        8,
+        24,
+        20,
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -537,9 +1268,9 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
               children: [
                 const SizedBox(height: 12),
 
-                // ------------------------------------------------
+                // ==================================================
                 // PERSONAL INFORMATION
-                // ------------------------------------------------
+                // ==================================================
 
                 _sectionTitle(
                   'Personal Information',
@@ -549,7 +1280,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                 const SizedBox(height: 14),
 
                 LayoutBuilder(
-                  builder: (context, constraints) {
+                  builder:
+                      (context, constraints) {
                     final twoColumns =
                         constraints.maxWidth >= 560;
 
@@ -606,7 +1338,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                 const SizedBox(height: 14),
 
                 LayoutBuilder(
-                  builder: (context, constraints) {
+                  builder:
+                      (context, constraints) {
                     final twoColumns =
                         constraints.maxWidth >= 560;
 
@@ -614,16 +1347,20 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                       return Column(
                         children: [
                           _dateField(
-                            controller: dobController,
-                            label: 'Date of Birth',
+                            controller:
+                                dobController,
+                            label:
+                                'Date of Birth',
                             icon:
                                 Icons.cake_outlined,
                           ),
                           const SizedBox(height: 14),
                           _dropdownField(
                             label: 'Gender',
-                            icon: Icons.wc_outlined,
-                            value: selectedGender,
+                            icon:
+                                Icons.wc_outlined,
+                            value:
+                                selectedGender,
                             items: const [
                               'Male',
                               'Female',
@@ -646,8 +1383,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                       children: [
                         Expanded(
                           child: _dateField(
-                            controller: dobController,
-                            label: 'Date of Birth',
+                            controller:
+                                dobController,
+                            label:
+                                'Date of Birth',
                             icon:
                                 Icons.cake_outlined,
                           ),
@@ -656,8 +1395,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                         Expanded(
                           child: _dropdownField(
                             label: 'Gender',
-                            icon: Icons.wc_outlined,
-                            value: selectedGender,
+                            icon:
+                                Icons.wc_outlined,
+                            value:
+                                selectedGender,
                             items: const [
                               'Male',
                               'Female',
@@ -681,7 +1422,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                 const SizedBox(height: 14),
 
                 LayoutBuilder(
-                  builder: (context, constraints) {
+                  builder:
+                      (context, constraints) {
                     final twoColumns =
                         constraints.maxWidth >= 560;
 
@@ -689,7 +1431,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                       return Column(
                         children: [
                           _dropdownField(
-                            label: 'Blood Group',
+                            label:
+                                'Blood Group',
                             icon:
                                 Icons.bloodtype_outlined,
                             value:
@@ -717,7 +1460,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                           _textField(
                             controller:
                                 admissionNoController,
-                            label: 'Admission No',
+                            label:
+                                'Admission No',
                             icon:
                                 Icons.badge_outlined,
                             required: true,
@@ -730,7 +1474,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                       children: [
                         Expanded(
                           child: _dropdownField(
-                            label: 'Blood Group',
+                            label:
+                                'Blood Group',
                             icon:
                                 Icons.bloodtype_outlined,
                             value:
@@ -760,7 +1505,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                           child: _textField(
                             controller:
                                 admissionNoController,
-                            label: 'Admission No',
+                            label:
+                                'Admission No',
                             icon:
                                 Icons.badge_outlined,
                             required: true,
@@ -771,9 +1517,9 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                   },
                 ),
 
-                // ------------------------------------------------
-                // CONTACT
-                // ------------------------------------------------
+                // ==================================================
+                // CONTACT INFORMATION
+                // ==================================================
 
                 const SizedBox(height: 24),
 
@@ -785,7 +1531,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                 const SizedBox(height: 14),
 
                 LayoutBuilder(
-                  builder: (context, constraints) {
+                  builder:
+                      (context, constraints) {
                     final twoColumns =
                         constraints.maxWidth >= 560;
 
@@ -809,7 +1556,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                             icon:
                                 Icons.email_outlined,
                             keyboardType:
-                                TextInputType.emailAddress,
+                                TextInputType
+                                    .emailAddress,
                           ),
                         ],
                       );
@@ -837,7 +1585,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                             icon:
                                 Icons.email_outlined,
                             keyboardType:
-                                TextInputType.emailAddress,
+                                TextInputType
+                                    .emailAddress,
                           ),
                         ),
                       ],
@@ -845,9 +1594,9 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                   },
                 ),
 
-                // ------------------------------------------------
-                // ACADEMIC
-                // ------------------------------------------------
+                // ==================================================
+                // ACADEMIC INFORMATION
+                // ==================================================
 
                 const SizedBox(height: 24),
 
@@ -858,11 +1607,16 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
                 const SizedBox(height: 14),
 
+                _academicInformationSection(),
+
+                const SizedBox(height: 14),
+
                 _dateField(
                   controller:
                       admissionDateController,
                   label: 'Admission Date',
-                  icon: Icons.event_outlined,
+                  icon:
+                      Icons.event_outlined,
                   required: true,
                 ),
 
@@ -880,8 +1634,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                   onChanged: (value) {
                     if (value != null) {
                       setState(() {
-                        selectedStatus =
-                            value;
+                        selectedStatus = value;
                       });
                     }
                   },
@@ -889,20 +1642,19 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
                 const SizedBox(height: 16),
 
-                // ------------------------------------------------
-                // EXISTING PARENT INFO
-                // ------------------------------------------------
+                // ==================================================
+                // SELECTED PARENT INFO
+                // ==================================================
 
-                if (widget.student.parentName != null &&
-                    widget.student.parentName!
-                        .trim()
-                        .isNotEmpty)
+                if (selectedParent != null)
                   Container(
                     width: double.infinity,
                     padding:
                         const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          Colors.green.shade50,
                       borderRadius:
                           BorderRadius.circular(10),
                       border: Border.all(
@@ -923,7 +1675,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Parent: ${widget.student.parentName}',
+                            'Selected Parent: ${selectedParent!.displayName}',
                             style: TextStyle(
                               fontSize: 13,
                               color:
@@ -982,7 +1734,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                 ? 'Updating...'
                 : 'Update Student',
           ),
-          style: ElevatedButton.styleFrom(
+          style:
+              ElevatedButton.styleFrom(
             backgroundColor:
                 Colors.blue.shade700,
             foregroundColor: Colors.white,

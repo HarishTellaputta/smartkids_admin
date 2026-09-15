@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/fee_model.dart';
+import '../models/fee_dashboard_summary_model.dart';
 
 class FeeService {
   final Dio _dio;
@@ -36,6 +37,10 @@ class FeeService {
     };
   }
 
+  // ============================================================
+  // PENDING FEES
+  // ============================================================
+
   Future<List<StudentFeeModel>> getPendingFees() async {
     try {
       final response = await _dio.get(
@@ -50,6 +55,10 @@ class FeeService {
       throw Exception(_getErrorMessage(e));
     }
   }
+
+  // ============================================================
+  // STUDENT FEES
+  // ============================================================
 
   Future<List<StudentFeeModel>> getStudentFees(
     int studentId, {
@@ -72,6 +81,10 @@ class FeeService {
     }
   }
 
+  // ============================================================
+  // PAYMENTS
+  // ============================================================
+
   Future<List<FeePaymentModel>> getPayments({
     int? studentId,
   }) async {
@@ -93,6 +106,10 @@ class FeeService {
       throw Exception(_getErrorMessage(e));
     }
   }
+
+  // ============================================================
+  // RECORD PAYMENT
+  // ============================================================
 
   Future<FeePaymentModel> recordPayment({
     required int studentFeeId,
@@ -122,6 +139,10 @@ class FeeService {
     }
   }
 
+  // ============================================================
+  // FEE STRUCTURES
+  // ============================================================
+
   Future<List<dynamic>> getFeeStructures({
     int? classId,
   }) async {
@@ -148,9 +169,33 @@ class FeeService {
     }
   }
 
-  Future<List<StudentFeeModel>> _parseStudentFees(
-    dynamic data,
-  ) async {
+  // ============================================================
+  // FEE DASHBOARD SUMMARY
+  // GET /api/v1/fees/dashboard-summary
+  // ============================================================
+
+  Future<FeeDashboardSummaryModel> getDashboardSummary() async {
+    try {
+      final response = await _dio.get(
+        '/api/v1/fees/dashboard-summary',
+        options: Options(
+          headers: await _headers(),
+        ),
+      );
+
+      return FeeDashboardSummaryModel.fromJson(
+        Map<String, dynamic>.from(response.data),
+      );
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
+  }
+
+  // ============================================================
+  // PARSE STUDENT FEES
+  // ============================================================
+
+  List<StudentFeeModel> _parseStudentFees(dynamic data) {
     if (data is List) {
       return data
           .map(
@@ -173,6 +218,10 @@ class FeeService {
 
     return [];
   }
+
+  // ============================================================
+  // PARSE PAYMENTS
+  // ============================================================
 
   List<FeePaymentModel> _parsePayments(dynamic data) {
     if (data is List) {
@@ -197,6 +246,10 @@ class FeeService {
 
     return [];
   }
+
+  // ============================================================
+  // ERROR HANDLING
+  // ============================================================
 
   String _getErrorMessage(DioException e) {
     if (e.response?.statusCode == 400) {
@@ -235,6 +288,10 @@ class FeeService {
 
     return e.message ?? 'Something went wrong.';
   }
+
+  // ============================================================
+  // SERVER ERROR MESSAGE
+  // ============================================================
 
   String? _serverMessage(DioException e) {
     final data = e.response?.data;

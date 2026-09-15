@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:smartkids_admin/features/attendance/models/attendance_dashboard_summary_model.dart';
+import 'package:smartkids_admin/features/attendance/services/attendance_service.dart';
+import 'package:smartkids_admin/features/fees/models/fee_dashboard_summary_model.dart';
+import 'package:smartkids_admin/features/fees/services/fee_service.dart';
 
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_topbar.dart';
@@ -39,6 +43,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   late final AdminDashboardService _dashboardService;
 
+  final FeeService _feeService = FeeService();
+
+  FeeDashboardSummaryModel? _feeDashboardSummary;
+
+  AttendanceDashboardSummaryModel? _attendanceDashboardSummary;
+
+  bool _isLoadingAttendanceDashboard = true;
+  String? _attendanceDashboardError;
+  bool _isLoadingFeeDashboard = true;
+  String? _feeDashboardError;
+
   bool _isLoadingDashboard = true;
   String? _dashboardError;
 
@@ -71,6 +86,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _dashboardService = AdminDashboardService(_apiClient);
 
     _loadDashboardData();
+    _loadFeeDashboardSummary();
+    _loadAttendanceDashboardSummary();
   }
 
   Future<void> _loadDashboardData() async {
@@ -97,6 +114,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       setState(() {
         _isLoadingDashboard = false;
         _dashboardError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadFeeDashboardSummary() async {
+    setState(() {
+      _isLoadingFeeDashboard = true;
+      _feeDashboardError = null;
+    });
+
+    try {
+      final data = await _feeService.getDashboardSummary();
+
+      if (!mounted) return;
+
+      setState(() {
+        _feeDashboardSummary = data;
+        _isLoadingFeeDashboard = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingFeeDashboard = false;
+        _feeDashboardError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadAttendanceDashboardSummary() async {
+    setState(() {
+      _isLoadingAttendanceDashboard = true;
+      _attendanceDashboardError = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      if (token.trim().isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final attendanceService = AttendanceService(token.trim());
+
+      final data = await attendanceService.getDashboardSummary();
+
+      if (!mounted) return;
+
+      setState(() {
+        _attendanceDashboardSummary = data;
+        _isLoadingAttendanceDashboard = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingAttendanceDashboard = false;
+        _attendanceDashboardError = e.toString();
       });
     }
   }
@@ -244,7 +320,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.refresh),
-                    onPressed: _isLoadingDashboard ? null : _loadDashboardData,
+                    onPressed:
+                        (_isLoadingDashboard ||
+                            _isLoadingFeeDashboard ||
+                            _isLoadingAttendanceDashboard)
+                        ? null
+                        : () {
+                            _loadDashboardData();
+                            _loadFeeDashboardSummary();
+                            _loadAttendanceDashboardSummary();
+                          },
                     tooltip: 'Refresh dashboard',
                   ),
                 ],
@@ -389,6 +474,60 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildAttendanceCard() {
+    if (_isLoadingAttendanceDashboard) {
+      return _buildDashboardCard(
+        title: 'Today\'s Attendance',
+        icon: Icons.calendar_month_outlined,
+        child: const SizedBox(
+          height: 180,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_attendanceDashboardError != null ||
+        _attendanceDashboardSummary == null) {
+      return _buildDashboardCard(
+        title: 'Today\'s Attendance',
+        icon: Icons.calendar_month_outlined,
+        child: SizedBox(
+          height: 180,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 32,
+                  color: Color(0xFFEF4444),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Unable to load attendance',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _loadAttendanceDashboardSummary,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final summary = _attendanceDashboardSummary!;
+
+    final double percentage = summary.attendancePercentage
+        .clamp(0.0, 100.0)
+        .toDouble();
+
     return _buildDashboardCard(
       title: 'Today\'s Attendance',
       icon: Icons.calendar_month_outlined,
@@ -409,7 +548,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       height: 120,
                       width: 120,
                       child: CircularProgressIndicator(
-                        value: 0.92,
+                        value: percentage / 100,
                         strokeWidth: 12,
                         backgroundColor: const Color(0xFFE5E7EB),
                         valueColor: const AlwaysStoppedAnimation<Color>(
@@ -417,18 +556,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ),
                       ),
                     ),
-                    const Column(
+
+                    Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '92%',
-                          style: TextStyle(
+                          '${percentage.toStringAsFixed(percentage % 1 == 0 ? 0 : 1)}%',
+                          style: const TextStyle(
                             fontSize: 25,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF111827),
                           ),
                         ),
-                        Text(
+                        const Text(
                           'Present',
                           style: TextStyle(
                             fontSize: 11,
@@ -448,23 +588,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   children: [
                     _buildAttendanceRow(
                       'Present',
-                      '322',
+                      summary.present.toString(),
                       const Color(0xFF2563EB),
                     ),
+
                     const SizedBox(height: 14),
+
                     _buildAttendanceRow(
                       'Absent',
-                      '18',
+                      summary.absent.toString(),
                       const Color(0xFFEF4444),
                     ),
+
                     const SizedBox(height: 14),
+
                     _buildAttendanceRow(
-                      'Total',
-                      '350',
+                      'Leave',
+                      summary.leave.toString(),
+                      const Color(0xFFF59E0B),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    _buildAttendanceRow(
+                      'Total Students',
+                      summary.totalStudents.toString(),
                       const Color(0xFF6B7280),
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Marked: ${summary.marked}/${summary.totalStudents}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+
+              Text(
+                'Not Marked: ${summary.totalStudents - summary.marked}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
               ),
             ],
           ),
@@ -501,6 +670,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildFeeCard() {
+    if (_isLoadingFeeDashboard) {
+      return _buildDashboardCard(
+        title: 'Fee Collection',
+        icon: Icons.currency_rupee,
+        child: const SizedBox(
+          height: 220,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_feeDashboardError != null || _feeDashboardSummary == null) {
+      return _buildDashboardCard(
+        title: 'Fee Collection',
+        icon: Icons.currency_rupee,
+        child: SizedBox(
+          height: 220,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 32,
+                  color: Color(0xFFEF4444),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Unable to load fee summary',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _loadFeeDashboardSummary,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final summary = _feeDashboardSummary!;
+
+    final double percentage = summary.collectionPercentage
+        .clamp(0.0, 100.0)
+        .toDouble();
+
     return _buildDashboardCard(
       title: 'Fee Collection',
       icon: Icons.currency_rupee,
@@ -509,9 +731,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           const SizedBox(height: 8),
 
-          const Text(
-            '₹35.20 L',
-            style: TextStyle(
+          Text(
+            _formatIndianCurrency(summary.collected),
+            style: const TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
               color: Color(0xFF111827),
@@ -521,7 +743,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 5),
 
           const Text(
-            'Total fees collected this academic year',
+            'Total fees collected',
             style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),
 
@@ -529,11 +751,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: const LinearProgressIndicator(
-              value: 0.78,
+            child: LinearProgressIndicator(
+              value: percentage / 100,
               minHeight: 10,
-              backgroundColor: Color(0xFFE5E7EB),
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+              backgroundColor: const Color(0xFFE5E7EB),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF2563EB),
+              ),
             ),
           ),
 
@@ -541,18 +765,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
-                'Collected: 78%',
-                style: TextStyle(
+                'Collected: ${percentage.toStringAsFixed(percentage % 1 == 0 ? 0 : 1)}%',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF2563EB),
                 ),
               ),
+
               Text(
-                'Target: ₹45.00 L',
-                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                'Total: ${_formatIndianCurrency(summary.totalFee)}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ],
           ),
@@ -561,9 +786,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
           Row(
             children: [
-              _buildFeeInfo('Collected', '₹35.20 L'),
+              _buildFeeInfo(
+                'Collected',
+                _formatIndianCurrency(summary.collected),
+              ),
+
               const SizedBox(width: 35),
-              _buildFeeInfo('Pending', '₹9.80 L'),
+
+              _buildFeeInfo('Pending', _formatIndianCurrency(summary.pending)),
             ],
           ),
         ],
@@ -590,6 +820,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       ],
     );
+  }
+
+  String _formatIndianCurrency(double amount) {
+    if (amount >= 10000000) {
+      return '₹${(amount / 10000000).toStringAsFixed(2)} Cr';
+    }
+
+    if (amount >= 100000) {
+      return '₹${(amount / 100000).toStringAsFixed(2)} L';
+    }
+
+    if (amount >= 1000) {
+      return '₹${(amount / 1000).toStringAsFixed(2)} K';
+    }
+
+    return '₹${amount.toStringAsFixed(0)}';
   }
 
   Widget _buildBottomSection() {

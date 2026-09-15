@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:smartkids_admin/features/attendance/models/attendance_dashboard_summary_model.dart';
 
 import '../models/attendance_request_model.dart';
 import '../models/attendance_response_model.dart';
@@ -10,17 +11,16 @@ class AttendanceService {
   final Dio _dio;
 
   AttendanceService(String token)
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              if (token.isNotEmpty)
-                'Authorization': 'Bearer $token',
-            },
-          ),
-        );
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://localhost:8080',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+          },
+        ),
+      );
 
   // ============================================================
   // DATE FORMAT
@@ -41,7 +41,8 @@ class AttendanceService {
       final data = e.response!.data;
 
       if (data is Map<String, dynamic>) {
-        message = data['message']?.toString() ??
+        message =
+            data['message']?.toString() ??
             data['error']?.toString() ??
             data.toString();
       } else {
@@ -106,13 +107,9 @@ class AttendanceService {
   // GET - ATTENDANCE BY ID
   // ============================================================
 
-  Future<AttendanceResponseModel> getAttendanceById(
-    int id,
-  ) async {
+  Future<AttendanceResponseModel> getAttendanceById(int id) async {
     try {
-      final response = await _dio.get(
-        '/api/v1/attendances/$id',
-      );
+      final response = await _dio.get('/api/v1/attendances/$id');
 
       return AttendanceResponseModel.fromJson(
         Map<String, dynamic>.from(response.data),
@@ -148,13 +145,9 @@ class AttendanceService {
   // DELETE - ATTENDANCE
   // ============================================================
 
-  Future<void> deleteAttendance(
-    int id,
-  ) async {
+  Future<void> deleteAttendance(int id) async {
     try {
-      await _dio.delete(
-        '/api/v1/attendances/$id',
-      );
+      await _dio.delete('/api/v1/attendances/$id');
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -195,9 +188,7 @@ class AttendanceService {
     try {
       final response = await _dio.get(
         '/api/v1/attendances/class/$classId',
-        queryParameters: {
-          'date': _formatDate(date),
-        },
+        queryParameters: {'date': _formatDate(date)},
       );
 
       return _parseAttendanceList(response.data);
@@ -280,9 +271,8 @@ class AttendanceService {
 
       return data
           .map(
-            (item) => AttendanceReportModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) =>
+                AttendanceReportModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     } on DioException catch (e) {
@@ -338,10 +328,7 @@ class AttendanceService {
         return (response.data as num).toDouble();
       }
 
-      return double.tryParse(
-            response.data.toString(),
-          ) ??
-          0.0;
+      return double.tryParse(response.data.toString()) ?? 0.0;
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -351,19 +338,32 @@ class AttendanceService {
   // PARSE ATTENDANCE LIST
   // ============================================================
 
-  List<AttendanceResponseModel> _parseAttendanceList(
-    dynamic data,
-  ) {
+  List<AttendanceResponseModel> _parseAttendanceList(dynamic data) {
     if (data is! List) {
       return [];
     }
 
     return data
         .map(
-          (item) => AttendanceResponseModel.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
+          (item) =>
+              AttendanceResponseModel.fromJson(Map<String, dynamic>.from(item)),
         )
         .toList();
+  }
+
+  // ============================================================
+  // GET - ATTENDANCE DASHBOARD SUMMARY
+  // ============================================================
+
+  Future<AttendanceDashboardSummaryModel> getDashboardSummary() async {
+    try {
+      final response = await _dio.get('/api/v1/attendances/dashboard/today');
+
+      return AttendanceDashboardSummaryModel.fromJson(
+        Map<String, dynamic>.from(response.data),
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
   }
 }

@@ -21,7 +21,7 @@ class SubjectService {
 
   Future<List<SubjectModel>> getAllSubjects() async {
     try {
-      final response = await _dio.get('/subjects');
+      final response = await _dio.get('/api/v1/subjects');
 
       final List<dynamic> data = response.data;
 
@@ -49,7 +49,7 @@ class SubjectService {
   Future<SubjectModel> getSubjectById(int id) async {
     try {
       final response = await _dio.get(
-        '/subjects/$id',
+        '/api/v1/subjects/$id',
       );
 
       return SubjectModel.fromJson(
@@ -74,7 +74,7 @@ class SubjectService {
   ) async {
     try {
       final response = await _dio.get(
-        '/subjects/school/$schoolId',
+        '/api/v1/subjects/school/$schoolId',
       );
 
       final List<dynamic> data = response.data;
@@ -105,7 +105,7 @@ class SubjectService {
   ) async {
     try {
       final response = await _dio.get(
-        '/subjects/school/$schoolId/active',
+        '/api/v1/subjects/school/$schoolId/active',
       );
 
       final List<dynamic> data = response.data;
@@ -136,7 +136,7 @@ class SubjectService {
   ) async {
     try {
       final response = await _dio.post(
-        '/subjects',
+        '/api/v1/subjects',
         data: subject.toJson(),
       );
 
@@ -163,7 +163,7 @@ class SubjectService {
   ) async {
     try {
       final response = await _dio.put(
-        '/subjects/$id',
+        '/api/v1/subjects/$id',
         data: subject.toJson(),
       );
 
@@ -187,7 +187,7 @@ class SubjectService {
   Future<void> deleteSubject(int id) async {
     try {
       await _dio.delete(
-        '/subjects/$id',
+        '/api/v1/subjects/$id',
       );
     } on DioException catch (e) {
       throw Exception(

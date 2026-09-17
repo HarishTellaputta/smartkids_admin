@@ -49,7 +49,7 @@ class StudentService {
 
     try {
       final response = await dio.get(
-        '/students',
+        '/api/v1/students',
         queryParameters: {
           'page': page,
           'size': size,
@@ -113,7 +113,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.get('/students/$id');
+      final response = await dio.get('/api/v1/students/$id');
 
       print('STATUS CODE: ${response.statusCode}');
       print('RESPONSE DATA: ${response.data}');
@@ -147,7 +147,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.post('/students', data: data);
+      final response = await dio.post('/api/v1/students', data: data);
 
       print('CREATE STATUS: ${response.statusCode}');
       print('CREATE RESPONSE: ${response.data}');
@@ -182,7 +182,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.put('/students/$id', data: data);
+      final response = await dio.put('/api/v1/students/$id', data: data);
 
       print('UPDATE STATUS: ${response.statusCode}');
       print('UPDATE RESPONSE: ${response.data}');
@@ -216,7 +216,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.delete('/students/$id');
+      final response = await dio.delete('/api/v1/students/$id');
 
       print('DELETE STATUS: ${response.statusCode}');
       print('DELETE RESPONSE: ${response.data}');
@@ -244,7 +244,7 @@ class StudentService {
     print('========================================');
 
     try {
-      final response = await dio.get('/students/class/$classId');
+      final response = await dio.get('/api/v1/students/class/$classId');
 
       print('STATUS CODE: ${response.statusCode}');
       print('RESPONSE DATA: ${response.data}');

@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-
 import '../models/examination_model.dart';
 
 class ExaminationService {
@@ -383,4 +382,11 @@ class ExaminationService {
         return e.message ?? 'Network error occurred.';
     }
   }
+
+  // ============================================================
+  // IMPORT EXAMINATIONS FROM EXCEL
+  // POST /api/v1/examinations/import
+  // ============================================================
+
+ 
 }

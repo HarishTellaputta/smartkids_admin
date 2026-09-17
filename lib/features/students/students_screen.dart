@@ -17,6 +17,9 @@ import 'dialogs/student_details_dialog.dart';
 import 'dialogs/delete_student_dialog.dart';
 import 'dialogs/student_filter_dialog.dart';
 
+import 'package:smartkids_admin/features/teachers/models/class_model.dart';
+import 'package:smartkids_admin/features/teachers/services/class_service.dart';
+
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({super.key});
 
@@ -28,6 +31,15 @@ class _StudentsScreenState extends State<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   late StudentService studentService;
+  late ClassService classService;
+
+  List<SchoolClass> classes = [];
+
+  int? selectedClassId;
+
+  bool isClassLoading = false;
+
+  static const int _schoolId = 1;
 
   List<Student> students = [];
 
@@ -90,9 +102,11 @@ class _StudentsScreenState extends State<StudentsScreen> {
       }
 
       studentService = StudentService(token);
+      classService = ClassService(token);
 
       _serviceInitialized = true;
 
+      await _loadClasses();
       await _loadStudents();
     } catch (e) {
       debugPrint('Student initialization error: $e');
@@ -109,6 +123,46 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   // ============================================================
+  // LOAD CLASSES
+  // ============================================================
+
+  Future<void> _loadClasses() async {
+    if (!_serviceInitialized) return;
+
+    setState(() {
+      isClassLoading = true;
+    });
+
+    try {
+      final result = await classService.getClassesBySchool(_schoolId);
+
+      if (!mounted) return;
+
+      setState(() {
+        classes = result;
+        isClassLoading = false;
+      });
+
+      debugPrint('========== CLASSES LOADED ==========');
+      debugPrint('CLASS COUNT: ${classes.length}');
+    } catch (e) {
+      debugPrint('Load classes error: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        isClassLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load classes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+  // ============================================================
   // LOAD STUDENTS
   // ============================================================
 
@@ -120,6 +174,40 @@ class _StudentsScreenState extends State<StudentsScreen> {
     });
 
     try {
+      // ========================================================
+      // SPECIFIC CLASS SELECTED
+      // ========================================================
+
+      if (selectedClassId != null) {
+        final result = await studentService.getStudentsByClassId(
+          selectedClassId!,
+        );
+
+        if (!mounted) return;
+
+        setState(() {
+          students = result;
+
+          // Class API currently returns List<Student>,
+          // so pagination is not required here.
+          totalElements = result.length;
+          totalPages = result.isEmpty ? 0 : 1;
+          currentPage = 0;
+
+          isLoading = false;
+        });
+
+        debugPrint('========== CLASS STUDENTS LOADED ==========');
+        debugPrint('CLASS ID: $selectedClassId');
+        debugPrint('STUDENT COUNT: ${students.length}');
+
+        return;
+      }
+
+      // ========================================================
+      // ALL CLASSES
+      // ========================================================
+
       final response = await studentService.getStudents(
         page: currentPage,
         size: 10,
@@ -177,6 +265,61 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
+  Future<void> _onClassChanged(int? classId) async {
+    setState(() {
+      selectedClassId = classId;
+      currentPage = 0;
+    });
+
+    await _loadStudents();
+  }
+
+  // ============================================================
+  // CLASS FILTER
+  // ============================================================
+
+  Widget _buildClassFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: selectedClassId,
+          isExpanded: true,
+          hint: const Text('All Classes'),
+          icon: const Icon(Icons.keyboard_arrow_down),
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text(
+                'All Classes',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+
+            ...classes
+                .where((schoolClass) => schoolClass.id != null)
+                .map(
+                  (schoolClass) => DropdownMenuItem<int?>(
+                    value: schoolClass.id,
+                    child: Text(
+                      schoolClass.name ??
+                          schoolClass.code ??
+                          'Class ${schoolClass.id}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+          ],
+          onChanged: isClassLoading ? null : _onClassChanged,
+        ),
+      ),
+    );
+  }
   // ============================================================
   // FILTERED STUDENTS
   // ============================================================
@@ -354,6 +497,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
   // BUILD
   // ============================================================
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     final displayedStudents = filteredStudents;
@@ -382,6 +529,33 @@ class _StudentsScreenState extends State<StudentsScreen> {
             ),
 
             // ----------------------------------------------------
+            // CLASS FILTER
+            // ----------------------------------------------------
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              child: Row(
+                children: [
+                  const Text(
+                    'Class:',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 12),
+
+                  SizedBox(width: 280, child: _buildClassFilter()),
+
+                  if (isClassLoading) ...[
+                    const SizedBox(width: 12),
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // ----------------------------------------------------
             // TOOLBAR
             // ----------------------------------------------------
             Padding(
@@ -395,7 +569,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
               ),
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
 
             // ----------------------------------------------------
             // TABLE / EMPTY / LOADING
@@ -415,9 +589,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
         ),
       ),
     );
-  }
-
-  // ============================================================
+  } // ============================================================
   // CONTENT
   // ============================================================
 

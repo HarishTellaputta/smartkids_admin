@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smartkids_admin/features/exams/models/examination_model.dart';
 import 'package:smartkids_admin/features/exams/services/examination_service.dart';
-
+import 'package:smartkids_admin/features/exams/services/examination_import_service.dart';
+import 'package:smartkids_admin/features/exams/widgets/examination_import_dialog.dart';
+import 'package:smartkids_admin/features/exams/services/examination_excel_picker_service.dart';
+import 'package:smartkids_admin/features/exams/models/excel_import_response_model.dart';
+import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
+import 'package:smartkids_admin/features/exams/services/examination_bulk_import_service.dart';
 
 class ExamsScreen extends StatefulWidget {
   const ExamsScreen({super.key});
@@ -13,6 +18,8 @@ class ExamsScreen extends StatefulWidget {
 
 class _ExamsScreenState extends State<ExamsScreen> {
   ExaminationService? _service;
+  ExaminationImportService? _importService;
+  ExaminationBulkImportService? _bulkImportService;
 
   List<ExaminationModel> exams = [];
   List<ExamScheduleModel> selectedSchedules = [];
@@ -20,6 +27,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
   bool isLoading = true;
   bool isSaving = false;
   bool isLoadingSchedules = false;
+
+  bool isImportingResults = false;
+  bool isImportingSchedules = false;
+  bool isImportingGradeRules = false;
 
   String selectedStatus = 'All';
   String selectedExamType = 'All';
@@ -56,6 +67,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
       }
 
       _service = ExaminationService(token);
+      _importService = ExaminationImportService(token);
+      _bulkImportService = ExaminationBulkImportService(token);
 
       await _loadExaminations();
     } catch (e) {
@@ -94,12 +107,416 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
       setState(() {
         isLoading = false;
-        errorMessage = e.toString().replaceFirst(
-          'Exception: ',
-          '',
-        );
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  // ============================================================
+  // IMPORT EXAMINATIONS FROM EXCEL
+  // ============================================================
+  Future<void> _importExaminationsExcel() async {
+    if (_importService == null) {
+      _showSnack('Examination import service is not initialized.');
+      return;
+    }
+
+    try {
+      debugPrint('========================================');
+      debugPrint('EXAMINATION IMPORT BUTTON CLICKED');
+      debugPrint('IMPORT SERVICE EXISTS: ${_importService != null}');
+      debugPrint('========================================');
+
+      debugPrint('OPENING EXAMINATION EXCEL FILE PICKER...');
+
+      final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
+
+      debugPrint('EXAMINATION EXCEL PICKER RESULT: $selectedFile');
+
+      if (selectedFile == null) {
+        debugPrint('NO EXAMINATION EXCEL FILE SELECTED');
+        return;
+      }
+
+      debugPrint('FILE NAME: ${selectedFile.fileName}');
+
+      debugPrint('FILE BYTES: ${selectedFile.bytes.length}');
+
+      setState(() {
+        isSaving = true;
+      });
+
+      debugPrint('CALLING EXAMINATION IMPORT API...');
+
+      final importResult = await _importService!.importExaminationsExcel(
+        bytes: selectedFile.bytes,
+        fileName: selectedFile.fileName,
+      );
+
+      debugPrint('EXAMINATION IMPORT API SUCCESS');
+
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      await showDialog(
+        context: context,
+        builder: (context) {
+          return ExaminationImportDialog(result: importResult);
+        },
+      );
+
+      await _loadExaminations();
+    } catch (e) {
+      debugPrint('EXAMINATION IMPORT ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      _showSnack(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _importResultsExcel() async {
+    if (_bulkImportService == null) {
+      _showSnack('Bulk import service is not initialized.');
+      return;
+    }
+
+    if (isImportingResults) {
+      return;
+    }
+
+    debugPrint('========================================');
+    debugPrint('RESULTS IMPORT BUTTON CLICKED');
+    debugPrint('========================================');
+
+    try {
+      final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
+
+      if (selectedFile == null) {
+        debugPrint('NO RESULTS EXCEL FILE SELECTED');
+        return;
+      }
+
+      debugPrint('SELECTED RESULTS FILE: ${selectedFile.fileName}');
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingResults = true;
+      });
+
+      final result = await _bulkImportService!.importResults(
+        bytes: selectedFile.bytes,
+        fileName: selectedFile.fileName,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingResults = false;
+      });
+
+      await _showBulkImportResult(title: 'Exam Results Import', result: result);
+
+      if (mounted) {
+        await _loadExaminations();
+      }
+    } catch (e) {
+      debugPrint('RESULTS IMPORT ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingResults = false;
+      });
+
+      _showSnack(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _importSchedulesExcel() async {
+    if (_bulkImportService == null) {
+      _showSnack('Bulk import service is not initialized.');
+      return;
+    }
+
+    if (isImportingSchedules) {
+      return;
+    }
+
+    debugPrint('========================================');
+    debugPrint('SCHEDULES IMPORT BUTTON CLICKED');
+    debugPrint('========================================');
+
+    try {
+      final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
+
+      if (selectedFile == null) {
+        debugPrint('NO SCHEDULES EXCEL FILE SELECTED');
+        return;
+      }
+
+      debugPrint('SELECTED SCHEDULES FILE: ${selectedFile.fileName}');
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingSchedules = true;
+      });
+
+      final result = await _bulkImportService!.importSchedules(
+        bytes: selectedFile.bytes,
+        fileName: selectedFile.fileName,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingSchedules = false;
+      });
+
+      await _showBulkImportResult(
+        title: 'Exam Schedules Import',
+        result: result,
+      );
+
+      if (mounted) {
+        await _loadExaminations();
+      }
+    } catch (e) {
+      debugPrint('SCHEDULES IMPORT ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingSchedules = false;
+      });
+
+      _showSnack(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _importGradeRulesExcel() async {
+    if (_bulkImportService == null) {
+      _showSnack('Bulk import service is not initialized.');
+      return;
+    }
+
+    if (isImportingGradeRules) {
+      return;
+    }
+
+    debugPrint('========================================');
+    debugPrint('GRADE RULES IMPORT BUTTON CLICKED');
+    debugPrint('========================================');
+
+    try {
+      final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
+
+      if (selectedFile == null) {
+        debugPrint('NO GRADE RULES EXCEL FILE SELECTED');
+        return;
+      }
+
+      debugPrint('SELECTED GRADE RULES FILE: ${selectedFile.fileName}');
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingGradeRules = true;
+      });
+
+      final result = await _bulkImportService!.importGradeRules(
+        bytes: selectedFile.bytes,
+        fileName: selectedFile.fileName,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingGradeRules = false;
+      });
+
+      await _showBulkImportResult(title: 'Grade Rules Import', result: result);
+
+      if (mounted) {
+        await _loadExaminations();
+      }
+    } catch (e) {
+      debugPrint('GRADE RULES IMPORT ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        isImportingGradeRules = false;
+      });
+
+      _showSnack(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _showBulkImportResult({
+    required String title,
+    required ExcelImportResponseModel result,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title)),
+            ],
+          ),
+          content: SizedBox(
+            width: 550,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _importResultCard(
+                        'Total Rows',
+                        result.totalRows.toString(),
+                        Icons.table_rows_outlined,
+                        const Color(0xFF2563EB),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _importResultCard(
+                        'Created',
+                        result.created.toString(),
+                        Icons.add_circle_outline,
+                        const Color(0xFF16A34A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _importResultCard(
+                        'Updated',
+                        result.updated.toString(),
+                        Icons.edit_outlined,
+                        const Color(0xFFCA8A04),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _importResultCard(
+                        'Errors',
+                        result.errors.toString(),
+                        Icons.error_outline,
+                        const Color(0xFFDC2626),
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (result.errorDetails.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Error Details',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: result.errorDetails.length,
+                      itemBuilder: (context, index) {
+                        final error = result.errorDetails[index];
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'Row ${error.row}: ${error.message}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _importResultCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ============================================================
@@ -108,14 +525,16 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   List<ExaminationModel> get filteredExams {
     return exams.where((exam) {
+      final examStatus = exam.status.trim().toUpperCase();
+      final examType = exam.examType.trim().toUpperCase();
+
       final statusMatch =
           selectedStatus == 'All' ||
-          exam.status.toUpperCase() == selectedStatus.toUpperCase();
+          examStatus == selectedStatus.trim().toUpperCase();
 
       final typeMatch =
           selectedExamType == 'All' ||
-          exam.examType.toUpperCase() ==
-              selectedExamType.toUpperCase();
+          examType == selectedExamType.trim().toUpperCase();
 
       return statusMatch && typeMatch;
     }).toList();
@@ -145,6 +564,16 @@ class _ExamsScreenState extends State<ExamsScreen> {
     }).length;
   }
 
+  int get draftExams {
+    return exams.where((e) => e.status.trim().toUpperCase() == 'DRAFT').length;
+  }
+
+  int get publishedExams {
+    return exams
+        .where((e) => e.status.trim().toUpperCase() == 'PUBLISHED')
+        .length;
+  }
+
   // ============================================================
   // CREATE EXAMINATION
   // ============================================================
@@ -165,12 +594,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // EXAM DIALOG
   // ============================================================
 
-  void _showExamDialog({
-    ExaminationModel? exam,
-  }) {
-    final nameController = TextEditingController(
-      text: exam?.name ?? '',
-    );
+  void _showExamDialog({ExaminationModel? exam}) {
+    final nameController = TextEditingController(text: exam?.name ?? '');
 
     final descriptionController = TextEditingController(
       text: exam?.description ?? '',
@@ -185,7 +610,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
 
     String examType = exam?.examType ?? 'UNIT_TEST';
-    String status = exam?.status ?? 'SCHEDULED';
+    String status = exam?.status ?? 'DRAFT';
 
     showDialog(
       context: context,
@@ -195,12 +620,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
           builder: (context, setDialogState) {
             return AlertDialog(
               title: Text(
-                exam == null
-                    ? 'Create New Examination'
-                    : 'Edit Examination',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                exam == null ? 'Create New Examination' : 'Edit Examination',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               content: SizedBox(
                 width: 500,
@@ -263,22 +684,21 @@ class _ExamsScreenState extends State<ExamsScreen> {
                           'Exam Type',
                           Icons.category_outlined,
                         ),
-                        items: const [
-                          'UNIT_TEST',
-                          'PERIODIC_TEST',
-                          'MID_TERM',
-                          'ANNUAL',
-                          'TERMINAL',
-                          'HALF_YEARLY',
-                          'OTHER',
-                        ].map((item) {
-                          return DropdownMenuItem<String>(
-                            value: item,
-                            child: Text(
-                              _prettyEnum(item),
-                            ),
-                          );
-                        }).toList(),
+                        items:
+                            const [
+                              'UNIT_TEST',
+                              'PERIODIC_TEST',
+                              'MID_TERM',
+                              'ANNUAL',
+                              'TERMINAL',
+                              'HALF_YEARLY',
+                              'OTHER',
+                            ].map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item,
+                                child: Text(_prettyEnum(item)),
+                              );
+                            }).toList(),
                         onChanged: (value) {
                           if (value != null) {
                             setDialogState(() {
@@ -296,19 +716,20 @@ class _ExamsScreenState extends State<ExamsScreen> {
                           'Status',
                           Icons.flag_outlined,
                         ),
-                        items: const [
-                          'SCHEDULED',
-                          'UPCOMING',
-                          'COMPLETED',
-                          'CANCELLED',
-                        ].map((item) {
-                          return DropdownMenuItem<String>(
-                            value: item,
-                            child: Text(
-                              _prettyEnum(item),
-                            ),
-                          );
-                        }).toList(),
+                        items:
+                            const [
+                              'DRAFT',
+                              'UPCOMING',
+                              'SCHEDULED',
+                              'PUBLISHED',
+                              'COMPLETED',
+                              'CANCELLED',
+                            ].map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item,
+                                child: Text(_prettyEnum(item)),
+                              );
+                            }).toList(),
                         onChanged: (value) {
                           if (value != null) {
                             setDialogState(() {
@@ -335,40 +756,28 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   onPressed: isSaving
                       ? null
                       : () async {
-                          final name =
-                              nameController.text.trim();
+                          final name = nameController.text.trim();
 
-                          final description =
-                              descriptionController.text.trim();
+                          final description = descriptionController.text.trim();
 
-                          final academicYearId =
-                              int.tryParse(
-                                academicYearController.text.trim(),
-                              );
+                          final academicYearId = int.tryParse(
+                            academicYearController.text.trim(),
+                          );
 
-                          final year =
-                              int.tryParse(
-                                yearController.text.trim(),
-                              );
+                          final year = int.tryParse(yearController.text.trim());
 
                           if (name.isEmpty) {
-                            _showSnack(
-                              'Please enter exam name.',
-                            );
+                            _showSnack('Please enter exam name.');
                             return;
                           }
 
                           if (academicYearId == null) {
-                            _showSnack(
-                              'Please enter valid Academic Year ID.',
-                            );
+                            _showSnack('Please enter valid Academic Year ID.');
                             return;
                           }
 
                           if (year == null) {
-                            _showSnack(
-                              'Please enter valid year.',
-                            );
+                            _showSnack('Please enter valid year.');
                             return;
                           }
 
@@ -380,10 +789,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
                             ExaminationModel result;
 
                             if (exam == null) {
-                              result = await _service!
-                                  .createExamination(
-                                academicYearId:
-                                    academicYearId,
+                              result = await _service!.createExamination(
+                                academicYearId: academicYearId,
                                 name: name,
                                 description: description,
                                 examType: examType,
@@ -391,11 +798,9 @@ class _ExamsScreenState extends State<ExamsScreen> {
                                 status: status,
                               );
                             } else {
-                              result = await _service!
-                                  .updateExamination(
+                              result = await _service!.updateExamination(
                                 id: exam.id!,
-                                academicYearId:
-                                    academicYearId,
+                                academicYearId: academicYearId,
                                 name: name,
                                 description: description,
                                 examType: examType,
@@ -413,9 +818,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                                 exams.insert(0, result);
                               });
 
-                              _showSnack(
-                                'Examination created successfully.',
-                              );
+                              _showSnack('Examination created successfully.');
                             } else {
                               setState(() {
                                 final index = exams.indexWhere(
@@ -427,9 +830,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                                 }
                               });
 
-                              _showSnack(
-                                'Examination updated successfully.',
-                              );
+                              _showSnack('Examination updated successfully.');
                             }
                           } catch (e) {
                             if (!mounted) return;
@@ -439,18 +840,14 @@ class _ExamsScreenState extends State<ExamsScreen> {
                             });
 
                             _showSnack(
-                              e.toString().replaceFirst(
-                                'Exception: ',
-                                '',
-                              ),
+                              e.toString().replaceFirst('Exception: ', ''),
                             );
                           } finally {
                             isSaving = false;
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
                   ),
                   child: isSaving
@@ -462,11 +859,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : Text(
-                          exam == null
-                              ? 'Create Exam'
-                              : 'Update Exam',
-                        ),
+                      : Text(exam == null ? 'Create Exam' : 'Update Exam'),
                 ),
               ],
             );
@@ -480,9 +873,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // DETAILS
   // ============================================================
 
-  Future<void> _showExamDetails(
-    ExaminationModel exam,
-  ) async {
+  Future<void> _showExamDetails(ExaminationModel exam) async {
     setState(() {
       selectedSchedules = [];
       isLoadingSchedules = true;
@@ -490,8 +881,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
     if (exam.id != null) {
       try {
-        final schedules = await _service!
-            .getSchedulesByExamination(exam.id!);
+        final schedules = await _service!.getSchedulesByExamination(exam.id!);
 
         if (!mounted) return;
 
@@ -506,12 +896,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
           isLoadingSchedules = false;
         });
 
-        _showSnack(
-          e.toString().replaceFirst(
-            'Exception: ',
-            '',
-          ),
-        );
+        _showSnack(e.toString().replaceFirst('Exception: ', ''));
       }
     } else {
       setState(() {
@@ -527,43 +912,23 @@ class _ExamsScreenState extends State<ExamsScreen> {
         return AlertDialog(
           title: Text(
             exam.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
             width: 650,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _detailRow(
-                    'Exam ID',
-                    '${exam.id ?? '-'}',
-                  ),
-                  _detailRow(
-                    'Academic Year',
-                    '${exam.academicYearId ?? '-'}',
-                  ),
-                  _detailRow(
-                    'Exam Type',
-                    _prettyEnum(exam.examType),
-                  ),
-                  _detailRow(
-                    'Year',
-                    '${exam.year}',
-                  ),
-                  _detailRow(
-                    'Status',
-                    _prettyEnum(exam.status),
-                  ),
+                  _detailRow('Exam ID', '${exam.id ?? '-'}'),
+                  _detailRow('Academic Year', '${exam.academicYearId ?? '-'}'),
+                  _detailRow('Exam Type', _prettyEnum(exam.examType)),
+                  _detailRow('Year', '${exam.year}'),
+                  _detailRow('Status', _prettyEnum(exam.status)),
                   _detailRow(
                     'Description',
-                    exam.description.isEmpty
-                        ? '-'
-                        : exam.description,
+                    exam.description.isEmpty ? '-' : exam.description,
                   ),
 
                   const SizedBox(height: 18),
@@ -592,8 +957,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF9FAFB),
-                        borderRadius:
-                            BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Text(
                         'No exam schedules found.',
@@ -622,14 +986,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
                 _showEditExamDialog(exam);
               },
-              icon: const Icon(
-                Icons.edit_outlined,
-                size: 17,
-              ),
+              icon: const Icon(Icons.edit_outlined, size: 17),
               label: const Text('Edit'),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    const Color(0xFF2563EB),
+                backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -647,41 +1007,22 @@ class _ExamsScreenState extends State<ExamsScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columnSpacing: 22,
-          headingRowColor:
-              const WidgetStatePropertyAll(
-            Color(0xFFF9FAFB),
-          ),
+          headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
           columns: const [
-            DataColumn(
-              label: Text('Subject'),
-            ),
-            DataColumn(
-              label: Text('Class'),
-            ),
-            DataColumn(
-              label: Text('Date'),
-            ),
-            DataColumn(
-              label: Text('Time'),
-            ),
-            DataColumn(
-              label: Text('Marks'),
-            ),
-            DataColumn(
-              label: Text('Room'),
-            ),
-            DataColumn(
-              label: Text('Status'),
-            ),
+            DataColumn(label: Text('Subject')),
+            DataColumn(label: Text('Class')),
+            DataColumn(label: Text('Date')),
+            DataColumn(label: Text('Time')),
+            DataColumn(label: Text('Marks')),
+            DataColumn(label: Text('Room')),
+            DataColumn(label: Text('Status')),
           ],
           rows: selectedSchedules.map((schedule) {
             return DataRow(
@@ -699,54 +1040,34 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   Text(
                     '${schedule.classId ?? '-'}'
                     '${schedule.sectionId != null ? ' / ${schedule.sectionId}' : ''}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
                 DataCell(
                   Text(
-                    _formatApiDate(
-                      schedule.examDate,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 11,
-                    ),
+                    _formatApiDate(schedule.examDate),
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ),
                 DataCell(
                   Text(
-                    _formatTime(
-                      schedule.startTime,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 11,
-                    ),
+                    _formatTime(schedule.startTime),
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ),
                 DataCell(
                   Text(
                     '${schedule.maxMarks}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
                 DataCell(
                   Text(
-                    schedule.roomNumber.isEmpty
-                        ? '-'
-                        : schedule.roomNumber,
-                    style: const TextStyle(
-                      fontSize: 11,
-                    ),
+                    schedule.roomNumber.isEmpty ? '-' : schedule.roomNumber,
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ),
-                DataCell(
-                  _statusBadge(
-                    schedule.status,
-                  ),
-                ),
+                DataCell(_statusBadge(schedule.status)),
               ],
             );
           }).toList(),
@@ -764,22 +1085,19 @@ class _ExamsScreenState extends State<ExamsScreen> {
       builder: (context, constraints) {
         if (constraints.maxWidth < 650) {
           return Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _headerText(),
               const SizedBox(height: 16),
-              _addExamButton(),
+              _headerActionButtons(),
             ],
           );
         }
 
         return Row(
           children: [
-            Expanded(
-              child: _headerText(),
-            ),
-            _addExamButton(),
+            Expanded(child: _headerText()),
+            _headerActionButtons(),
           ],
         );
       },
@@ -788,8 +1106,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   Widget _headerText() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Examinations',
@@ -802,10 +1119,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
         const SizedBox(height: 7),
         Text(
           'Create and manage school examinations and schedules.',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
         ),
       ],
     );
@@ -814,27 +1128,39 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Widget _addExamButton() {
     return ElevatedButton.icon(
       onPressed: _showCreateExamDialog,
-      icon: const Icon(
-        Icons.add,
-        size: 19,
-      ),
-      label: const Text(
-        'Create Examination',
-      ),
+      icon: const Icon(Icons.add, size: 19),
+      label: const Text('Create Examination'),
       style: ElevatedButton.styleFrom(
-        backgroundColor:
-            const Color(0xFF2563EB),
+        backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 15,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.circular(10),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
+    );
+  }
+
+  Widget _headerActionButtons() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        OutlinedButton.icon(
+          onPressed: isSaving ? null : _importExaminationsExcel,
+          icon: const Icon(Icons.upload_file_outlined, size: 18),
+          label: const Text('Import Excel'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF2563EB),
+            side: const BorderSide(color: Color(0xFF2563EB)),
+            padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+
+        _addExamButton(),
+      ],
     );
   }
 
@@ -845,46 +1171,143 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Widget _buildFilters() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(15),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < 700) {
-            return Column(
-              children: [
-                _statusDropdown(),
-                const SizedBox(height: 12),
-                _examTypeDropdown(),
-              ],
-            );
-          }
+          final isMobile = constraints.maxWidth < 650;
 
-          return Row(
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 220,
-                child: _statusDropdown(),
+              Row(
+                children: [
+                  Container(
+                    height: 36,
+                    width: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(
+                      Icons.filter_list_rounded,
+                      size: 19,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Filters',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        selectedStatus = 'All';
+                        selectedExamType = 'All';
+                      });
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Clear'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 220,
-                child: _examTypeDropdown(),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _loadExaminations,
-                icon: const Icon(
-                  Icons.refresh_outlined,
+
+              const SizedBox(height: 18),
+
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Status',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    _statusDropdown(),
+
+                    const SizedBox(height: 14),
+
+                    const Text(
+                      'Exam Type',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    _examTypeDropdown(),
+                  ],
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 240,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Status',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          _statusDropdown(),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    SizedBox(
+                      width: 240,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Exam Type',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          _examTypeDropdown(),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
             ],
           );
         },
@@ -897,8 +1320,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
       value: selectedStatus,
       items: const [
         'All',
+        'DRAFT',
         'UPCOMING',
         'SCHEDULED',
+        'PUBLISHED',
         'COMPLETED',
         'CANCELLED',
       ],
@@ -942,34 +1367,23 @@ class _ExamsScreenState extends State<ExamsScreen> {
   }) {
     return Container(
       height: 46,
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 11,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius:
-            BorderRadius.circular(9),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          icon: const Icon(
-            Icons.keyboard_arrow_down,
-            size: 19,
-          ),
+          icon: const Icon(Icons.keyboard_arrow_down, size: 19),
           items: items.map((item) {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
                 _prettyEnum(item),
-                style: const TextStyle(
-                  fontSize: 12,
-                ),
+                style: const TextStyle(fontSize: 12),
               ),
             );
           }).toList(),
@@ -986,7 +1400,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Widget _buildSummaryCards() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        int columns = 4;
+        int columns = 3;
 
         if (constraints.maxWidth < 900) {
           columns = 2;
@@ -1001,10 +1415,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(),
-          childAspectRatio:
-              columns == 1 ? 4 : 2.5,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: columns == 1 ? 4 : 2.5,
           children: [
             _summaryCard(
               'Total Exams',
@@ -1013,6 +1425,15 @@ class _ExamsScreenState extends State<ExamsScreen> {
               const Color(0xFF2563EB),
               const Color(0xFFEFF6FF),
             ),
+
+            _summaryCard(
+              'Draft',
+              '$draftExams',
+              Icons.edit_note_outlined,
+              const Color(0xFF6B7280),
+              const Color(0xFFF3F4F6),
+            ),
+
             _summaryCard(
               'Upcoming',
               '$upcomingExams',
@@ -1020,6 +1441,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
               const Color(0xFF7C3AED),
               const Color(0xFFF5F3FF),
             ),
+
             _summaryCard(
               'Scheduled',
               '$scheduledExams',
@@ -1027,6 +1449,15 @@ class _ExamsScreenState extends State<ExamsScreen> {
               const Color(0xFFD97706),
               const Color(0xFFFFFBEB),
             ),
+
+            _summaryCard(
+              'Published',
+              '$publishedExams',
+              Icons.publish_outlined,
+              const Color(0xFF7C3AED),
+              const Color(0xFFF3E8FF),
+            ),
+
             _summaryCard(
               'Completed',
               '$completedExams',
@@ -1051,11 +1482,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
@@ -1064,27 +1492,18 @@ class _ExamsScreenState extends State<ExamsScreen> {
             width: 48,
             decoration: BoxDecoration(
               color: background,
-              borderRadius:
-                  BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: color,
-            ),
+            child: Icon(icon, color: color),
           ),
           const SizedBox(width: 14),
           Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
               const SizedBox(height: 4),
               Text(
@@ -1114,15 +1533,11 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -1137,100 +1552,55 @@ class _ExamsScreenState extends State<ExamsScreen> {
               const Spacer(),
               Text(
                 '${data.length} exams',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          data.isEmpty
-              ? _emptyState()
-              : _examTable(data),
+          data.isEmpty ? _emptyState() : _examTable(data),
         ],
       ),
     );
   }
 
-  Widget _examTable(
-    List<ExaminationModel> data,
-  ) {
+  Widget _examTable(List<ExaminationModel> data) {
     return SingleChildScrollView(
-      scrollDirection:
-          Axis.horizontal,
+      scrollDirection: Axis.horizontal,
       child: DataTable(
         columnSpacing: 30,
         horizontalMargin: 8,
         dataRowMinHeight: 72,
         dataRowMaxHeight: 82,
-        headingRowColor:
-            const WidgetStatePropertyAll(
-          Color(0xFFF9FAFB),
-        ),
+        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
         columns: const [
-          DataColumn(
-            label: Text('Examination'),
-          ),
-          DataColumn(
-            label: Text('Exam Type'),
-          ),
-          DataColumn(
-            label: Text('Year'),
-          ),
-          DataColumn(
-            label: Text('Academic Year'),
-          ),
-          DataColumn(
-            label: Text('Status'),
-          ),
-          DataColumn(
-            label: Text('Actions'),
-          ),
+          DataColumn(label: Text('Examination')),
+          DataColumn(label: Text('Exam Type')),
+          DataColumn(label: Text('Year')),
+          DataColumn(label: Text('Academic Year')),
+          DataColumn(label: Text('Status')),
+          DataColumn(label: Text('Actions')),
         ],
         rows: data.map((exam) {
           return DataRow(
             cells: [
-              DataCell(
-                _examNameCell(exam),
-              ),
+              DataCell(_examNameCell(exam)),
               DataCell(
                 Text(
-                  _prettyEnum(
-                    exam.examType,
-                  ),
-                  style:
-                      const TextStyle(
-                    fontSize: 12,
-                  ),
+                  _prettyEnum(exam.examType),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
               DataCell(
-                Text(
-                  '${exam.year}',
-                  style:
-                      const TextStyle(
-                    fontSize: 12,
-                  ),
-                ),
+                Text('${exam.year}', style: const TextStyle(fontSize: 12)),
               ),
               DataCell(
                 Text(
                   '${exam.academicYearId ?? '-'}',
-                  style:
-                      const TextStyle(
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
-              DataCell(
-                _statusBadge(
-                  exam.status,
-                ),
-              ),
-              DataCell(
-                _actionButtons(exam),
-              ),
+              DataCell(_statusBadge(exam.status)),
+              DataCell(_actionButtons(exam)),
             ],
           );
         }).toList(),
@@ -1238,9 +1608,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
     );
   }
 
-  Widget _examNameCell(
-    ExaminationModel exam,
-  ) {
+  Widget _examNameCell(ExaminationModel exam) {
     return SizedBox(
       width: 240,
       child: Row(
@@ -1249,10 +1617,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
             height: 40,
             width: 40,
             decoration: BoxDecoration(
-              color:
-                  const Color(0xFFEFF6FF),
-              borderRadius:
-                  BorderRadius.circular(10),
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.assignment_outlined,
@@ -1263,20 +1629,16 @@ class _ExamsScreenState extends State<ExamsScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   exam.name,
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -1284,8 +1646,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   'EX${exam.id ?? '-'}',
                   style: const TextStyle(
                     fontSize: 10,
-                    color:
-                        Color(0xFF9CA3AF),
+                    color: Color(0xFF9CA3AF),
                   ),
                 ),
               ],
@@ -1300,81 +1661,68 @@ class _ExamsScreenState extends State<ExamsScreen> {
     Color color;
     Color background;
 
-    switch (status.toUpperCase()) {
+    switch (status.trim().toUpperCase()) {
+      case 'DRAFT':
+        color = const Color(0xFF6B7280);
+        background = const Color(0xFFF3F4F6);
+        break;
+
       case 'UPCOMING':
-        color =
-            const Color(0xFF2563EB);
-        background =
-            const Color(0xFFDBEAFE);
+        color = const Color(0xFF2563EB);
+        background = const Color(0xFFDBEAFE);
         break;
 
       case 'SCHEDULED':
-        color =
-            const Color(0xFFD97706);
-        background =
-            const Color(0xFFFEF3C7);
+        color = const Color(0xFFD97706);
+        background = const Color(0xFFFEF3C7);
+        break;
+
+      case 'PUBLISHED':
+        color = const Color(0xFF7C3AED);
+        background = const Color(0xFFF3E8FF);
         break;
 
       case 'COMPLETED':
-        color =
-            const Color(0xFF15803D);
-        background =
-            const Color(0xFFDCFCE7);
+        color = const Color(0xFF15803D);
+        background = const Color(0xFFDCFCE7);
         break;
 
       case 'CANCELLED':
-        color =
-            const Color(0xFFDC2626);
-        background =
-            const Color(0xFFFEE2E2);
+        color = const Color(0xFFDC2626);
+        background = const Color(0xFFFEE2E2);
         break;
 
       default:
-        color =
-            const Color(0xFF6B7280);
-        background =
-            const Color(0xFFF3F4F6);
+        color = const Color(0xFF6B7280);
+        background = const Color(0xFFF3F4F6);
     }
-
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         _prettyEnum(status),
         style: TextStyle(
           fontSize: 10,
-          fontWeight:
-              FontWeight.w600,
+          fontWeight: FontWeight.w600,
           color: color,
         ),
       ),
     );
   }
 
-  Widget _actionButtons(
-    ExaminationModel exam,
-  ) {
+  Widget _actionButtons(ExaminationModel exam) {
     return Row(
-      mainAxisSize:
-          MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           tooltip: 'View Details',
           onPressed: () {
             _showExamDetails(exam);
           },
-          icon: const Icon(
-            Icons.visibility_outlined,
-            size: 18,
-          ),
+          icon: const Icon(Icons.visibility_outlined, size: 18),
         ),
         IconButton(
           tooltip: 'Edit',
@@ -1397,38 +1745,25 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   Widget _emptyState() {
     return const Padding(
-      padding:
-          EdgeInsets.symmetric(
-        vertical: 60,
-      ),
+      padding: EdgeInsets.symmetric(vertical: 60),
       child: Center(
         child: Column(
           children: [
-            Icon(
-              Icons.assignment_outlined,
-              size: 52,
-              color: Color(0xFFD1D5DB),
-            ),
+            Icon(Icons.assignment_outlined, size: 52, color: Color(0xFFD1D5DB)),
             SizedBox(height: 12),
             Text(
               'No examinations found',
               style: TextStyle(
                 fontSize: 16,
-                fontWeight:
-                    FontWeight.w600,
-                color:
-                    Color(0xFF374151),
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
               ),
             ),
             SizedBox(height: 5),
             Text(
               'Try changing your filters or create a new examination.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color:
-                    Color(0xFF9CA3AF),
-              ),
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
             ),
           ],
         ),
@@ -1440,25 +1775,12 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // INPUT DECORATION
   // ============================================================
 
-  InputDecoration _inputDecoration(
-    String label,
-    IconData icon,
-  ) {
+  InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(
-        icon,
-        size: 19,
-      ),
-      border: OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(9),
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 13,
-      ),
+      prefixIcon: Icon(icon, size: 19),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
     );
   }
 
@@ -1466,40 +1788,26 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // DETAIL ROW
   // ============================================================
 
-  Widget _detailRow(
-    String label,
-    String value,
-  ) {
+  Widget _detailRow(String label, String value) {
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
-                color:
-                    Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style:
-                  const TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
-                fontWeight:
-                    FontWeight.w600,
-                color:
-                    Color(0xFF111827),
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
               ),
             ),
           ),
@@ -1518,14 +1826,11 @@ class _ExamsScreenState extends State<ExamsScreen> {
     return value
         .replaceAll('_', ' ')
         .split(' ')
-        .map(
-          (word) {
-            if (word.isEmpty) return '';
+        .map((word) {
+          if (word.isEmpty) return '';
 
-            return word[0].toUpperCase() +
-                word.substring(1).toLowerCase();
-          },
-        )
+          return word[0].toUpperCase() + word.substring(1).toLowerCase();
+        })
         .join(' ');
   }
 
@@ -1571,39 +1876,31 @@ class _ExamsScreenState extends State<ExamsScreen> {
   void _showSnack(String message) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xFFF5F7FB),
+      backgroundColor: const Color(0xFFF5F7FB),
       body: isLoading
-          ? const Center(
-              child:
-                  CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding:
-                  const EdgeInsets.all(28),
+              padding: const EdgeInsets.all(28),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
 
                   const SizedBox(height: 24),
 
-                  if (errorMessage != null)
-                    _errorBanner(),
+                  _buildExcelImportSection(),
 
-                  if (errorMessage != null)
-                    const SizedBox(height: 16),
+                  const SizedBox(height: 24),
+
+                  if (errorMessage != null) _errorBanner(),
+
+                  if (errorMessage != null) const SizedBox(height: 16),
 
                   _buildFilters(),
 
@@ -1623,47 +1920,114 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Widget _errorBanner() {
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color:
-            const Color(0xFFFEF2F2),
-        borderRadius:
-            BorderRadius.circular(10),
-        border: Border.all(
-          color:
-              const Color(0xFFFECACA),
-        ),
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFECACA)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.error_outline,
-            color:
-                Color(0xFFDC2626),
-          ),
+          const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               errorMessage!,
-              style:
-                  const TextStyle(
-                fontSize: 12,
-                color:
-                    Color(0xFF991B1B),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF991B1B)),
             ),
           ),
           IconButton(
             tooltip: 'Retry',
-            onPressed:
-                _loadExaminations,
-            icon: const Icon(
-              Icons.refresh,
-              size: 18,
-            ),
+            onPressed: _loadExaminations,
+            icon: const Icon(Icons.refresh, size: 18),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildExcelImportSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bulk Excel Import',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF111827),
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          const Text(
+            'Import exam schedules, results and grade rules using Excel files.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+
+          const SizedBox(height: 16),
+
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _bulkImportButton(
+                label: 'Import Schedules',
+                icon: Icons.calendar_month_outlined,
+                isLoading: isImportingSchedules,
+                onPressed: isImportingSchedules ? null : _importSchedulesExcel,
+              ),
+
+              _bulkImportButton(
+                label: 'Import Results',
+                icon: Icons.assessment_outlined,
+                isLoading: isImportingResults,
+                onPressed: isImportingResults ? null : _importResultsExcel,
+              ),
+
+              _bulkImportButton(
+                label: 'Import Grade Rules',
+                icon: Icons.rule_outlined,
+                isLoading: isImportingGradeRules,
+                onPressed: isImportingGradeRules
+                    ? null
+                    : _importGradeRulesExcel,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bulkImportButton({
+    required String label,
+    required IconData icon,
+    required bool isLoading,
+    required VoidCallback? onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: 18),
+      label: Text(isLoading ? 'Importing...' : label),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }

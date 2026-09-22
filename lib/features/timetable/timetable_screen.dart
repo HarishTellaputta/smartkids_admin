@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:smartkids_admin/features/classes/models/class_form_model.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 import 'package:smartkids_admin/features/teachers/models/class_subject_model.dart';
-import 'package:smartkids_admin/features/teachers/models/subject_model.dart';
 import 'package:smartkids_admin/features/teachers/models/teacher_model.dart';
 
 import 'package:smartkids_admin/features/teachers/services/class_service.dart';
 import 'package:smartkids_admin/features/teachers/services/class_subject_service.dart';
 import 'package:smartkids_admin/features/teachers/services/teacher_service.dart';
+
 import 'package:smartkids_admin/features/timetable/models/timetable_model.dart';
+import 'package:smartkids_admin/features/timetable/models/timetable_import_response_model.dart';
 import 'package:smartkids_admin/features/timetable/services/timetable_service.dart';
+
 import 'package:smartkids_admin/models/section_model.dart';
 import 'package:smartkids_admin/services/section_service.dart';
+import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
+
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
 
@@ -32,6 +35,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   bool _loading = true;
   bool _loadingTimetable = false;
+  bool _importingExcel = false;
 
   String? _error;
 
@@ -62,6 +66,139 @@ class _TimetableScreenState extends State<TimetableScreen> {
   }
 
   // ============================================================
+  // EXCEL IMPORT
+  // ============================================================
+
+  Future<void> _importTimetableExcel() async {
+    try {
+      final selectedFile = await ExcelFilePickerService.pickExcelFile();
+
+      if (selectedFile == null) {
+        return;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _importingExcel = true;
+        _error = null;
+      });
+
+      final result = await _timetableService!.importTimetableExcel(
+        bytes: selectedFile.bytes,
+        fileName: selectedFile.fileName,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _importingExcel = false;
+      });
+
+      await _refreshTimetable();
+
+      if (!mounted) return;
+
+      await _showTimetableImportResult(result);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _importingExcel = false;
+      });
+
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+    }
+  }
+
+  Future<void> _showTimetableImportResult(
+    TimetableImportResponseModel result,
+  ) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.file_upload, color: Colors.green),
+              SizedBox(width: 10),
+              Text('Timetable Import'),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _importSummaryRow('Total Rows', result.totalRows),
+                  _importSummaryRow('Imported', result.successCount),
+                  _importSummaryRow('Failed', result.failedCount),
+
+                  if (result.errors.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+
+                    const Text(
+                      'Failed Rows',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    ...result.errors.map((error) {
+                      return Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Row ${error.row}: ${error.message}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _importSummaryRow(String title, int value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            value.toString(),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
   // INITIALIZE
   // ============================================================
 
@@ -72,10 +209,13 @@ class _TimetableScreenState extends State<TimetableScreen> {
       final token = prefs.getString('jwt_token');
 
       if (token == null || token.isEmpty) {
+        if (!mounted) return;
+
         setState(() {
           _loading = false;
           _error = 'JWT token not found. Please login again.';
         });
+
         return;
       }
 
@@ -180,7 +320,9 @@ class _TimetableScreenState extends State<TimetableScreen> {
   // ============================================================
 
   Future<void> _refreshTimetable() async {
-    if (_selectedClass == null) return;
+    if (_selectedClass == null || _timetableService == null) {
+      return;
+    }
 
     try {
       setState(() {
@@ -217,18 +359,12 @@ class _TimetableScreenState extends State<TimetableScreen> {
         return false;
       }
 
-      // If no section selected, show all sections
       if (_selectedSection == null) {
         return true;
       }
 
-      // Show:
-      // 1. selected section entries
-      // 2. class-wide entries where sectionId == null
       return entry.sectionId == null || entry.sectionId == _selectedSection!.id;
-    }).toList()..sort((a, b) {
-      return a.startTime.compareTo(b.startTime);
-    });
+    }).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
   // ============================================================
@@ -261,7 +397,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                 required int teacherId,
                 required int classId,
                 int? sectionId,
-                required String subject,
+                required int subjectId,
                 required String day,
                 required String startTime,
                 required String endTime,
@@ -271,7 +407,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                   teacherId: teacherId,
                   classId: classId,
                   sectionId: sectionId,
-                  subject: subject,
+                  subjectId: subjectId,
                   day: day,
                   startTime: startTime,
                   endTime: endTime,
@@ -291,7 +427,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
     required int teacherId,
     required int classId,
     int? sectionId,
-    required String subject,
+    required int subjectId,
     required String day,
     required String startTime,
     required String endTime,
@@ -308,7 +444,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
         teacherId: teacherId,
         classId: classId,
         sectionId: sectionId,
-        subject: subject,
+        subjectId: subjectId,
         dayOfWeek: day,
         startTime: startTime,
         endTime: endTime,
@@ -408,24 +544,52 @@ class _TimetableScreenState extends State<TimetableScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
+
       appBar: AppBar(
         title: const Text(
           'Timetable',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
+
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: OutlinedButton.icon(
+              onPressed: _loading || _loadingTimetable || _importingExcel
+                  ? null
+                  : _importTimetableExcel,
+
+              icon: _importingExcel
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.table_view_rounded, size: 19),
+
+              label: const Text(
+                'Import Excel',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+
           IconButton(
             tooltip: 'Refresh',
-            onPressed: _loadingTimetable ? null : _refreshTimetable,
+            onPressed: _loadingTimetable || _importingExcel
+                ? null
+                : _refreshTimetable,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _loading ? null : _showAddTimetableDialog,
+        onPressed: _loading || _importingExcel ? null : _showAddTimetableDialog,
         icon: const Icon(Icons.add),
         label: const Text('Add Period'),
       ),
+
       body: _buildBody(),
     );
   }
@@ -912,7 +1076,7 @@ class _AddTimetableDialog extends StatefulWidget {
     required int teacherId,
     required int classId,
     int? sectionId,
-    required String subject,
+    required int subjectId,
     required String day,
     required String startTime,
     required String endTime,
@@ -1050,16 +1214,30 @@ class _AddTimetableDialogState extends State<_AddTimetableDialog> {
       return;
     }
 
+    final subjectId = _subjectId;
+
+    if (subjectId <= 0) {
+      _showError('Invalid subject selected.');
+      return;
+    }
+
+    final teacherId = _teacherId;
+
+    if (teacherId <= 0) {
+      _showError('Invalid teacher selected.');
+      return;
+    }
+
     try {
       setState(() {
         _saving = true;
       });
 
       await widget.onSave(
-        teacherId: _teacherId,
+        teacherId: teacherId,
         classId: widget.classId,
         sectionId: _selectedSection?.id,
-        subject: _subjectName,
+        subjectId: subjectId,
         day: _selectedDay,
         startTime: _formatBackendTime(_startTime!),
         endTime: _formatBackendTime(_endTime!),
@@ -1076,6 +1254,10 @@ class _AddTimetableDialogState extends State<_AddTimetableDialog> {
     }
   }
 
+  // ============================================================
+  // IDs
+  // ============================================================
+
   int get _teacherId {
     final dynamic teacher = _selectedTeacher;
 
@@ -1086,16 +1268,19 @@ class _AddTimetableDialogState extends State<_AddTimetableDialog> {
     }
   }
 
-  String get _subjectName {
+  int get _subjectId {
     final dynamic subject = _selectedSubject;
 
-    // Your ClassSubjectModel should expose name.
     try {
-      return subject.name.toString();
+      return subject.id as int;
     } catch (_) {
-      return subject.toString();
+      return 0;
     }
   }
+
+  // ============================================================
+  // TIME FORMAT
+  // ============================================================
 
   String _formatBackendTime(TimeOfDay time) {
     return '${time.hour.toString().padLeft(2, '0')}:'
@@ -1250,7 +1435,9 @@ class _AddTimetableDialogState extends State<_AddTimetableDialog> {
                   onChanged: _saving
                       ? null
                       : (value) {
-                          if (value == null) return;
+                          if (value == null) {
+                            return;
+                          }
 
                           setState(() {
                             _selectedDay = value;
@@ -1322,6 +1509,10 @@ class _AddTimetableDialogState extends State<_AddTimetableDialog> {
       ],
     );
   }
+
+  // ============================================================
+  // DISPLAY HELPERS
+  // ============================================================
 
   String _getSubjectName(ClassSubjectModel subject) {
     try {

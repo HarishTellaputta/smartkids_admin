@@ -15,7 +15,7 @@ class AdminDashboardService {
   Future<int> getStudentCount() async {
     try {
       final response = await apiClient.dio.get(
-        '/students',
+        '/api/v1/students',
       );
 
       print('STUDENTS RESPONSE: ${response.data}');

@@ -3,6 +3,9 @@ import 'package:smartkids_admin/features/attendance/models/attendance_dashboard_
 import 'package:smartkids_admin/features/attendance/services/attendance_service.dart';
 import 'package:smartkids_admin/features/fees/models/fee_dashboard_summary_model.dart';
 import 'package:smartkids_admin/features/fees/services/fee_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:smartkids_admin/services/parent_service.dart';
 
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_topbar.dart';
@@ -60,6 +63,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _studentCount = 0;
   int _teacherCount = 0;
   int _classCount = 0;
+  int _parentCount = 0;
+
+  bool _isLoadingParentDashboard = true;
+  String? _parentDashboardError;
 
   int selectedIndex = 0;
 
@@ -88,6 +95,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _loadDashboardData();
     _loadFeeDashboardSummary();
     _loadAttendanceDashboardSummary();
+    _loadParentDashboardSummary();
   }
 
   Future<void> _loadDashboardData() async {
@@ -173,6 +181,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       setState(() {
         _isLoadingAttendanceDashboard = false;
         _attendanceDashboardError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadParentDashboardSummary() async {
+    setState(() {
+      _isLoadingParentDashboard = true;
+      _parentDashboardError = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      if (token.trim().isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final parentService = ParentService(token.trim());
+
+      final parents = await parentService.getParents();
+
+      if (!mounted) return;
+
+      setState(() {
+        _parentCount = parents.length;
+        _isLoadingParentDashboard = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingParentDashboard = false;
+        _parentDashboardError = e.toString();
       });
     }
   }
@@ -323,12 +365,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     onPressed:
                         (_isLoadingDashboard ||
                             _isLoadingFeeDashboard ||
-                            _isLoadingAttendanceDashboard)
+                            _isLoadingAttendanceDashboard ||
+                            _isLoadingParentDashboard)
                         ? null
                         : () {
                             _loadDashboardData();
                             _loadFeeDashboardSummary();
                             _loadAttendanceDashboardSummary();
+                            _loadParentDashboardSummary();
                           },
                     tooltip: 'Refresh dashboard',
                   ),
@@ -423,7 +467,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             StatCard(
               title: 'Parents',
-              value: '310',
+              value: _isLoadingParentDashboard
+                  ? '...'
+                  : _parentCount.toString(),
               subtitle: 'Registered Parents',
               icon: Icons.family_restroom_outlined,
               onTap: () => _onMenuSelected(5),
@@ -981,12 +1027,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _buildQuickAction(
             icon: Icons.psychology_outlined,
             title: 'Create MCQ Test',
-            onTap: () => _onMenuSelected(10),
+            onTap: () => _onMenuSelected(11),
           ),
           _buildQuickAction(
             icon: Icons.campaign_outlined,
             title: 'Create Notice',
-            onTap: () => _onMenuSelected(12),
+            onTap: () => _onMenuSelected(13),
           ),
         ],
       ),

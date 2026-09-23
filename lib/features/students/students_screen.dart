@@ -4,19 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:smartkids_admin/models/student_model.dart';
 import 'package:smartkids_admin/services/student_service.dart';
-
+import 'package:smartkids_admin/features/students/student_details_screen.dart';
 import 'widgets/student_header.dart';
-import 'widgets/student_summary_cards.dart';
 import 'widgets/student_table.dart';
 import 'widgets/student_toolbar.dart';
 import 'widgets/student_empty_state.dart';
+import 'package:smartkids_admin/features/students/student_import_screen.dart';
 
 import 'dialogs/add_student_dialog.dart';
 import 'dialogs/edit_student_dialog.dart';
-import 'dialogs/student_details_dialog.dart';
 import 'dialogs/delete_student_dialog.dart';
 import 'dialogs/student_filter_dialog.dart';
-
+import 'widgets/student_overview_panel.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 import 'package:smartkids_admin/features/teachers/services/class_service.dart';
 
@@ -34,7 +33,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
   late ClassService classService;
 
   List<SchoolClass> classes = [];
-
   int? selectedClassId;
 
   bool isClassLoading = false;
@@ -125,7 +123,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
   // ============================================================
   // LOAD CLASSES
   // ============================================================
-
   Future<void> _loadClasses() async {
     if (!_serviceInitialized) return;
 
@@ -162,6 +159,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
       );
     }
   }
+
   // ============================================================
   // LOAD STUDENTS
   // ============================================================
@@ -320,6 +318,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
     );
   }
+
   // ============================================================
   // FILTERED STUDENTS
   // ============================================================
@@ -378,9 +377,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
       return date.year == now.year && date.month == now.month;
     }).length;
   }
-  // ============================================================
-  // ADD STUDENT
-  // ============================================================
 
   void _showAddStudentDialog() {
     if (!_serviceInitialized) return;
@@ -399,6 +395,18 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
+  Future<void> _showImportExcel() async {
+    final imported = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentImportScreen(studentService: studentService),
+      ),
+    );
+
+    if (imported == true && mounted) {
+      await _loadStudents();
+    }
+  }
   // ============================================================
   // EDIT STUDENT
   // ============================================================
@@ -426,11 +434,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
   // ============================================================
 
   void _showStudentDetails(Student student) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StudentDetailsDialog(student: student);
-      },
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => StudentDetailsScreen(student: student)),
     );
   }
 
@@ -510,88 +516,209 @@ class _StudentsScreenState extends State<StudentsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ----------------------------------------------------
+            // ======================================================
             // HEADER
-            // ----------------------------------------------------
-            StudentHeader(onAddStudent: _showAddStudentDialog),
-
-            // ----------------------------------------------------
-            // SUMMARY CARDS
-            // ----------------------------------------------------
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-              child: StudentSummaryCards(
-                totalStudents: totalElements,
-                activeStudents: activeStudents,
-                inactiveStudents: inactiveStudents,
-                newStudentsThisMonth: newStudentsThisMonth,
-              ),
+            // ======================================================
+            StudentHeader(
+              onImportExcel: _showImportExcel,
+              onAddStudent: _showAddStudentDialog,
             ),
-
-            // ----------------------------------------------------
-            // CLASS FILTER
-            // ----------------------------------------------------
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-              child: Row(
-                children: [
-                  const Text(
-                    'Class:',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 12),
-
-                  SizedBox(width: 280, child: _buildClassFilter()),
-
-                  if (isClassLoading) ...[
-                    const SizedBox(width: 12),
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // ----------------------------------------------------
-            // TOOLBAR
-            // ----------------------------------------------------
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: StudentToolbar(
-                searchController: _searchController,
-                selectedStatus: _selectedStatus,
-                onFilterPressed: _showFilterDialog,
-                onRefresh: _loadStudents,
-                onAddStudent: _showAddStudentDialog,
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            // ----------------------------------------------------
-            // TABLE / EMPTY / LOADING
-            // ----------------------------------------------------
+            // ======================================================
+            // MAIN CONTENT
+            // 20% OVERVIEW | 80% STUDENT LIST
+            // ======================================================
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildContent(displayedStudents),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ==================================================
+                    // LEFT - 20%
+                    // ==================================================
+                    Expanded(
+                      flex: 2,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            StudentOverviewPanel(
+                              totalStudents: totalElements,
+                              activeStudents: activeStudents,
+                              inactiveStudents: inactiveStudents,
+                              newStudentsThisMonth: newStudentsThisMonth,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // ==================================================
+                    // RIGHT - 80%
+                    // ==================================================
+                    Expanded(
+                      flex: 8,
+                      child: Column(
+                        children: [
+                          _buildStudentToolbar(),
+
+                          const SizedBox(height: 12),
+
+                          Expanded(child: _buildContent(displayedStudents)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
-            // ----------------------------------------------------
+            // ======================================================
             // PAGINATION
-            // ----------------------------------------------------
+            // ======================================================
             if (!isLoading && totalPages > 1) _buildPagination(),
           ],
         ),
       ),
     );
-  } // ============================================================
-  // CONTENT
-  // ============================================================
+  }
+
+  Widget _buildStudentToolbar() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          // ======================================================
+          // SEARCH
+          // ======================================================
+          Expanded(
+            flex: 4,
+            child: SizedBox(
+              height: 42,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search students...',
+                  hintStyle: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: Color(0xFF6B7280),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(9),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(9),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(9),
+                    borderSide: BorderSide(color: Colors.indigo.shade300),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          // ======================================================
+          // CLASS FILTER
+          // ======================================================
+          SizedBox(width: 155, height: 42, child: _buildClassFilter()),
+
+          const SizedBox(width: 10),
+
+          // ======================================================
+          // STATUS FILTER
+          // ======================================================
+          OutlinedButton.icon(
+            onPressed: _showFilterDialog,
+            icon: const Icon(Icons.filter_alt_outlined, size: 17),
+            label: Text(
+              _selectedStatus == 'All' ? 'Filter' : _selectedStatus,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(90, 42),
+              side: BorderSide(color: Colors.grey.shade300),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(9),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          // ======================================================
+          // REFRESH
+          // ======================================================
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: isLoading ? null : _loadStudents,
+            icon: const Icon(Icons.refresh_rounded, size: 21),
+          ),
+
+          const SizedBox(width: 4),
+          // ======================================================
+          // IMPORT EXCEL
+          // ======================================================
+          // OutlinedButton.icon(
+          //   onPressed: _showImportExcel,
+          //   icon: const Icon(Icons.upload_file_outlined, size: 18),
+          //   label: const Text(
+          //     'Import Excel',
+          //     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          //   ),
+          //   style: OutlinedButton.styleFrom(
+          //     minimumSize: const Size(120, 42),
+          //     foregroundColor: Colors.indigo,
+          //     side: BorderSide(color: Colors.indigo.shade200),
+          //     shape: RoundedRectangleBorder(
+          //       borderRadius: BorderRadius.circular(9),
+          //     ),
+          //   ),
+          // ),
+
+          // const SizedBox(width: 8),
+          // // ======================================================
+          // // ADD STUDENT
+          // // ======================================================
+          // ElevatedButton.icon(
+          //   onPressed: _showAddStudentDialog,
+          //   icon: const Icon(Icons.add, size: 18),
+          //   label: const Text(
+          //     'Add Student',
+          //     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          //   ),
+          //   style: ElevatedButton.styleFrom(
+          //     minimumSize: const Size(125, 42),
+          //     backgroundColor: Theme.of(context).primaryColor,
+          //     foregroundColor: Colors.white,
+          //     elevation: 0,
+          //     shape: RoundedRectangleBorder(
+          //       borderRadius: BorderRadius.circular(9),
+          //     ),
+          //   ),
+          // ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildContent(List<Student> displayedStudents) {
     if (isLoading) {

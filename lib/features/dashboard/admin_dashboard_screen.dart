@@ -4,7 +4,8 @@ import 'package:smartkids_admin/features/attendance/services/attendance_service.
 import 'package:smartkids_admin/features/fees/models/fee_dashboard_summary_model.dart';
 import 'package:smartkids_admin/features/fees/services/fee_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:smartkids_admin/features/attendance/models/attendance_last_six_days_model.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:smartkids_admin/services/parent_service.dart';
 
 import '../../widgets/admin_sidebar.dart';
@@ -25,13 +26,11 @@ import '../notices/notices_screen.dart';
 import '../events/events_screen.dart';
 import '../admissions/admissions_screen.dart';
 import '../settings/settings_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/api_client.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../../services/admin_dashboard_service.dart';
-import '../teachers/services/subject_service.dart';
 import '../subjects/subjects_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -57,16 +56,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isLoadingFeeDashboard = true;
   String? _feeDashboardError;
 
+  List<AttendanceLastSixDaysModel> _lastSixDaysAttendance = [];
+
+  bool _isLoadingLastSixDaysAttendance = true;
+  String? _lastSixDaysAttendanceError;
+
   bool _isLoadingDashboard = true;
   String? _dashboardError;
 
   int _studentCount = 0;
   int _teacherCount = 0;
-  int _classCount = 0;
-  int _parentCount = 0;
-
-  bool _isLoadingParentDashboard = true;
-  String? _parentDashboardError;
 
   int selectedIndex = 0;
 
@@ -95,7 +94,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _loadDashboardData();
     _loadFeeDashboardSummary();
     _loadAttendanceDashboardSummary();
-    _loadParentDashboardSummary();
+    _loadLastSixDaysAttendance();
   }
 
   Future<void> _loadDashboardData() async {
@@ -112,7 +111,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       setState(() {
         _studentCount = data['students'] ?? 0;
         _teacherCount = data['teachers'] ?? 0;
-        _classCount = data['classes'] ?? 0;
 
         _isLoadingDashboard = false;
       });
@@ -185,36 +183,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  Future<void> _loadParentDashboardSummary() async {
+  Future<void> _loadLastSixDaysAttendance() async {
     setState(() {
-      _isLoadingParentDashboard = true;
-      _parentDashboardError = null;
+      _isLoadingLastSixDaysAttendance = true;
+      _lastSixDaysAttendanceError = null;
     });
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token') ?? '';
 
-      if (token.trim().isEmpty) {
-        throw Exception('JWT token not found. Please login again.');
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('Authentication token not found');
       }
 
-      final parentService = ParentService(token.trim());
+      final attendanceService = AttendanceService(token.trim());
 
-      final parents = await parentService.getParents();
+      final data = await attendanceService.getLastSixDaysAttendance();
 
       if (!mounted) return;
 
       setState(() {
-        _parentCount = parents.length;
-        _isLoadingParentDashboard = false;
+        _lastSixDaysAttendance = data;
+        _isLoadingLastSixDaysAttendance = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _isLoadingParentDashboard = false;
-        _parentDashboardError = e.toString();
+        _lastSixDaysAttendanceError = e.toString();
+        _isLoadingLastSixDaysAttendance = false;
       });
     }
   }
@@ -365,14 +364,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     onPressed:
                         (_isLoadingDashboard ||
                             _isLoadingFeeDashboard ||
-                            _isLoadingAttendanceDashboard ||
-                            _isLoadingParentDashboard)
+                            _isLoadingAttendanceDashboard||
+                            _isLoadingLastSixDaysAttendance)
                         ? null
                         : () {
                             _loadDashboardData();
                             _loadFeeDashboardSummary();
                             _loadAttendanceDashboardSummary();
-                            _loadParentDashboardSummary();
+                            _loadLastSixDaysAttendance();
                           },
                     tooltip: 'Refresh dashboard',
                   ),
@@ -426,23 +425,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _buildStatsGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        int crossAxisCount;
+        if (constraints.maxWidth >= 900) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 1,
+                child: StatCard(
+                  title: 'Students',
+                  value: _isLoadingDashboard ? '...' : _studentCount.toString(),
+                  icon: Icons.people,
+                  subtitle: 'Total students',
+                ),
+              ),
 
-        if (constraints.maxWidth >= 1200) {
-          crossAxisCount = 4;
-        } else if (constraints.maxWidth >= 700) {
-          crossAxisCount = 2;
-        } else {
-          crossAxisCount = 1;
+              const SizedBox(width: 16),
+
+              Expanded(flex: 2, child: _buildLastSixDaysAttendanceCard()),
+            ],
+          );
         }
 
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: _getStatCardAspectRatio(crossAxisCount),
+        return Column(
           children: [
             StatCard(
               title: 'Students',
@@ -451,45 +455,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               subtitle: 'Total students',
             ),
 
-            StatCard(
-              title: 'Teachers',
-              value: _isLoadingDashboard ? '...' : _teacherCount.toString(),
-              icon: Icons.person,
-              subtitle: 'Total teachers',
-            ),
+            const SizedBox(height: 16),
 
-            StatCard(
-              title: 'Classes',
-              value: _isLoadingDashboard ? '...' : _classCount.toString(),
-              icon: Icons.class_,
-              subtitle: 'Total classes',
-            ),
-
-            StatCard(
-              title: 'Parents',
-              value: _isLoadingParentDashboard
-                  ? '...'
-                  : _parentCount.toString(),
-              subtitle: 'Registered Parents',
-              icon: Icons.family_restroom_outlined,
-              onTap: () => _onMenuSelected(5),
-            ),
+            _buildLastSixDaysAttendanceCard(),
           ],
         );
       },
     );
-  }
-
-  double _getStatCardAspectRatio(int crossAxisCount) {
-    if (crossAxisCount == 4) {
-      return 2.0;
-    }
-
-    if (crossAxisCount == 2) {
-      return 2.3;
-    }
-
-    return 3.2;
   }
 
   Widget _buildOverviewSection() {
@@ -862,6 +834,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             fontSize: 14,
             fontWeight: FontWeight.bold,
             color: Color(0xFF111827),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStudentTeacherSummary() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        _buildSmallCountItem(
+          icon: Icons.people_alt_rounded,
+          label: 'Students',
+          value: _isLoadingDashboard ? '...' : _studentCount.toString(),
+        ),
+        const SizedBox(width: 20),
+        _buildSmallCountItem(
+          icon: Icons.person_rounded,
+          label: 'Teachers',
+          value: _isLoadingDashboard ? '...' : _teacherCount.toString(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSmallCountItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF6B7280)),
+        const SizedBox(width: 6),
+        Text(
+          '$value $label',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF374151),
           ),
         ),
       ],
@@ -1328,6 +1341,199 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLastSixDaysAttendanceCard() {
+    if (_isLoadingLastSixDaysAttendance) {
+      return _buildDashboardCard(
+        title: 'Last 6 Days Attendance',
+        icon: Icons.bar_chart_rounded,
+        child: const SizedBox(
+          height: 300,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_lastSixDaysAttendanceError != null) {
+      return _buildDashboardCard(
+        title: 'Last 6 Days Attendance',
+        icon: Icons.bar_chart_rounded,
+        child: SizedBox(
+          height: 300,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 32,
+                  color: Color(0xFFEF4444),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Unable to load attendance',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _loadLastSixDaysAttendance,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_lastSixDaysAttendance.isEmpty) {
+      return _buildDashboardCard(
+        title: 'Last 6 Days Attendance',
+        icon: Icons.bar_chart_rounded,
+        child: const SizedBox(
+          height: 300,
+          child: Center(
+            child: Text(
+              'No attendance data available',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final attendance = _lastSixDaysAttendance;
+
+    return _buildDashboardCard(
+      title: 'Last 6 Days Attendance',
+      icon: Icons.bar_chart_rounded,
+      child: SizedBox(
+        height: 320,
+        child: BarChart(
+          BarChartData(
+            minY: 0,
+            maxY: 100,
+            alignment: BarChartAlignment.spaceAround,
+
+            // Grid
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              horizontalInterval: 20,
+            ),
+
+            // Remove chart border
+            borderData: FlBorderData(show: false),
+
+            // Touch / Tooltip
+            barTouchData: BarTouchData(
+              enabled: true,
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipItem: (group, groupIndex, groupRod, rodIndex) {
+                  final item = attendance[groupIndex];
+
+                  return BarTooltipItem(
+                    '${item.day}\n'
+                    '${item.attendancePercentage.toStringAsFixed(1)}% Attendance\n'
+                    'Present: ${item.present}\n'
+                    'Absent: ${item.absent}\n'
+                    'Leave: ${item.leave}',
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                  );
+                },
+              ),
+            ),
+
+            // Axis Titles
+            titlesData: FlTitlesData(
+              // Top
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+
+              // Right
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+
+              // Left percentage
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 45,
+                  interval: 20,
+                  getTitlesWidget: (value, meta) {
+                    return Text(
+                      '${value.toInt()}%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF6B7280),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // Bottom days
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 38,
+                  getTitlesWidget: (value, meta) {
+                    final int index = value.toInt();
+
+                    if (index < 0 || index >= attendance.length) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        attendance[index].day,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            // Six attendance bars
+            barGroups: List.generate(attendance.length, (index) {
+              final double percentage = attendance[index].attendancePercentage
+                  .clamp(0.0, 100.0)
+                  .toDouble();
+
+              return BarChartGroupData(
+                x: index,
+                barsSpace: 0,
+                barRods: [
+                  BarChartRodData(
+                    toY: percentage,
+                    width: 28,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(6),
+                      topRight: Radius.circular(6),
+                    ),
+                    color: const Color(0xFF2563EB),
+                  ),
+                ],
+              );
+            }),
+          ),
         ),
       ),
     );

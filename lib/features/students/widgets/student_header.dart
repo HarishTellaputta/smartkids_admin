@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 class StudentHeader extends StatelessWidget {
+  final VoidCallback onImportExcel;
   final VoidCallback onAddStudent;
 
   const StudentHeader({
     super.key,
+    required this.onImportExcel,
     required this.onAddStudent,
   });
 
@@ -59,6 +61,36 @@ class StudentHeader extends StatelessWidget {
               ],
             ),
           ),
+
+          // Import Excel
+          OutlinedButton.icon(
+            onPressed: onImportExcel,
+            icon: const Icon(
+              Icons.upload_file_outlined,
+              size: 19,
+            ),
+            label: const Text(
+              'Import Excel',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 14,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              side: BorderSide(
+                color: Theme.of(context).primaryColor,
+              ),
+              foregroundColor: Theme.of(context).primaryColor,
+            ),
+          ),
+
+          const SizedBox(width: 10),
 
           // Add Student
           ElevatedButton.icon(

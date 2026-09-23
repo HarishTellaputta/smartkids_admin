@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 import '../models/examination_model.dart';
+import '../models/exam_result_model.dart';
+
 
 class ExaminationService {
   final Dio _dio;
@@ -383,10 +385,34 @@ class ExaminationService {
     }
   }
 
+  Future<List<ExamResultResponseModel>> getResultsByStudent(
+    int studentId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '/api/v1/examinations/results',
+        queryParameters: {'studentId': studentId},
+      );
+
+      if (response.data is List) {
+        return (response.data as List)
+            .whereType<Map>()
+            .map(
+              (item) => ExamResultResponseModel.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .toList();
+      }
+
+      return [];
+    } on DioException catch (e) {
+      throw Exception(_handleError(e));
+    }
+  }
+
   // ============================================================
   // IMPORT EXAMINATIONS FROM EXCEL
   // POST /api/v1/examinations/import
   // ============================================================
-
- 
 }

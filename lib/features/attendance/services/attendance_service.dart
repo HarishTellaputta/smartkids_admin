@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:smartkids_admin/features/attendance/models/attendance_dashboard_summary_model.dart';
-
+import 'package:smartkids_admin/features/attendance/models/attendance_last_six_days_model.dart';
 import '../models/attendance_request_model.dart';
 import '../models/attendance_response_model.dart';
 import '../models/attendance_report_model.dart';
@@ -362,6 +362,30 @@ class AttendanceService {
       return AttendanceDashboardSummaryModel.fromJson(
         Map<String, dynamic>.from(response.data),
       );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  // ============================================================
+  // GET - LAST 6 DAYS ATTENDANCE
+  // ============================================================
+
+  Future<List<AttendanceLastSixDaysModel>> getLastSixDaysAttendance() async {
+    try {
+      final response = await _dio.get(
+        '/api/v1/attendances/dashboard/last-six-days',
+      );
+
+      final List<dynamic> data = response.data as List<dynamic>;
+
+      return data
+          .map(
+            (item) => AttendanceLastSixDaysModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
     } on DioException catch (e) {
       throw _handleError(e);
     }

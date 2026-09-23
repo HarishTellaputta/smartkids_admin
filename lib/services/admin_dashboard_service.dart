@@ -1,7 +1,7 @@
-
 import 'package:dio/dio.dart';
 
 import '../core/network/api_client.dart';
+import '../models/student_gender_summary.dart';
 
 class AdminDashboardService {
   final ApiClient apiClient;
@@ -14,9 +14,7 @@ class AdminDashboardService {
 
   Future<int> getStudentCount() async {
     try {
-      final response = await apiClient.dio.get(
-        '/api/v1/students',
-      );
+      final response = await apiClient.dio.get('/api/v1/students');
 
       print('STUDENTS RESPONSE: ${response.data}');
 
@@ -40,9 +38,7 @@ class AdminDashboardService {
       print('STUDENT COUNT ERROR: ${e.response?.data}');
       print('STUDENT COUNT STATUS: ${e.response?.statusCode}');
 
-      throw Exception(
-        'Failed to load student count',
-      );
+      throw Exception('Failed to load student count');
     }
   }
 
@@ -52,9 +48,7 @@ class AdminDashboardService {
 
   Future<int> getTeacherCount() async {
     try {
-      final response = await apiClient.dio.get(
-        '/api/v1/teachers',
-      );
+      final response = await apiClient.dio.get('/api/v1/teachers');
 
       print('TEACHERS RESPONSE: ${response.data}');
 
@@ -69,9 +63,7 @@ class AdminDashboardService {
       print('TEACHER COUNT ERROR: ${e.response?.data}');
       print('TEACHER COUNT STATUS: ${e.response?.statusCode}');
 
-      throw Exception(
-        'Failed to load teacher count',
-      );
+      throw Exception('Failed to load teacher count');
     }
   }
 
@@ -81,9 +73,7 @@ class AdminDashboardService {
 
   Future<int> getClassCount() async {
     try {
-      final response = await apiClient.dio.get(
-        '/api/v1/classes',
-      );
+      final response = await apiClient.dio.get('/api/v1/classes');
 
       print('CLASSES RESPONSE: ${response.data}');
 
@@ -98,9 +88,7 @@ class AdminDashboardService {
       print('CLASS COUNT ERROR: ${e.response?.data}');
       print('CLASS COUNT STATUS: ${e.response?.statusCode}');
 
-      throw Exception(
-        'Failed to load class count',
-      );
+      throw Exception('Failed to load class count');
     }
   }
 
@@ -125,6 +113,25 @@ class AdminDashboardService {
       print('DASHBOARD COUNT ERROR: $e');
 
       rethrow;
+    }
+  }
+
+  Future<StudentGenderSummary> getStudentGenderSummary() async {
+    try {
+      final response = await apiClient.dio.get(
+        '/api/v1/students/gender-summary',
+      );
+
+      print('STUDENT GENDER SUMMARY: ${response.data}');
+
+      return StudentGenderSummary.fromJson(
+        Map<String, dynamic>.from(response.data),
+      );
+    } on DioException catch (e) {
+      print('STUDENT GENDER SUMMARY ERROR: ${e.response?.data}');
+      print('STUDENT GENDER SUMMARY STATUS: ${e.response?.statusCode}');
+
+      throw Exception('Failed to load student gender summary');
     }
   }
 }

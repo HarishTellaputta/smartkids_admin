@@ -276,4 +276,54 @@ class StudentService {
       rethrow;
     }
   }
+
+  // =========================
+  // IMPORT STUDENTS FROM EXCEL
+  // =========================
+  Future<String> importStudentsExcel({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    print('');
+    print('========================================');
+    print('IMPORT STUDENTS EXCEL');
+    print('========================================');
+
+    print('FILE NAME: $fileName');
+    print('FILE SIZE: ${bytes.length}');
+    print('REQUEST URL: ${dio.options.baseUrl}/api/v1/students/import-excel');
+    print('AUTH HEADER: ${dio.options.headers['Authorization']}');
+
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: fileName),
+      });
+
+      final response = await dio.post(
+        '/api/v1/students/import-excel',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      print('');
+      print('========== EXCEL IMPORT RESPONSE ==========');
+      print('STATUS CODE: ${response.statusCode}');
+      print('RESPONSE DATA: ${response.data}');
+      print('===========================================');
+
+      return response.data.toString();
+    } on DioException catch (e) {
+      print('');
+      print('!!!!!!!! EXCEL IMPORT ERROR !!!!!!!!');
+      print('ERROR TYPE: ${e.type}');
+      print('ERROR MESSAGE: ${e.message}');
+      print('REQUEST URL: ${e.requestOptions.uri}');
+      print('REQUEST METHOD: ${e.requestOptions.method}');
+      print('STATUS CODE: ${e.response?.statusCode}');
+      print('RESPONSE DATA: ${e.response?.data}');
+      print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+
+      rethrow;
+    }
+  }
 }

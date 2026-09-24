@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smartkids_admin/features/attendance/models/attendance_last_six_days_model.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:smartkids_admin/services/parent_service.dart';
+import '../attendance/attendance_dashboard_screen.dart';
 
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_topbar.dart';
@@ -2653,7 +2654,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return const ParentsScreen();
 
       case 6:
-        return const AttendanceScreen();
+        return const AttendanceDashboardScreen();
 
       case 7:
         return const HomeworkScreen();

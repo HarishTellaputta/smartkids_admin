@@ -16,11 +16,7 @@ class AdminSidebar extends StatelessWidget {
       width: 260,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          right: BorderSide(
-            color: Colors.grey.withOpacity(0.10),
-          ),
-        ),
+        border: Border(right: BorderSide(color: Colors.grey.withOpacity(0.10))),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.025),
@@ -173,10 +169,7 @@ class AdminSidebar extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.indigo.shade600,
-                  Colors.blue.shade500,
-                ],
+                colors: [Colors.indigo.shade600, Colors.blue.shade500],
               ),
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
@@ -236,11 +229,7 @@ class AdminSidebar extends StatelessWidget {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(
-        left: 14,
-        top: 6,
-        bottom: 9,
-      ),
+      padding: const EdgeInsets.only(left: 14, top: 6, bottom: 9),
       child: Row(
         children: [
           Container(
@@ -293,10 +282,7 @@ class AdminSidebar extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
               gradient: isSelected
                   ? LinearGradient(
@@ -311,9 +297,7 @@ class AdminSidebar extends StatelessWidget {
               color: isSelected ? null : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: isSelected
-                  ? Border.all(
-                      color: Colors.indigo.withOpacity(0.07),
-                    )
+                  ? Border.all(color: Colors.indigo.withOpacity(0.07))
                   : null,
             ),
             child: Row(
@@ -327,18 +311,13 @@ class AdminSidebar extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.indigo.shade600,
-                        Colors.blue.shade500,
-                      ],
+                      colors: [Colors.indigo.shade600, Colors.blue.shade500],
                     ),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
 
-                SizedBox(
-                  width: isSelected ? 9 : 12,
-                ),
+                SizedBox(width: isSelected ? 9 : 12),
 
                 // Icon
                 AnimatedContainer(
@@ -387,10 +366,7 @@ class AdminSidebar extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [
-                          Colors.indigo.shade500,
-                          Colors.blue.shade500,
-                        ],
+                        colors: [Colors.indigo.shade500, Colors.blue.shade500],
                       ),
                       borderRadius: BorderRadius.circular(6),
                     ),
@@ -434,19 +410,10 @@ class AdminSidebar extends StatelessWidget {
 
   Widget _buildBottomSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        12,
-        8,
-        12,
-        14,
-      ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: Colors.grey.withOpacity(0.08),
-          ),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.08))),
       ),
       child: Column(
         children: [
@@ -482,14 +449,14 @@ class AdminSidebar extends StatelessWidget {
     final Color iconColor = isLogout
         ? Colors.red.shade400
         : isSelected
-            ? Colors.indigo.shade600
-            : const Color(0xFF6B7280);
+        ? Colors.indigo.shade600
+        : const Color(0xFF6B7280);
 
     final Color textColor = isLogout
         ? Colors.red.shade500
         : isSelected
-            ? Colors.indigo.shade700
-            : const Color(0xFF374151);
+        ? Colors.indigo.shade700
+        : const Color(0xFF374151);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 3),
@@ -503,16 +470,13 @@ class AdminSidebar extends StatelessWidget {
           borderRadius: BorderRadius.circular(11),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 9,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: isSelected
                   ? Colors.indigo.shade50
                   : isLogout
-                      ? Colors.red.shade50.withOpacity(0.45)
-                      : Colors.transparent,
+                  ? Colors.red.shade50.withOpacity(0.45)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(11),
             ),
             child: Row(
@@ -524,15 +488,11 @@ class AdminSidebar extends StatelessWidget {
                     color: isSelected
                         ? Colors.white
                         : isLogout
-                            ? Colors.red.shade50
-                            : Colors.grey.shade50,
+                        ? Colors.red.shade50
+                        : Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 18,
-                    color: iconColor,
-                  ),
+                  child: Icon(icon, size: 18, color: iconColor),
                 ),
 
                 const SizedBox(width: 10),

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smartkids_admin/models/parent_model.dart';
 import 'package:smartkids_admin/services/parent_service.dart';
 import 'package:smartkids_admin/services/student_service.dart';
+import 'package:smartkids_admin/features/parents/parent_details_screen.dart';
 
 class ParentsScreen extends StatefulWidget {
   const ParentsScreen({super.key});
@@ -24,8 +25,14 @@ class _ParentsScreenState extends State<ParentsScreen> {
   bool _isSaving = false;
 
   String _selectedRelationship = 'All';
-
   String? _errorMessage;
+
+  static const Color _primary = Color(0xFF4F46E5);
+  static const Color _secondary = Color(0xFF7C3AED);
+  static const Color _background = Color(0xFFF6F7FB);
+  static const Color _textPrimary = Color(0xFF111827);
+  static const Color _textSecondary = Color(0xFF6B7280);
+  static const Color _border = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -39,21 +46,16 @@ class _ParentsScreenState extends State<ParentsScreen> {
     super.dispose();
   }
 
-  // ============================================================
-  // INITIALIZE
-  // ============================================================
-
   Future<void> _initialize() async {
     final prefs = await SharedPreferences.getInstance();
-
     final token = prefs.getString('jwt_token');
 
     if (token == null || token.isEmpty) {
       if (!mounted) return;
 
       setState(() {
+        _errorMessage = 'Session expired. Please login again.';
         _isLoading = false;
-        _errorMessage = 'Login session not found. Please login again.';
       });
 
       return;
@@ -64,46 +66,41 @@ class _ParentsScreenState extends State<ParentsScreen> {
     await _loadParents();
   }
 
-  // ============================================================
-  // LOAD PARENTS
-  // ============================================================
-
   Future<void> _loadParents() async {
     if (_parentService == null) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final parents = await _parentService!.getParents();
+      final filtered = _filterParents(parents);
 
       if (!mounted) return;
 
       setState(() {
         _parents = parents;
-        _applyFilters();
+        _filteredParents = filtered;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
+        _errorMessage = e.toString();
         _isLoading = false;
-        _errorMessage = _cleanError(e);
       });
     }
   }
 
-  // ============================================================
-  // SEARCH + FILTER
-  // ============================================================
-
-  void _applyFilters() {
+  List<Parent> _filterParents(List<Parent> source) {
     final query = _searchController.text.trim().toLowerCase();
 
-    final result = _parents.where((parent) {
+    return source.where((parent) {
       final matchesSearch =
           query.isEmpty ||
           parent.displayName.toLowerCase().contains(query) ||
@@ -122,244 +119,155 @@ class _ParentsScreenState extends State<ParentsScreen> {
 
       return matchesSearch && matchesRelationship;
     }).toList();
+  }
+
+  void _applyFilters() {
+    final filtered = _filterParents(_parents);
+
+    if (!mounted) return;
 
     setState(() {
-      _filteredParents = result;
+      _filteredParents = filtered;
     });
   }
 
-  // ============================================================
-  // ADD PARENT
-  // ============================================================
+  int get _fatherCount {
+    return _parents
+        .where((p) => (p.relationship ?? '').toLowerCase() == 'father')
+        .length;
+  }
+
+  int get _motherCount {
+    return _parents
+        .where((p) => (p.relationship ?? '').toLowerCase() == 'mother')
+        .length;
+  }
+
+  int get _guardianCount {
+    return _parents
+        .where((p) => (p.relationship ?? '').toLowerCase() == 'guardian')
+        .length;
+  }
+
+  Future<void> _showParentDetails(Parent parent) async {
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ParentDetailsScreen(parent: parent)),
+    );
+
+    if (mounted) {
+      await _loadParents();
+    }
+  }
 
   Future<void> _showAddParentDialog() async {
-    if (_parentService == null) return;
+    final result = await _parentFormDialog();
 
-    final formKey = GlobalKey<FormState>();
+    if (result == null || _parentService == null) return;
 
-    final fatherController = TextEditingController();
-    final motherController = TextEditingController();
-    final guardianController = TextEditingController();
-    final phoneController = TextEditingController();
-    final emailController = TextEditingController();
-    final addressController = TextEditingController();
-
-    String relationship = 'Father';
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (context, setDialogState) {
-              return _parentFormDialog(
-                title: 'Add Parent',
-                subtitle: 'Create a new parent record',
-                formKey: formKey,
-                fatherController: fatherController,
-                motherController: motherController,
-                guardianController: guardianController,
-                phoneController: phoneController,
-                emailController: emailController,
-                addressController: addressController,
-                relationship: relationship,
-                isEdit: false,
-                isSaving: _isSaving,
-                onRelationshipChanged: (value) {
-                  setDialogState(() {
-                    relationship = value;
-                  });
-                },
-                onSave: () async {
-                  if (!formKey.currentState!.validate()) return;
-
-                  setState(() {
-                    _isSaving = true;
-                  });
-
-                  try {
-                    await _parentService!.createParent(
-                      fatherName: fatherController.text.trim(),
-                      motherName: motherController.text.trim(),
-                      guardianName: guardianController.text.trim(),
-                      contactPhone: phoneController.text.trim(),
-                      contactEmail: emailController.text.trim(),
-                      relationship: relationship,
-                      address: addressController.text.trim(),
-                    );
-
-                    if (!mounted) return;
-
-                    Navigator.pop(dialogContext);
-
-                    _showSuccess('Parent created successfully');
-
-                    await _loadParents();
-                  } catch (e) {
-                    _showError(_cleanError(e));
-                  } finally {
-                    if (mounted) {
-                      setState(() {
-                        _isSaving = false;
-                      });
-                    }
-                  }
-                },
-              );
-            },
-          );
-        },
+      await _parentService!.createParent(
+        fatherName: result['fatherName'],
+        motherName: result['motherName'],
+        guardianName: result['guardianName'],
+        contactPhone: result['contactPhone'],
+        contactEmail: result['contactEmail'],
+        relationship: result['relationship'],
+        address: result['address'],
       );
+
+      if (!mounted) return;
+
+      _showSuccess('Parent added successfully.');
+      await _loadParents();
+    } catch (e) {
+      if (!mounted) return;
+      _showError(e.toString());
     } finally {
-      fatherController.dispose();
-      motherController.dispose();
-      guardianController.dispose();
-      phoneController.dispose();
-      emailController.dispose();
-      addressController.dispose();
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
-
-  // ============================================================
-  // EDIT PARENT
-  // ============================================================
 
   Future<void> _showEditParentDialog(Parent parent) async {
-    if (_parentService == null || parent.id == null) return;
+    if (parent.id == null || _parentService == null) return;
 
-    final formKey = GlobalKey<FormState>();
+    final result = await _parentFormDialog(parent: parent);
 
-    final fatherController = TextEditingController(
-      text: parent.fatherName ?? '',
-    );
+    if (result == null) return;
 
-    final motherController = TextEditingController(
-      text: parent.motherName ?? '',
-    );
-
-    final guardianController = TextEditingController(
-      text: parent.guardianName ?? '',
-    );
-
-    final phoneController = TextEditingController(
-      text: parent.contactPhone ?? '',
-    );
-
-    final emailController = TextEditingController(
-      text: parent.contactEmail ?? '',
-    );
-
-    final addressController = TextEditingController(text: parent.address ?? '');
-
-    String relationship = parent.relationship?.isNotEmpty == true
-        ? parent.relationship!
-        : 'Father';
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (context, setDialogState) {
-              return _parentFormDialog(
-                title: 'Edit Parent',
-                subtitle: 'Update parent information',
-                formKey: formKey,
-                fatherController: fatherController,
-                motherController: motherController,
-                guardianController: guardianController,
-                phoneController: phoneController,
-                emailController: emailController,
-                addressController: addressController,
-                relationship: relationship,
-                isEdit: true,
-                isSaving: _isSaving,
-                onRelationshipChanged: (value) {
-                  setDialogState(() {
-                    relationship = value;
-                  });
-                },
-                onSave: () async {
-                  if (!formKey.currentState!.validate()) return;
-
-                  setState(() {
-                    _isSaving = true;
-                  });
-
-                  try {
-                    await _parentService!.updateParent(
-                      id: parent.id!,
-                      fatherName: fatherController.text.trim(),
-                      motherName: motherController.text.trim(),
-                      guardianName: guardianController.text.trim(),
-                      contactPhone: phoneController.text.trim(),
-                      contactEmail: emailController.text.trim(),
-                      relationship: relationship,
-                      address: addressController.text.trim(),
-                    );
-
-                    if (!mounted) return;
-
-                    Navigator.pop(dialogContext);
-
-                    _showSuccess('Parent updated successfully');
-
-                    await _loadParents();
-                  } catch (e) {
-                    _showError(_cleanError(e));
-                  } finally {
-                    if (mounted) {
-                      setState(() {
-                        _isSaving = false;
-                      });
-                    }
-                  }
-                },
-              );
-            },
-          );
-        },
+      await _parentService!.updateParent(
+        id: parent.id!,
+        fatherName: result['fatherName'],
+        motherName: result['motherName'],
+        guardianName: result['guardianName'],
+        contactPhone: result['contactPhone'],
+        contactEmail: result['contactEmail'],
+        relationship: result['relationship'],
+        address: result['address'],
       );
+
+      if (!mounted) return;
+
+      _showSuccess('Parent updated successfully.');
+      await _loadParents();
+    } catch (e) {
+      if (!mounted) return;
+      _showError(e.toString());
     } finally {
-      fatherController.dispose();
-      motherController.dispose();
-      guardianController.dispose();
-      phoneController.dispose();
-      emailController.dispose();
-      addressController.dispose();
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
-  // ============================================================
-  // DELETE PARENT
-  // ============================================================
-
   Future<void> _deleteParent(Parent parent) async {
-    if (_parentService == null || parent.id == null) return;
+    if (parent.id == null || _parentService == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(22),
           ),
           title: const Text(
             'Delete Parent?',
-            style: TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w800, color: _textPrimary),
           ),
           content: Text(
             'Are you sure you want to delete ${parent.displayName}?',
+            style: const TextStyle(color: _textSecondary, height: 1.5),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Delete'),
             ),
@@ -371,65 +279,27 @@ class _ParentsScreenState extends State<ParentsScreen> {
     if (confirmed != true) return;
 
     try {
-      setState(() {
-        _isLoading = true;
-      });
-
       await _parentService!.deleteParent(parent.id!);
 
       if (!mounted) return;
 
-      _showSuccess('Parent deleted successfully');
-
+      _showSuccess('Parent deleted successfully.');
       await _loadParents();
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      _showError(_cleanError(e));
+      _showError(e.toString());
     }
   }
-
-  // ============================================================
-  // VIEW DETAILS
-  // ============================================================
-
-  Future<void> _showParentDetails(Parent parent) async {
-    Parent selectedParent = parent;
-
-    if (_parentService != null && parent.id != null) {
-      try {
-        selectedParent = await _parentService!.getParent(parent.id!);
-      } catch (_) {
-        // If detail API fails, show existing object.
-      }
-    }
-
-    if (!mounted) return;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return _parentDetailsDialog(selectedParent);
-      },
-    );
-  }
-
-  // ============================================================
-  // LINK STUDENT
-  // ============================================================
 
   Future<void> _showLinkStudentDialog(Parent parent) async {
-    if (_parentService == null || parent.id == null) return;
+    if (parent.id == null || _parentService == null) return;
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
 
     if (token == null || token.isEmpty) {
-      _showError('Login session expired.');
+      if (!mounted) return;
+      _showError('Session expired. Please login again.');
       return;
     }
 
@@ -438,95 +308,240 @@ class _ParentsScreenState extends State<ParentsScreen> {
 
       final studentPage = await studentService.getStudents(page: 0, size: 100);
 
-      final students = studentPage.content;
+      final availableStudents = studentPage.content.where((student) {
+        return student.id != null && student.parentId == null;
+      }).toList();
 
       if (!mounted) return;
 
-      if (students.isEmpty) {
-        _showError('No students available.');
+      if (availableStudents.isEmpty) {
+        _showError('No unlinked students available.');
         return;
       }
 
       int? selectedStudentId;
 
-      await showDialog(
+      final selected = await showDialog<int>(
         context: context,
         builder: (dialogContext) {
           return StatefulBuilder(
             builder: (context, setDialogState) {
-              final availableStudents = students
-                  .where(
-                    (student) => student.id != null && student.parentId == null,
-                  )
-                  .toList();
-
               return AlertDialog(
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(24),
                 ),
-                title: const Text(
-                  'Link Student',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                content: SizedBox(
-                  width: 450,
-                  child: availableStudents.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text(
-                            'All available students are already linked.',
-                          ),
-                        )
-                      : DropdownButtonFormField<int>(
-                          initialValue: selectedStudentId,
-                          decoration: InputDecoration(
-                            labelText: 'Select Student',
-                            prefixIcon: const Icon(Icons.school_outlined),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+
+                title: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [_primary, _secondary],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.link_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Link Student',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: _textPrimary,
                             ),
                           ),
-                          items: availableStudents.map((student) {
-                            return DropdownMenuItem<int>(
-                              value: student.id,
-                              child: Text(student.name ?? 'Unnamed Student'),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setDialogState(() {
-                              selectedStudentId = value;
-                            });
-                          },
-                        ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Connect a student to this parent',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: _textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F3FF),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE9E5FF)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: const Icon(
+                              Icons.person_rounded,
+                              color: _primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Parent',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  parent.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: _textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    const Text(
+                      'Select Student',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _textPrimary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedStudentId,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        hintText: 'Choose a student',
+                        prefixIcon: const Icon(
+                          Icons.school_rounded,
+                          color: _primary,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8F9FC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: _border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: _primary,
+                            width: 1.4,
+                          ),
+                        ),
+                      ),
+                      items: availableStudents.map((student) {
+                        return DropdownMenuItem<int>(
+                          value: student.id,
+                          child: Text(
+                            '${student.name ?? 'Student'}'
+                            '${student.admissionNo != null ? ' • ${student.admissionNo}' : ''}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _textPrimary,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedStudentId = value;
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      '${availableStudents.length} student${availableStudents.length == 1 ? '' : 's'} available',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: _textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('Cancel'),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
+
                   FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _primary,
+                      disabledBackgroundColor: const Color(0xFFD1D5DB),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 13,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     onPressed: selectedStudentId == null
                         ? null
-                        : () async {
-                            try {
-                              await _parentService!.linkStudent(
-                                parentId: parent.id!,
-                                studentId: selectedStudentId!,
-                              );
-
-                              if (!mounted) return;
-
-                              Navigator.pop(dialogContext);
-
-                              _showSuccess('Student linked successfully');
-
-                              await _loadParents();
-                            } catch (e) {
-                              _showError(_cleanError(e));
-                            }
-                          },
-                    icon: const Icon(Icons.link),
-                    label: const Text('Link Student'),
+                        : () => Navigator.pop(dialogContext, selectedStudentId),
+                    icon: const Icon(Icons.link_rounded, size: 18),
+                    label: const Text(
+                      'Link Student',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               );
@@ -534,36 +549,41 @@ class _ParentsScreenState extends State<ParentsScreen> {
           );
         },
       );
-    } catch (e) {
+
+      if (selected == null) return;
+
+      await _parentService!.linkStudent(
+        parentId: parent.id!,
+        studentId: selected,
+      );
+
       if (!mounted) return;
 
-      _showError(_cleanError(e));
+      _showSuccess('Student linked successfully.');
+      await _loadParents();
+    } catch (e) {
+      if (!mounted) return;
+      _showError(e.toString());
     }
   }
 
-  // ============================================================
-  // UNLINK STUDENT
-  // ============================================================
-
   Future<void> _unlinkStudent(Parent parent, ParentStudent student) async {
-    if (_parentService == null || parent.id == null || student.id == null) {
-      return;
-    }
+    if (parent.id == null || student.id == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(22),
           ),
           title: const Text(
             'Unlink Student?',
-            style: TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
           content: Text(
-            'Remove ${student.name ?? 'this student'} '
-            'from ${parent.displayName}?',
+            'Remove ${student.name} from ${parent.displayName}?',
+            style: const TextStyle(color: _textSecondary, height: 1.5),
           ),
           actions: [
             TextButton(
@@ -571,7 +591,12 @@ class _ParentsScreenState extends State<ParentsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.orange.shade700,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Unlink'),
             ),
@@ -590,196 +615,97 @@ class _ParentsScreenState extends State<ParentsScreen> {
 
       if (!mounted) return;
 
-      _showSuccess('Student unlinked successfully');
-
+      _showSuccess('Student unlinked successfully.');
       await _loadParents();
     } catch (e) {
-      _showError(_cleanError(e));
+      if (!mounted) return;
+      _showError(e.toString());
     }
   }
 
-  // ============================================================
-  // FILTER DIALOG
-  // ============================================================
-
   Future<void> _showFilterDialog() async {
-    String tempRelationship = _selectedRelationship;
+    String selected = _selectedRelationship;
 
-    await showDialog(
+    final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final relationships = ['All', 'Father', 'Mother', 'Guardian'];
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(24),
               ),
-              titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 8),
-              contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              title: const Text(
+                'Filter Parents',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: relationships.map((relationship) {
+                  final isSelected = selected == relationship;
 
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEAF2FF),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.filter_alt_outlined,
-                      color: Color(0xFF2563EB),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Filter Parents',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.pop(dialogContext);
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      setDialogState(() {
+                        selected = relationship;
+                      });
                     },
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-
-              content: SizedBox(
-                width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 8),
-
-                    const Text(
-                      'Relationship',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
                       ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _filterChip(
-                          label: 'All',
-                          icon: Icons.people_outline,
-                          selected: tempRelationship == 'All',
-                          onSelected: () {
-                            setDialogState(() {
-                              tempRelationship = 'All';
-                            });
-                          },
-                        ),
-
-                        _filterChip(
-                          label: 'Father',
-                          icon: Icons.man_outlined,
-                          selected: tempRelationship == 'Father',
-                          onSelected: () {
-                            setDialogState(() {
-                              tempRelationship = 'Father';
-                            });
-                          },
-                        ),
-
-                        _filterChip(
-                          label: 'Mother',
-                          icon: Icons.woman_outlined,
-                          selected: tempRelationship == 'Mother',
-                          onSelected: () {
-                            setDialogState(() {
-                              tempRelationship = 'Mother';
-                            });
-                          },
-                        ),
-
-                        _filterChip(
-                          label: 'Guardian',
-                          icon: Icons.family_restroom_outlined,
-                          selected: tempRelationship == 'Guardian',
-                          onSelected: () {
-                            setDialogState(() {
-                              tempRelationship = 'Guardian';
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        color: isSelected
+                            ? _primary.withOpacity(.08)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected ? _primary : _border,
+                        ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.info_outline,
-                            size: 18,
-                            color: Color(0xFF64748B),
+                          Icon(
+                            isSelected
+                                ? Icons.radio_button_checked_rounded
+                                : Icons.radio_button_off_rounded,
+                            color: isSelected ? _primary : _textSecondary,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              tempRelationship == 'All'
-                                  ? 'Showing parents from all relationships'
-                                  : 'Showing $tempRelationship parents only',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF64748B),
-                              ),
+                          const SizedBox(width: 12),
+                          Text(
+                            relationship,
+                            style: TextStyle(
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isSelected ? _primary : _textPrimary,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  );
+                }).toList(),
               ),
-
               actions: [
                 TextButton(
-                  onPressed: () {
-                    setDialogState(() {
-                      tempRelationship = 'All';
-                    });
-                  },
-                  child: const Text(
-                    'Reset',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  onPressed: () => Navigator.pop(dialogContext, 'All'),
+                  child: const Text('Reset'),
                 ),
-
-                const SizedBox(width: 8),
-
-                FilledButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _selectedRelationship = tempRelationship;
-                      _applyFilters();
-                    });
-
-                    Navigator.pop(dialogContext);
-                  },
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Apply Filter'),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext, selected),
+                  child: const Text('Apply'),
                 ),
               ],
             );
@@ -787,776 +713,690 @@ class _ParentsScreenState extends State<ParentsScreen> {
         );
       },
     );
+
+    if (result == null) return;
+
+    setState(() {
+      _selectedRelationship = result;
+    });
+
+    _applyFilters();
   }
 
-  Widget _filterChip({
-  required String label,
-  required IconData icon,
-  required bool selected,
-  required VoidCallback onSelected,
-}) {
-  return ChoiceChip(
-    selected: selected,
-    onSelected: (_) => onSelected(),
-    avatar: Icon(
-      icon,
-      size: 18,
-      color: selected
-          ? Colors.white
-          : const Color(0xFF64748B),
-    ),
-    label: Text(label),
-    labelStyle: TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: selected
-          ? Colors.white
-          : const Color(0xFF334155),
-    ),
-    selectedColor: const Color(0xFF2563EB),
-    backgroundColor: Colors.white,
-    side: BorderSide(
-      color: selected
-          ? const Color(0xFF2563EB)
-          : const Color(0xFFE2E8F0),
-    ),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(10),
-    ),
-    padding: const EdgeInsets.symmetric(
-      horizontal: 8,
-      vertical: 8,
-    ),
-  );
-}
-  // ============================================================
-  // FORM DIALOG
-  // ============================================================
+  Future<Map<String, dynamic>?> _parentFormDialog({Parent? parent}) async {
+    final fatherController = TextEditingController(
+      text: parent?.fatherName ?? '',
+    );
+    final motherController = TextEditingController(
+      text: parent?.motherName ?? '',
+    );
+    final guardianController = TextEditingController(
+      text: parent?.guardianName ?? '',
+    );
+    final phoneController = TextEditingController(
+      text: parent?.contactPhone ?? '',
+    );
+    final emailController = TextEditingController(
+      text: parent?.contactEmail ?? '',
+    );
+    final addressController = TextEditingController(
+      text: parent?.address ?? '',
+    );
 
-  Widget _parentFormDialog({
-    required String title,
-    required String subtitle,
-    required GlobalKey<FormState> formKey,
-    required TextEditingController fatherController,
-    required TextEditingController motherController,
-    required TextEditingController guardianController,
-    required TextEditingController phoneController,
-    required TextEditingController emailController,
-    required TextEditingController addressController,
-    required String relationship,
-    required bool isEdit,
-    required bool isSaving,
-    required ValueChanged<String> onRelationshipChanged,
-    required VoidCallback onSave,
-  }) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 720),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
+    String relationship = parent?.relationship ?? 'Father';
+
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 760),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.12),
+                    blurRadius: 40,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.family_restroom,
-                          color: Color(0xFF2563EB),
-                        ),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 22, 16, 22),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_primary, _secondary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(28),
+                        topRight: Radius.circular(28),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(.16),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Icon(
+                            parent == null
+                                ? Icons.person_add_alt_1_rounded
+                                : Icons.edit_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                parent == null
+                                    ? 'Add New Parent'
+                                    : 'Edit Parent',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                parent == null
+                                    ? 'Create a parent profile'
+                                    : 'Update parent information',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(.78),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Form(
+                      key: formKey,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              title,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            _sectionTitle(
+                              'Parent Information',
+                              Icons.family_restroom_rounded,
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              subtitle,
-                              style: TextStyle(color: Colors.grey.shade600),
+                            const SizedBox(height: 14),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final twoColumn = constraints.maxWidth >= 560;
+
+                                if (twoColumn) {
+                                  return Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _textField(
+                                              controller: fatherController,
+                                              label: 'Father Name',
+                                              icon: Icons.person_rounded,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: _textField(
+                                              controller: motherController,
+                                              label: 'Mother Name',
+                                              icon: Icons.person_rounded,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _textField(
+                                              controller: guardianController,
+                                              label: 'Guardian Name',
+                                              icon: Icons
+                                                  .admin_panel_settings_rounded,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: _dropdownField(
+                                              value: relationship,
+                                              label: 'Relationship',
+                                              icon:
+                                                  Icons.family_restroom_rounded,
+                                              items: const [
+                                                'Father',
+                                                'Mother',
+                                                'Guardian',
+                                              ],
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  relationship = value;
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                return Column(
+                                  children: [
+                                    _textField(
+                                      controller: fatherController,
+                                      label: 'Father Name',
+                                      icon: Icons.person_rounded,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _textField(
+                                      controller: motherController,
+                                      label: 'Mother Name',
+                                      icon: Icons.person_rounded,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _textField(
+                                      controller: guardianController,
+                                      label: 'Guardian Name',
+                                      icon: Icons.admin_panel_settings_rounded,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _dropdownField(
+                                      value: relationship,
+                                      label: 'Relationship',
+                                      icon: Icons.family_restroom_rounded,
+                                      items: const [
+                                        'Father',
+                                        'Mother',
+                                        'Guardian',
+                                      ],
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          relationship = value;
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 26),
+                            _sectionTitle(
+                              'Contact Information',
+                              Icons.contact_phone_rounded,
+                            ),
+                            const SizedBox(height: 14),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final twoColumn = constraints.maxWidth >= 560;
+
+                                if (twoColumn) {
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: _textField(
+                                          controller: phoneController,
+                                          label: 'Phone Number',
+                                          icon: Icons.phone_rounded,
+                                          keyboardType: TextInputType.phone,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: _textField(
+                                          controller: emailController,
+                                          label: 'Email Address',
+                                          icon: Icons.email_rounded,
+                                          keyboardType:
+                                              TextInputType.emailAddress,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                return Column(
+                                  children: [
+                                    _textField(
+                                      controller: phoneController,
+                                      label: 'Phone Number',
+                                      icon: Icons.phone_rounded,
+                                      keyboardType: TextInputType.phone,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _textField(
+                                      controller: emailController,
+                                      label: 'Email Address',
+                                      icon: Icons.email_rounded,
+                                      keyboardType: TextInputType.emailAddress,
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            _textField(
+                              controller: addressController,
+                              label: 'Address',
+                              icon: Icons.location_on_rounded,
+                              maxLines: 3,
                             ),
                           ],
                         ),
-                      ),
-                      IconButton(
-                        onPressed: isSaving
-                            ? null
-                            : () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  _sectionTitle('Parent Information'),
-
-                  const SizedBox(height: 14),
-
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final twoColumns = constraints.maxWidth >= 600;
-
-                      if (!twoColumns) {
-                        return Column(
-                          children: [
-                            _textField(
-                              controller: fatherController,
-                              label: 'Father Name',
-                              icon: Icons.person_outline,
-                            ),
-                            const SizedBox(height: 14),
-                            _textField(
-                              controller: motherController,
-                              label: 'Mother Name',
-                              icon: Icons.person_outline,
-                            ),
-                          ],
-                        );
-                      }
-
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: _textField(
-                              controller: fatherController,
-                              label: 'Father Name',
-                              icon: Icons.person_outline,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: _textField(
-                              controller: motherController,
-                              label: 'Mother Name',
-                              icon: Icons.person_outline,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  _textField(
-                    controller: guardianController,
-                    label: 'Guardian Name',
-                    icon: Icons.supervisor_account_outlined,
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final twoColumns = constraints.maxWidth >= 600;
-
-                      if (!twoColumns) {
-                        return Column(
-                          children: [
-                            _textField(
-                              controller: phoneController,
-                              label: 'Contact Phone',
-                              icon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
-                              validator: _phoneValidator,
-                            ),
-                            const SizedBox(height: 14),
-                            _textField(
-                              controller: emailController,
-                              label: 'Contact Email',
-                              icon: Icons.email_outlined,
-                              keyboardType: TextInputType.emailAddress,
-                              validator: _emailValidator,
-                            ),
-                          ],
-                        );
-                      }
-
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: _textField(
-                              controller: phoneController,
-                              label: 'Contact Phone',
-                              icon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
-                              validator: _phoneValidator,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: _textField(
-                              controller: emailController,
-                              label: 'Contact Email',
-                              icon: Icons.email_outlined,
-                              keyboardType: TextInputType.emailAddress,
-                              validator: _emailValidator,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  DropdownButtonFormField<String>(
-                    initialValue: relationship,
-                    decoration: InputDecoration(
-                      labelText: 'Relationship',
-                      prefixIcon: const Icon(Icons.family_restroom_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'Father', child: Text('Father')),
-                      DropdownMenuItem(value: 'Mother', child: Text('Mother')),
-                      DropdownMenuItem(
-                        value: 'Guardian',
-                        child: Text('Guardian'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        onRelationshipChanged(value);
-                      }
-                    },
                   ),
-
-                  const SizedBox(height: 14),
-
-                  _textField(
-                    controller: addressController,
-                    label: 'Address',
-                    icon: Icons.location_on_outlined,
-                    maxLines: 3,
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: isSaving
-                            ? null
-                            : () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.icon(
-                        onPressed: isSaving ? null : onSave,
-                        icon: isSaving
-                            ? const SizedBox(
-                                width: 17,
-                                height: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Icon(isEdit ? Icons.save_outlined : Icons.add),
-                        label: Text(
-                          isSaving
-                              ? 'Saving...'
-                              : isEdit
-                              ? 'Update Parent'
-                              : 'Add Parent',
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFAFAFC),
+                      border: Border(top: BorderSide(color: _border)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            side: const BorderSide(color: _border),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('Cancel'),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _primary,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 22,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            if (!formKey.currentState!.validate()) {
+                              return;
+                            }
+
+                            Navigator.pop(dialogContext, {
+                              'fatherName': _nullableValue(
+                                fatherController.text,
+                              ),
+                              'motherName': _nullableValue(
+                                motherController.text,
+                              ),
+                              'guardianName': _nullableValue(
+                                guardianController.text,
+                              ),
+                              'contactPhone': _nullableValue(
+                                phoneController.text,
+                              ),
+                              'contactEmail': _nullableValue(
+                                emailController.text,
+                              ),
+                              'relationship': relationship,
+                              'address': _nullableValue(addressController.text),
+                            });
+                          },
+                          icon: Icon(
+                            parent == null
+                                ? Icons.add_rounded
+                                : Icons.save_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            parent == null ? 'Add Parent' : 'Save Changes',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // DETAILS DIALOG
-  // ============================================================
-
-  Widget _parentDetailsDialog(Parent parent) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 650, maxHeight: 700),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: const Color(0xFFEFF6FF),
-                      child: Text(
-                        parent.initials,
-                        style: const TextStyle(
-                          color: Color(0xFF2563EB),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            parent.displayName,
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            parent.id != null
-                                ? 'Parent ID: ${parent.id}'
-                                : 'Parent',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                _sectionTitle('Contact Information'),
-
-                const SizedBox(height: 12),
-
-                _detailTile(
-                  Icons.phone_outlined,
-                  'Phone',
-                  parent.contactPhone ?? 'Not provided',
-                ),
-
-                _detailTile(
-                  Icons.email_outlined,
-                  'Email',
-                  parent.contactEmail ?? 'Not provided',
-                ),
-
-                _detailTile(
-                  Icons.location_on_outlined,
-                  'Address',
-                  parent.address ?? 'Not provided',
-                ),
-
-                _detailTile(
-                  Icons.family_restroom_outlined,
-                  'Relationship',
-                  parent.relationship ?? 'Not provided',
-                ),
-
-                const SizedBox(height: 20),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _infoCard(
-                        title: 'Father',
-                        value: parent.fatherName ?? 'Not provided',
-                        icon: Icons.person_outline,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _infoCard(
-                        title: 'Mother',
-                        value: parent.motherName ?? 'Not provided',
-                        icon: Icons.person_outline,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                Row(
-                  children: [
-                    _sectionTitle('Linked Students'),
-                    const Spacer(),
-                    if (parent.id != null)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showLinkStudentDialog(parent);
-                        },
-                        icon: const Icon(Icons.link, size: 18),
-                        label: const Text('Link Student'),
-                      ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                if (parent.students.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.school_outlined,
-                          size: 34,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No students linked',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ...parent.students.map(
-                    (student) => Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(13),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.school_outlined,
-                              color: Color(0xFF2563EB),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  student.name ?? 'Unnamed Student',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                if (student.admissionNo != null)
-                                  Text(
-                                    'Admission: ${student.admissionNo}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Unlink',
-                            onPressed: () {
-                              Navigator.pop(context);
-                              _unlinkStudent(parent, student);
-                            },
-                            icon: const Icon(
-                              Icons.link_off,
-                              color: Colors.orange,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              _buildHeader(),
-
-              const SizedBox(height: 22),
-
-              _buildSummaryCards(),
-
-              const SizedBox(height: 22),
-
-              Expanded(child: _buildMainContent()),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // HEADER
-  // ============================================================
-
-  Widget _buildHeader() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 800;
-
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _headerTitle(),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _isLoading ? null : _showAddParentDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Parent'),
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(child: _headerTitle()),
-            FilledButton.icon(
-              onPressed: _isLoading ? null : _showAddParentDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Parent'),
-            ),
-          ],
         );
       },
     );
+
+    fatherController.dispose();
+    motherController.dispose();
+    guardianController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    addressController.dispose();
+
+    return result;
   }
 
-  Widget _headerTitle() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Parents',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF111827),
-          ),
+  String? _nullableValue(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: (value) {
+        if (label == 'Phone Number' &&
+            value != null &&
+            value.trim().isNotEmpty &&
+            value.trim().length < 10) {
+          return 'Enter a valid phone number';
+        }
+
+        if (label == 'Email Address' &&
+            value != null &&
+            value.trim().isNotEmpty &&
+            !value.contains('@')) {
+          return 'Enter a valid email';
+        }
+
+        return null;
+      },
+      decoration: InputDecoration(
+        labelText: label,
+        alignLabelWithHint: maxLines > 1,
+        prefixIcon: Padding(
+          padding: EdgeInsets.only(bottom: maxLines > 1 ? 34 : 0),
+          child: Icon(icon, size: 20),
         ),
-        const SizedBox(height: 5),
+        filled: true,
+        fillColor: const Color(0xFFF8F9FC),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 15,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _primary, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdownField({
+    required String value,
+    required String label,
+    required IconData icon,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        filled: true,
+        fillColor: const Color(0xFFF8F9FC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _primary, width: 1.5),
+        ),
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem<String>(value: item, child: Text(item));
+      }).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _sectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _primary.withOpacity(.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: _primary, size: 18),
+        ),
+        const SizedBox(width: 10),
         Text(
-          'Manage parents, guardians and student relationships.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: _textPrimary,
+          ),
         ),
       ],
     );
   }
 
-  // ============================================================
-  // SUMMARY CARDS
-  // ============================================================
-
-  Widget _buildSummaryCards() {
-    final total = _parents.length;
-
-    final fathers = _parents
-        .where((p) => (p.relationship ?? '').toLowerCase() == 'father')
-        .length;
-
-    final mothers = _parents
-        .where((p) => (p.relationship ?? '').toLowerCase() == 'mother')
-        .length;
-
-    final guardians = _parents
-        .where((p) => (p.relationship ?? '').toLowerCase() == 'guardian')
-        .length;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-
-        if (width < 650) {
-          return Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _summaryCard(
-                      title: 'Total Parents',
-                      value: '$total',
-                      icon: Icons.groups_outlined,
-                      iconColor: const Color(0xFF2563EB),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _summaryCard(
-                      title: 'Fathers',
-                      value: '$fathers',
-                      icon: Icons.person_outline,
-                      iconColor: const Color(0xFF7C3AED),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _summaryCard(
-                      title: 'Mothers',
-                      value: '$mothers',
-                      icon: Icons.person_outline,
-                      iconColor: const Color(0xFFDB2777),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _summaryCard(
-                      title: 'Guardians',
-                      value: '$guardians',
-                      icon: Icons.supervisor_account_outlined,
-                      iconColor: const Color(0xFF059669),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(
-              child: _summaryCard(
-                title: 'Total Parents',
-                value: '$total',
-                icon: Icons.groups_outlined,
-                iconColor: const Color(0xFF2563EB),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _summaryCard(
-                title: 'Fathers',
-                value: '$fathers',
-                icon: Icons.person_outline,
-                iconColor: const Color(0xFF7C3AED),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _summaryCard(
-                title: 'Mothers',
-                value: '$mothers',
-                icon: Icons.person_outline,
-                iconColor: const Color(0xFFDB2777),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _summaryCard(
-                title: 'Guardians',
-                value: '$guardians',
-                icon: Icons.supervisor_account_outlined,
-                iconColor: const Color(0xFF059669),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _summaryCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color iconColor,
-  }) {
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(13),
+              gradient: const LinearGradient(
+                colors: [_primary, _secondary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(17),
             ),
-            child: Icon(icon, color: iconColor),
+            child: const Icon(
+              Icons.groups_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Parents',
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                    color: _textPrimary,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Manage parent profiles, contacts and student connections',
+                  style: TextStyle(color: _textSecondary, fontSize: 13.5),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _showAddParentDialog,
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.all(_primary),
+              padding: WidgetStateProperty.all(
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              ),
+              shape: WidgetStateProperty.all(
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+              ),
+            ),
+            icon: const Icon(Icons.add_rounded, size: 19),
+            label: const Text(
+              'Add Parent',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCards() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cards = [
+          _SummaryData(
+            title: 'Total Parents',
+            value: _parents.length.toString(),
+            icon: Icons.groups_rounded,
+            description: 'Registered profiles',
+          ),
+          _SummaryData(
+            title: 'Fathers',
+            value: _fatherCount.toString(),
+            icon: Icons.man_rounded,
+            description: 'Father profiles',
+          ),
+          _SummaryData(
+            title: 'Mothers',
+            value: _motherCount.toString(),
+            icon: Icons.woman_rounded,
+            description: 'Mother profiles',
+          ),
+          _SummaryData(
+            title: 'Guardians',
+            value: _guardianCount.toString(),
+            icon: Icons.admin_panel_settings_rounded,
+            description: 'Guardian profiles',
+          ),
+        ];
+
+        if (constraints.maxWidth < 700) {
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: cards.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.65,
+            ),
+            itemBuilder: (context, index) {
+              return _summaryCard(cards[index]);
+            },
+          );
+        }
+
+        return Row(
+          children: cards.map((card) {
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: card == cards.last ? 0 : 12),
+                child: _summaryCard(card),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _summaryCard(_SummaryData data) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.025),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(.08),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(data.icon, color: _primary, size: 23),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -1564,17 +1404,27 @@ class _ParentsScreenState extends State<ParentsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
+                  data.title,
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    color: _textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  data.value,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                    color: _textPrimary,
+                  ),
+                ),
+                Text(
+                  data.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10.5, color: _textSecondary),
                 ),
               ],
             ),
@@ -1584,55 +1434,61 @@ class _ParentsScreenState extends State<ParentsScreen> {
     );
   }
 
-  // ============================================================
-  // MAIN CONTENT
-  // ============================================================
-
   Widget _buildMainContent() {
     return Container(
-      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.025),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
           _buildToolbar(),
-          Expanded(child: _buildBody()),
+          const Divider(height: 1, color: _border),
+          Expanded(
+            child: _isLoading
+                ? _buildLoading()
+                : _errorMessage != null
+                ? _buildError()
+                : _filteredParents.isEmpty
+                ? _buildEmpty()
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth < 850) {
+                        return _buildMobileList();
+                      }
+
+                      return _buildDesktopTable();
+                    },
+                  ),
+          ),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // TOOLBAR
-  // ============================================================
-
   Widget _buildToolbar() {
-    final filterActive = _selectedRelationship != 'All';
-
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < 700) {
+          if (constraints.maxWidth < 650) {
             return Column(
               children: [
-                _searchBox(),
+                _buildSearchField(),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _filterButton(filterActive)),
+                    Expanded(child: _buildFilterButton()),
                     const SizedBox(width: 10),
-                    IconButton(
-                      tooltip: 'Refresh',
-                      onPressed: _isLoading ? null : _loadParents,
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFFF3F4F6),
-                      ),
-                      icon: const Icon(Icons.refresh),
-                    ),
+                    _buildRefreshButton(),
                   ],
                 ),
               ],
@@ -1641,18 +1497,11 @@ class _ParentsScreenState extends State<ParentsScreen> {
 
           return Row(
             children: [
-              Expanded(child: _searchBox()),
+              Expanded(child: _buildSearchField()),
               const SizedBox(width: 12),
-              _filterButton(filterActive),
+              _buildFilterButton(),
               const SizedBox(width: 10),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _isLoading ? null : _loadParents,
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFF3F4F6),
-                ),
-                icon: const Icon(Icons.refresh),
-              ),
+              _buildRefreshButton(),
             ],
           );
         },
@@ -1660,167 +1509,196 @@ class _ParentsScreenState extends State<ParentsScreen> {
     );
   }
 
-  Widget _searchBox() {
+  Widget _buildSearchField() {
     return TextField(
       controller: _searchController,
       onChanged: (_) => _applyFilters(),
       decoration: InputDecoration(
         hintText: 'Search parent, phone, email or address...',
-        prefixIcon: const Icon(Icons.search, size: 21),
-        suffixIcon: _searchController.text.isEmpty
-            ? null
-            : IconButton(
+        hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+        prefixIcon: const Icon(Icons.search_rounded, color: _textSecondary),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
                 onPressed: () {
                   _searchController.clear();
                   _applyFilters();
                 },
-                icon: const Icon(Icons.clear),
-              ),
+                icon: const Icon(Icons.close_rounded),
+              )
+            : null,
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: const Color(0xFFF8F9FC),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _primary, width: 1.4),
+        ),
       ),
     );
   }
 
-  Widget _filterButton(bool active) {
+  Widget _buildFilterButton() {
+    final active = _selectedRelationship != 'All';
+
     return OutlinedButton.icon(
       onPressed: _showFilterDialog,
-      icon: Icon(
-        Icons.filter_list,
-        color: active ? const Color(0xFF2563EB) : Colors.grey.shade700,
-      ),
-      label: Text(active ? 'Filter: $_selectedRelationship' : 'Filter'),
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size(120, 50),
-        side: BorderSide(
-          color: active ? const Color(0xFF2563EB) : Colors.grey.shade300,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        backgroundColor: active ? _primary.withOpacity(.06) : Colors.white,
+        side: BorderSide(color: active ? _primary : _border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+      ),
+      icon: Icon(
+        Icons.filter_list_rounded,
+        size: 19,
+        color: active ? _primary : _textSecondary,
+      ),
+      label: Text(
+        active ? _selectedRelationship : 'Filter',
+        style: TextStyle(
+          color: active ? _primary : _textPrimary,
+          fontWeight: FontWeight.w700,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  // ============================================================
-  // BODY
-  // ============================================================
-
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_errorMessage != null) {
-      return _errorState();
-    }
-
-    if (_filteredParents.isEmpty) {
-      return _emptyState();
-    }
-
-    return _parentsTable();
-  }
-
-  // ============================================================
-  // TABLE
-  // ============================================================
-
-  Widget _parentsTable() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: SingleChildScrollView(
-                child: DataTable(
-                  headingRowHeight: 52,
-                  dataRowMinHeight: 72,
-                  dataRowMaxHeight: 82,
-                  horizontalMargin: 20,
-                  columnSpacing: 28,
-                  headingTextStyle: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
-                    fontSize: 13,
-                  ),
-                  columns: const [
-                    DataColumn(label: Text('PARENT')),
-                    DataColumn(label: Text('RELATIONSHIP')),
-                    DataColumn(label: Text('PHONE')),
-                    DataColumn(label: Text('EMAIL')),
-                    DataColumn(label: Text('STUDENTS')),
-                    DataColumn(label: Text('ACTION')),
-                  ],
-                  rows: _filteredParents.map((parent) {
-                    return DataRow(
-                      cells: [
-                        DataCell(_parentCell(parent)),
-                        DataCell(
-                          _relationshipBadge(parent.relationship ?? 'Unknown'),
-                        ),
-                        DataCell(Text(parent.contactPhone ?? 'Not provided')),
-                        DataCell(
-                          SizedBox(
-                            width: 190,
-                            child: Text(
-                              parent.contactEmail ?? 'Not provided',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        DataCell(_studentCell(parent)),
-                        DataCell(_actionMenu(parent)),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
+  Widget _buildRefreshButton() {
+    return Tooltip(
+      message: 'Refresh',
+      child: IconButton(
+        onPressed: _isLoading ? null : _loadParents,
+        style: IconButton.styleFrom(
+          backgroundColor: const Color(0xFFF8F9FC),
+          side: const BorderSide(color: _border),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(13),
           ),
-        );
-      },
+          padding: const EdgeInsets.all(13),
+        ),
+        icon: const Icon(Icons.refresh_rounded, color: _textPrimary),
+      ),
     );
   }
 
-  Widget _parentCell(Parent parent) {
+  Widget _buildDesktopTable() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowHeight: 52,
+          dataRowMinHeight: 72,
+          dataRowMaxHeight: 82,
+          columnSpacing: 28,
+          horizontalMargin: 16,
+          headingTextStyle: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: _textSecondary,
+            letterSpacing: .5,
+          ),
+          columns: const [
+            DataColumn(label: Text('PARENT')),
+            DataColumn(label: Text('RELATIONSHIP')),
+            DataColumn(label: Text('PHONE')),
+            DataColumn(label: Text('EMAIL')),
+            DataColumn(label: Text('STUDENTS')),
+            DataColumn(label: Text('ACTION')),
+          ],
+          rows: _filteredParents.map((parent) {
+            return DataRow(
+              onSelectChanged: (_) => _showParentDetails(parent),
+              cells: [
+                DataCell(_parentNameCell(parent)),
+                DataCell(_relationshipBadge(parent.relationship)),
+                DataCell(
+                  Text(
+                    parent.contactPhone?.isNotEmpty == true
+                        ? parent.contactPhone!
+                        : '—',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: _textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 190,
+                    child: Text(
+                      parent.contactEmail?.isNotEmpty == true
+                          ? parent.contactEmail!
+                          : '—',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+                DataCell(_studentCount(parent)),
+                DataCell(_actionMenu(parent)),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _parentNameCell(Parent parent) {
+    final initials = parent.initials.trim().isNotEmpty
+        ? parent.initials
+        : _getInitials(parent.displayName);
+
     return SizedBox(
-      width: 220,
+      width: 230,
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 21,
-            backgroundColor: const Color(0xFFEFF6FF),
-            child: Text(
-              parent.initials,
-              style: const TextStyle(
-                color: Color(0xFF2563EB),
-                fontWeight: FontWeight.w700,
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  _primary.withOpacity(.12),
+                  _secondary.withOpacity(.12),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Center(
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: _primary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  parent.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  parent.id != null ? 'ID: ${parent.id}' : 'Parent',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                ),
-              ],
+            child: Text(
+              parent.displayName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: _textPrimary,
+                fontSize: 13.5,
+              ),
             ),
           ),
         ],
@@ -1828,255 +1706,365 @@ class _ParentsScreenState extends State<ParentsScreen> {
     );
   }
 
-  Widget _studentCell(Parent parent) {
-    if (parent.students.isEmpty) {
-      return Text(
-        'Not linked',
-        style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-      );
-    }
-
-    if (parent.students.length == 1) {
-      return SizedBox(
-        width: 160,
-        child: Text(
-          parent.students.first.name ?? 'Unnamed Student',
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
-    }
+  Widget _studentCount(Parent parent) {
+    final count = parent.students.length;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(20),
+        color: count > 0
+            ? Colors.green.withOpacity(.08)
+            : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        '${parent.students.length} students',
-        style: const TextStyle(
-          color: Color(0xFF2563EB),
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.school_rounded,
+            size: 15,
+            color: count > 0 ? Colors.green.shade700 : _textSecondary,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            count == 1 ? '1 Student' : '$count Students',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: count > 0 ? Colors.green.shade700 : _textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _relationshipBadge(String relationship) {
-    Color background;
-    Color foreground;
+  Widget _relationshipBadge(String? relationship) {
+    final value = relationship?.trim().isNotEmpty == true
+        ? relationship!.trim()
+        : 'Parent';
 
-    switch (relationship.toLowerCase()) {
+    IconData icon;
+
+    switch (value.toLowerCase()) {
+      case 'father':
+        icon = Icons.man_rounded;
+        break;
       case 'mother':
-        background = const Color(0xFFFCE7F3);
-        foreground = const Color(0xFFBE185D);
+        icon = Icons.woman_rounded;
         break;
-
       case 'guardian':
-        background = const Color(0xFFD1FAE5);
-        foreground = const Color(0xFF047857);
+        icon = Icons.admin_panel_settings_rounded;
         break;
-
       default:
-        background = const Color(0xFFEDE9FE);
-        foreground = const Color(0xFF6D28D9);
+        icon = Icons.family_restroom_rounded;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
+        color: _primary.withOpacity(.07),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        relationship,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: _primary),
+          const SizedBox(width: 5),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: _primary,
+            ),
+          ),
+        ],
       ),
     );
   }
-
-  // ============================================================
-  // ACTION MENU
-  // ============================================================
 
   Widget _actionMenu(Parent parent) {
     return PopupMenuButton<String>(
       tooltip: 'Actions',
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (value) {
         switch (value) {
           case 'view':
             _showParentDetails(parent);
             break;
-
           case 'edit':
             _showEditParentDialog(parent);
             break;
-
           case 'link':
             _showLinkStudentDialog(parent);
             break;
-
           case 'delete':
             _deleteParent(parent);
             break;
         }
       },
       itemBuilder: (context) {
-        return const [
-          PopupMenuItem(
+        return [
+          const PopupMenuItem(
             value: 'view',
             child: ListTile(
-              dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.visibility_outlined),
+              leading: Icon(Icons.visibility_rounded),
               title: Text('View Details'),
             ),
           ),
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 'edit',
             child: ListTile(
-              dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.edit_outlined),
-              title: Text('Edit'),
+              leading: Icon(Icons.edit_rounded),
+              title: Text('Edit Parent'),
             ),
           ),
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 'link',
             child: ListTile(
-              dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.link),
+              leading: Icon(Icons.link_rounded),
               title: Text('Link Student'),
             ),
           ),
-          PopupMenuDivider(),
-          PopupMenuItem(
+          const PopupMenuDivider(),
+          const PopupMenuItem(
             value: 'delete',
             child: ListTile(
-              dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.delete_outline, color: Colors.red),
+              leading: Icon(Icons.delete_outline_rounded, color: Colors.red),
               title: Text('Delete', style: TextStyle(color: Colors.red)),
             ),
           ),
         ];
       },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FC),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: _border),
+        ),
+        child: const Icon(
+          Icons.more_horiz_rounded,
+          color: _textPrimary,
+          size: 20,
+        ),
+      ),
     );
   }
 
-  // ============================================================
-  // EMPTY STATE
-  // ============================================================
+  Widget _buildMobileList() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(14),
+      itemCount: _filteredParents.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final parent = _filteredParents[index];
+        return _parentMobileCard(parent);
+      },
+    );
+  }
 
-  Widget _emptyState() {
-    final hasFilters =
-        _searchController.text.trim().isNotEmpty ||
-        _selectedRelationship != 'All';
+  Widget _parentMobileCard(Parent parent) {
+    final initials = parent.initials.trim().isNotEmpty
+        ? parent.initials
+        : _getInitials(parent.displayName);
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => _showParentDetails(parent),
+      child: Container(
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _border),
+        ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const Icon(
-                Icons.groups_outlined,
-                size: 40,
-                color: Color(0xFF2563EB),
-              ),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        _primary.withOpacity(.12),
+                        _secondary.withOpacity(.12),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Center(
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                        color: _primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        parent.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: _textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _relationshipBadge(parent.relationship),
+                    ],
+                  ),
+                ),
+                _actionMenu(parent),
+              ],
             ),
-            const SizedBox(height: 18),
-            Text(
-              hasFilters ? 'No parents found' : 'No parents available',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: _border),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _mobileInfo(
+                    Icons.phone_rounded,
+                    parent.contactPhone?.isNotEmpty == true
+                        ? parent.contactPhone!
+                        : 'No phone',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _mobileInfo(
+                    Icons.school_rounded,
+                    parent.students.isEmpty
+                        ? 'No students'
+                        : '${parent.students.length} student${parent.students.length == 1 ? '' : 's'}',
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 7),
-            Text(
-              hasFilters
-                  ? 'Try changing your search or filter.'
-                  : 'Add your first parent to get started.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 20),
-            if (hasFilters)
-              OutlinedButton.icon(
-                onPressed: () {
-                  _searchController.clear();
-
-                  setState(() {
-                    _selectedRelationship = 'All';
-                  });
-
-                  _applyFilters();
-                },
-                icon: const Icon(Icons.clear_all),
-                label: const Text('Clear Filters'),
-              )
-            else
-              FilledButton.icon(
-                onPressed: _showAddParentDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Parent'),
-              ),
+            if (parent.contactEmail?.isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              _mobileInfo(Icons.email_rounded, parent.contactEmail!),
+            ],
           ],
         ),
       ),
     );
   }
 
-  // ============================================================
-  // ERROR STATE
-  // ============================================================
+  Widget _mobileInfo(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: _primary),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: _textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _errorState() {
+  Widget _buildLoading() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 30,
+            height: 30,
+            child: CircularProgressIndicator(strokeWidth: 2.8, color: _primary),
+          ),
+          SizedBox(height: 14),
+          Text(
+            'Loading parents...',
+            style: TextStyle(
+              color: _textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(30),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
+                color: Colors.red.withOpacity(.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
-                Icons.cloud_off_outlined,
-                size: 36,
-                color: Colors.red,
+              child: Icon(
+                Icons.cloud_off_rounded,
+                color: Colors.red.shade600,
+                size: 30,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             const Text(
               'Unable to load parents',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: _textPrimary,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             Text(
               _errorMessage ?? 'Something went wrong.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: _loadParents,
-              icon: const Icon(Icons.refresh),
+              style: FilledButton.styleFrom(
+                backgroundColor: _primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
             ),
           ],
@@ -2085,197 +2073,203 @@ class _ParentsScreenState extends State<ParentsScreen> {
     );
   }
 
-  // ============================================================
-  // COMMON WIDGETS
-  // ============================================================
+  Widget _buildEmpty() {
+    final hasFilters =
+        _searchController.text.trim().isNotEmpty ||
+        _selectedRelationship != 'All';
 
-  Widget _textField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-    int maxLines = 1,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: validator,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        alignLabelWithHint: maxLines > 1,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF111827),
-      ),
-    );
-  }
-
-  Widget _detailTile(IconData icon, String title, String value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF64748B)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(.08),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.groups_outlined,
+                color: _primary,
+                size: 34,
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoCard({
-    required String title,
-    required String value,
-    required IconData icon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF2563EB)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
+            const SizedBox(height: 18),
+            Text(
+              hasFilters ? 'No parents found' : 'No parents yet',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: _textPrimary,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 7),
+            Text(
+              hasFilters
+                  ? 'Try changing your search or filter.'
+                  : 'Add your first parent profile to get started.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+            if (hasFilters)
+              OutlinedButton.icon(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {
+                    _selectedRelationship = 'All';
+                  });
+                  _applyFilters();
+                },
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.clear_all_rounded),
+                label: const Text('Clear Filters'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: _showAddParentDialog,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add Parent'),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  // ============================================================
-  // VALIDATION
-  // ============================================================
+  String _getInitials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
 
-  String? _phoneValidator(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Phone number is required';
+    if (parts.isEmpty) return 'P';
+
+    if (parts.length == 1) {
+      return parts.first
+          .substring(0, parts.first.length >= 2 ? 2 : 1)
+          .toUpperCase();
     }
 
-    final phone = value.trim();
-
-    if (!RegExp(r'^[0-9]{10}$').hasMatch(phone)) {
-      return 'Enter valid 10-digit phone';
-    }
-
-    return null;
-  }
-
-  String? _emailValidator(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null;
-    }
-
-    final email = value.trim();
-
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      return 'Enter valid email';
-    }
-
-    return null;
-  }
-
-  // ============================================================
-  // MESSAGES
-  // ============================================================
-
-  String _cleanError(Object error) {
-    final message = error.toString();
-
-    if (message.startsWith('Exception: ')) {
-      return message.substring(11);
-    }
-
-    return message;
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 
   void _showSuccess(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF16A34A),
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(child: Text(message)),
-            ],
-          ),
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF166534),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   void _showError(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFDC2626),
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(child: Text(message)),
-            ],
-          ),
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFFB91C1C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _background,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontalPadding = constraints.maxWidth >= 1200
+                ? 28.0
+                : constraints.maxWidth >= 700
+                ? 20.0
+                : 14.0;
+
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1450),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    18,
+                    horizontalPadding,
+                    18,
+                  ),
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 18),
+                      _buildSummaryCards(),
+                      const SizedBox(height: 18),
+                      Expanded(child: _buildMainContent()),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryData {
+  final String title;
+  final String value;
+  final IconData icon;
+  final String description;
+
+  const _SummaryData({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.description,
+  });
 }

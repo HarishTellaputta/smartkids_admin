@@ -1,18 +1,20 @@
 import 'package:dio/dio.dart';
 import '../models/subject_model.dart';
+import '../subject_performance_model.dart';
+
 class SubjectService {
   final Dio _dio;
 
   SubjectService(String token)
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-          ),
-        );
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://localhost:8080',
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
 
   // ============================================================
   // GET ALL SUBJECTS
@@ -26,17 +28,11 @@ class SubjectService {
       final List<dynamic> data = response.data;
 
       return data
-          .map(
-            (json) => SubjectModel.fromJson(
-              json as Map<String, dynamic>,
-            ),
-          )
+          .map((json) => SubjectModel.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
       throw Exception(
-        e.response?.data?.toString() ??
-            e.message ??
-            'Failed to load subjects',
+        e.response?.data?.toString() ?? e.message ?? 'Failed to load subjects',
       );
     }
   }
@@ -48,18 +44,12 @@ class SubjectService {
 
   Future<SubjectModel> getSubjectById(int id) async {
     try {
-      final response = await _dio.get(
-        '/api/v1/subjects/$id',
-      );
+      final response = await _dio.get('/api/v1/subjects/$id');
 
-      return SubjectModel.fromJson(
-        response.data as Map<String, dynamic>,
-      );
+      return SubjectModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw Exception(
-        e.response?.data?.toString() ??
-            e.message ??
-            'Failed to load subject',
+        e.response?.data?.toString() ?? e.message ?? 'Failed to load subject',
       );
     }
   }
@@ -69,22 +59,14 @@ class SubjectService {
   // GET /subjects/school/{schoolId}
   // ============================================================
 
-  Future<List<SubjectModel>> getSubjectsBySchool(
-    int schoolId,
-  ) async {
+  Future<List<SubjectModel>> getSubjectsBySchool(int schoolId) async {
     try {
-      final response = await _dio.get(
-        '/api/v1/subjects/school/$schoolId',
-      );
+      final response = await _dio.get('/api/v1/subjects/school/$schoolId');
 
       final List<dynamic> data = response.data;
 
       return data
-          .map(
-            (json) => SubjectModel.fromJson(
-              json as Map<String, dynamic>,
-            ),
-          )
+          .map((json) => SubjectModel.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
       throw Exception(
@@ -100,9 +82,7 @@ class SubjectService {
   // GET /subjects/school/{schoolId}/active
   // ============================================================
 
-  Future<List<SubjectModel>> getActiveSubjectsBySchool(
-    int schoolId,
-  ) async {
+  Future<List<SubjectModel>> getActiveSubjectsBySchool(int schoolId) async {
     try {
       final response = await _dio.get(
         '/api/v1/subjects/school/$schoolId/active',
@@ -111,11 +91,7 @@ class SubjectService {
       final List<dynamic> data = response.data;
 
       return data
-          .map(
-            (json) => SubjectModel.fromJson(
-              json as Map<String, dynamic>,
-            ),
-          )
+          .map((json) => SubjectModel.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
       throw Exception(
@@ -131,23 +107,17 @@ class SubjectService {
   // POST /subjects
   // ============================================================
 
-  Future<SubjectModel> createSubject(
-    SubjectModel subject,
-  ) async {
+  Future<SubjectModel> createSubject(SubjectModel subject) async {
     try {
       final response = await _dio.post(
         '/api/v1/subjects',
         data: subject.toJson(),
       );
 
-      return SubjectModel.fromJson(
-        response.data as Map<String, dynamic>,
-      );
+      return SubjectModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw Exception(
-        e.response?.data?.toString() ??
-            e.message ??
-            'Failed to create subject',
+        e.response?.data?.toString() ?? e.message ?? 'Failed to create subject',
       );
     }
   }
@@ -157,24 +127,17 @@ class SubjectService {
   // PUT /subjects/{id}
   // ============================================================
 
-  Future<SubjectModel> updateSubject(
-    int id,
-    SubjectModel subject,
-  ) async {
+  Future<SubjectModel> updateSubject(int id, SubjectModel subject) async {
     try {
       final response = await _dio.put(
         '/api/v1/subjects/$id',
         data: subject.toJson(),
       );
 
-      return SubjectModel.fromJson(
-        response.data as Map<String, dynamic>,
-      );
+      return SubjectModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw Exception(
-        e.response?.data?.toString() ??
-            e.message ??
-            'Failed to update subject',
+        e.response?.data?.toString() ?? e.message ?? 'Failed to update subject',
       );
     }
   }
@@ -186,14 +149,33 @@ class SubjectService {
 
   Future<void> deleteSubject(int id) async {
     try {
-      await _dio.delete(
-        '/api/v1/subjects/$id',
+      await _dio.delete('/api/v1/subjects/$id');
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?.toString() ?? e.message ?? 'Failed to delete subject',
       );
+    }
+  }
+
+  Future<List<SubjectPerformanceModel>> getSubjectPerformance(
+    int subjectId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '/api/v1/subjects/$subjectId/performance',
+      );
+      final List<dynamic> data = response.data;
+      return data
+          .map(
+            (json) =>
+                SubjectPerformanceModel.fromJson(json as Map<String, dynamic>),
+          )
+          .toList();
     } on DioException catch (e) {
       throw Exception(
         e.response?.data?.toString() ??
             e.message ??
-            'Failed to delete subject',
+            'Failed to load subject performance',
       );
     }
   }

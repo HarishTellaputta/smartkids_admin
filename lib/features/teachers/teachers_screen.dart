@@ -15,6 +15,9 @@ import 'dialogs/teacher_filter_dialog.dart';
 import 'dialogs/teacher_details_dialog.dart';
 import 'dialogs/assign_class_dialog.dart';
 import 'dialogs/assign_class_dialog.dart';
+import '../teachers/teacher_details_screen.dart';
+
+import 'package:smartkids_admin/features/teachers/models/teacher_assignment_model.dart';
 
 class TeachersScreen extends StatefulWidget {
   const TeachersScreen({super.key});
@@ -276,23 +279,23 @@ class _TeachersScreenState extends State<TeachersScreen> {
 
     if (!mounted) return;
 
-    await showDialog(
-      context: context,
-      builder: (_) {
-        return TeacherDetailsDialog(
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeacherDetailsScreen(
           teacher: teacher,
           assignmentService: _assignmentService!,
           classes: _classes,
           onAssignClass: () async {
-            final assigned = await _showAssignClassDialog(teacher);
-
-            return assigned;
+            return await _showAssignClassDialog(teacher);
           },
-        );
-      },
+        ),
+      ),
     );
-  }
 
+    // Return అయిన తర్వాత assignments/table refresh కావాలంటే
+    await _loadTeachers();
+  }
   // ============================================================
   // ASSIGN CLASS
   // ============================================================
@@ -308,6 +311,23 @@ class _TeachersScreenState extends State<TeachersScreen> {
 
     if (!mounted) return false;
 
+    // Load this teacher's existing class-subject assignments
+    List<TeacherAssignment> assignments = [];
+
+    try {
+      assignments = await _assignmentService!.getAssignmentsByTeacher(
+        teacher.id!,
+      );
+    } catch (e) {
+      if (!mounted) return false;
+
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
+
+      return false;
+    }
+
+    if (!mounted) return false;
+
     final assigned = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -316,8 +336,9 @@ class _TeachersScreenState extends State<TeachersScreen> {
           teacher: teacher,
           classes: _classes,
           assignmentService: _assignmentService!,
-          classService: _classService!, // ADD THIS
+          classService: _classService!,
           isLoadingClasses: _isLoadingClasses,
+          existingAssignments: assignments,
         );
       },
     );
@@ -328,7 +349,6 @@ class _TeachersScreenState extends State<TeachersScreen> {
 
     return assigned == true;
   }
-
   // ============================================================
   // DELETE TEACHER
   // ============================================================
@@ -796,6 +816,9 @@ class _TeachersScreenState extends State<TeachersScreen> {
           ],
           rows: _filteredTeachers.map((teacher) {
             return DataRow(
+              onSelectChanged: (_) {
+                _showTeacherDetails(teacher);
+              },
               cells: [
                 DataCell(_teacherCell(teacher)),
                 DataCell(Text(teacher.employeeId ?? '-')),

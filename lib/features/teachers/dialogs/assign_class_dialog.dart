@@ -6,12 +6,15 @@ import '../models/teacher_model.dart';
 import '../services/class_service.dart';
 import '../services/teacher_assignment_service.dart';
 
+import 'package:smartkids_admin/features/teachers/models/teacher_assignment_model.dart';
+
 class AssignClassDialog extends StatefulWidget {
   final Teacher teacher;
   final List<SchoolClass> classes;
   final TeacherAssignmentService assignmentService;
   final ClassService classService;
   final bool isLoadingClasses;
+  final List<TeacherAssignment> existingAssignments;
 
   const AssignClassDialog({
     super.key,
@@ -20,6 +23,7 @@ class AssignClassDialog extends StatefulWidget {
     required this.assignmentService,
     required this.classService,
     required this.isLoadingClasses,
+    required this.existingAssignments,
   });
 
   @override
@@ -78,8 +82,39 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_cleanError(e))));
+      ).showSnackBar(
+        SnackBar(content: Text(_cleanError(e))),
+      );
     }
+  }
+
+  // ------------------------------------------------------------
+  // RETURNS ONLY SUBJECTS WHICH ARE NOT ALREADY ASSIGNED
+  // TO THIS TEACHER FOR THE SELECTED CLASS
+  // ------------------------------------------------------------
+  List<ClassSubjectModel> _availableSubjects() {
+    if (selectedClass?.id == null) {
+      return [];
+    }
+
+    final selectedClassId = selectedClass!.id!;
+
+    final assignedSubjectIds = widget.existingAssignments
+        .where(
+          (assignment) =>
+              assignment.classId == selectedClassId,
+        )
+        .map(
+          (assignment) => assignment.subjectId,
+        )
+        .toSet();
+
+    return _subjects
+        .where(
+          (subject) =>
+              !assignedSubjectIds.contains(subject.subjectId),
+        )
+        .toList();
   }
 
   Future<void> _assignClass() async {
@@ -136,7 +171,9 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   String _cleanError(Object error) {
@@ -185,7 +222,9 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
     return AlertDialog(
       title: const Text(
         'Assign Class & Subject',
-        style: TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
       ),
       content: SizedBox(
         width: 430,
@@ -195,6 +234,7 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _teacherInfo(),
+
               const SizedBox(height: 20),
 
               _classDropdown(),
@@ -220,12 +260,15 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _isSaving || _isLoadingSubjects ? null : _assignClass,
+          onPressed:
+              _isSaving || _isLoadingSubjects ? null : _assignClass,
           child: _isSaving
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
                 )
               : const Text('Assign'),
         ),
@@ -234,9 +277,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
   }
 
   Widget _teacherInfo() {
-    final teacherName = widget.teacher.name?.trim().isNotEmpty == true
-        ? widget.teacher.name!.trim()
-        : 'Teacher';
+    final teacherName =
+        widget.teacher.name?.trim().isNotEmpty == true
+            ? widget.teacher.name!.trim()
+            : 'Teacher';
 
     return Container(
       width: double.infinity,
@@ -244,26 +288,37 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       decoration: BoxDecoration(
         color: Colors.blue.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: Colors.blue.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 22,
             child: Text(
-              teacherName.isNotEmpty ? teacherName[0].toUpperCase() : 'T',
+              teacherName.isNotEmpty
+                  ? teacherName[0].toUpperCase()
+                  : 'T',
             ),
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Teacher',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
                 ),
+
                 const SizedBox(height: 2),
+
                 Text(
                   teacherName,
                   style: const TextStyle(
@@ -289,14 +344,22 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
         prefixIcon: Icon(Icons.class_rounded),
         border: OutlineInputBorder(),
       ),
-      items: widget.classes.where((schoolClass) => schoolClass.id != null).map((
-        schoolClass,
-      ) {
-        return DropdownMenuItem<int>(
-          value: schoolClass.id!,
-          child: Text(_className(schoolClass), overflow: TextOverflow.ellipsis),
-        );
-      }).toList(),
+      items: widget.classes
+          .where(
+            (schoolClass) => schoolClass.id != null,
+          )
+          .map(
+            (schoolClass) {
+              return DropdownMenuItem<int>(
+                value: schoolClass.id!,
+                child: Text(
+                  _className(schoolClass),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            },
+          )
+          .toList(),
       onChanged: widget.isLoadingClasses || _isSaving
           ? null
           : (classId) {
@@ -337,10 +400,14 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
             SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
             ),
             SizedBox(width: 12),
-            Expanded(child: Text('Loading subjects...')),
+            Expanded(
+              child: Text('Loading subjects...'),
+            ),
           ],
         ),
       );
@@ -360,6 +427,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       );
     }
 
+    // IMPORTANT:
+    // Filter already assigned subjects.
+    final availableSubjects = _availableSubjects();
+
     if (_subjects.isEmpty) {
       return InputDecorator(
         decoration: const InputDecoration(
@@ -369,7 +440,26 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
         ),
         child: const Text(
           'No subjects assigned to this class',
-          style: TextStyle(color: Colors.redAccent),
+          style: TextStyle(
+            color: Colors.redAccent,
+          ),
+        ),
+      );
+    }
+
+    if (availableSubjects.isEmpty) {
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Subject',
+          prefixIcon: Icon(Icons.menu_book_rounded),
+          border: OutlineInputBorder(),
+        ),
+        child: const Text(
+          'All subjects are already assigned to this teacher for this class',
+          style: TextStyle(
+            color: Colors.orange,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       );
     }
@@ -383,15 +473,17 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
         prefixIcon: Icon(Icons.menu_book_rounded),
         border: OutlineInputBorder(),
       ),
-      items: _subjects.map((subject) {
-        return DropdownMenuItem<int>(
-          value: subject.subjectId,
-          child: Text(
-            _subjectDisplayName(subject),
-            overflow: TextOverflow.ellipsis,
-          ),
-        );
-      }).toList(),
+      items: availableSubjects.map(
+        (subject) {
+          return DropdownMenuItem<int>(
+            value: subject.subjectId,
+            child: Text(
+              _subjectDisplayName(subject),
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        },
+      ).toList(),
       onChanged: _isSaving
           ? null
           : (subjectId) {
@@ -399,7 +491,7 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
               ClassSubjectModel? selected;
 
-              for (final subject in _subjects) {
+              for (final subject in availableSubjects) {
                 if (subject.subjectId == subjectId) {
                   selected = subject;
                   break;
@@ -426,14 +518,23 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, size: 20, color: Colors.grey),
+          Icon(
+            Icons.info_outline,
+            size: 20,
+            color: Colors.grey,
+          ),
+
           SizedBox(width: 8),
+
           Expanded(
             child: Text(
-              'Only subjects already assigned to the selected class '
-              'will appear here. The teacher will be assigned to the '
-              'selected class and subject.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              'Only subjects assigned to the selected class '
+              'and not already assigned to this teacher will '
+              'appear here.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
             ),
           ),
         ],

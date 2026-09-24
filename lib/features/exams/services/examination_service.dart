@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import '../models/examination_model.dart';
 import '../models/exam_result_model.dart';
-
+import 'package:smartkids_admin/features/teachers/models/teacher_performance_model.dart';
 
 class ExaminationService {
   final Dio _dio;
@@ -409,6 +409,23 @@ class ExaminationService {
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     }
+  }
+
+  Future<List<TeacherPerformance>> getTeacherPerformance(int teacherId) async {
+    final response = await _dio.get('/api/v1/teachers/$teacherId/performance');
+
+    final data = response.data;
+
+    if (data is List) {
+      return data
+          .map(
+            (json) =>
+                TeacherPerformance.fromJson(Map<String, dynamic>.from(json)),
+          )
+          .toList();
+    }
+
+    return [];
   }
 
   // ============================================================

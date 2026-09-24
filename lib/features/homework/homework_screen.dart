@@ -40,17 +40,18 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   }
 
   // ============================================================
-  // LOAD HOMEWORK
+  // LOAD
   // ============================================================
 
   Future<void> _loadHomework() async {
-    setState(() {
-      isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+      });
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final token = prefs.getString('jwt_token');
 
       if (token == null || token.isEmpty) {
@@ -94,10 +95,9 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
           (homework.sectionName ?? '').toLowerCase().contains(query) ||
           (homework.assignedByTeacherName ?? '').toLowerCase().contains(query);
 
-      final classDisplay = _classDisplay(homework);
-
       final matchesClass =
-          selectedClass == 'All Classes' || classDisplay == selectedClass;
+          selectedClass == 'All Classes' ||
+          _classDisplay(homework) == selectedClass;
 
       final matchesSubject =
           selectedSubject == 'All Subjects' ||
@@ -129,11 +129,10 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         .length;
   }
 
-  double get submissionPercentage {
-    // HomeworkResponseDto does not contain submission count.
-    // Therefore we cannot calculate real submission rate
-    // from the current Homework APIs.
-    return 0;
+  int get closedCount {
+    return homeworkList
+        .where((item) => _displayStatus(item.status) == 'Closed')
+        .length;
   }
 
   // ============================================================
@@ -144,12 +143,12 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     required int classId,
     int? sectionId,
     required int teacherId,
-    required String subject,
+    String? subject,
     required String title,
-    required String description,
+    String? description,
     required String dueDate,
-    required String status,
-    required String priority,
+    String? status,
+    String? priority,
   }) async {
     setState(() {
       isSaving = true;
@@ -197,106 +196,91 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   }
 
   // ============================================================
-  // UPDATE
-  // ============================================================
-
-  Future<void> _updateHomework({
-    required int id,
-    required int classId,
-    int? sectionId,
-    required int teacherId,
-    required String subject,
-    required String title,
-    required String description,
-    required String dueDate,
-    required String status,
-    required String priority,
-  }) async {
-    setState(() {
-      isSaving = true;
-    });
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
-
-      if (token == null || token.isEmpty) {
-        throw Exception('JWT token not found.');
-      }
-
-      _service.setToken(token);
-
-      final updated = await _service.updateHomework(
-        id: id,
-        classId: classId,
-        sectionId: sectionId,
-        teacherId: teacherId,
-        subject: subject,
-        title: title,
-        description: description,
-        dueDate: dueDate,
-        status: status,
-        priority: priority,
-      );
-
-      if (!mounted) return;
-
-      final index = homeworkList.indexWhere((item) => item.id == id);
-
-      if (index != -1) {
-        setState(() {
-          homeworkList[index] = updated;
-        });
-      }
-
-      setState(() {
-        isSaving = false;
-      });
-
-      _showSuccess('Homework updated successfully.');
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isSaving = false;
-      });
-
-      _showError(e.toString());
-    }
-  }
-
-  // ============================================================
   // DELETE
   // ============================================================
 
   Future<void> _deleteHomework(HomeworkModel homework) async {
-    final id = homework.id;
-
-    if (id == null) return;
+    if (homework.id == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete Homework?'),
-          content: Text(
-            'Are you sure you want to delete '
-            '"${homework.title ?? ''}"?',
+      builder: (dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+          child: Padding(
+            padding: const EdgeInsets.all(26),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1F2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Delete Homework?',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Are you sure you want to delete "${homework.title ?? '-'}"?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Delete'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Delete'),
-            ),
-          ],
+          ),
         );
       },
     );
@@ -313,12 +297,12 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
 
       _service.setToken(token);
 
-      await _service.deleteHomework(id);
+      await _service.deleteHomework(homework.id!);
 
       if (!mounted) return;
 
       setState(() {
-        homeworkList.removeWhere((item) => item.id == id);
+        homeworkList.removeWhere((item) => item.id == homework.id);
       });
 
       _showSuccess('Homework deleted successfully.');
@@ -332,7 +316,13 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   // ============================================================
 
   Future<void> _publishHomework(HomeworkModel homework) async {
-    if (homework.id == null) return;
+    if (homework.id == null ||
+        homework.classId == null ||
+        homework.assignedByTeacherId == null ||
+        homework.dueDate == null) {
+      _showError('Required homework information is missing.');
+      return;
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -349,12 +339,13 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         classId: homework.classId!,
         sectionId: homework.sectionId,
         teacherId: homework.assignedByTeacherId!,
-        subject: homework.subject ?? '',
+        subject: homework.subject,
         title: homework.title ?? '',
-        description: homework.description ?? '',
+        description: homework.description,
         dueDate: homework.dueDate!,
         status: 'ACTIVE',
-        priority: homework.priority ?? 'MEDIUM',
+        attachmentUrl: homework.attachmentUrl,
+        priority: homework.priority,
       );
 
       if (!mounted) return;
@@ -374,277 +365,6 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   }
 
   // ============================================================
-  // CREATE DIALOG
-  // ============================================================
-
-  void _showAddHomeworkDialog() {
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    int? classId;
-    int? sectionId;
-    int? teacherId;
-
-    String subject = 'Mathematics';
-    String dueDate = _todayPlusOne();
-    String status = 'ACTIVE';
-    String priority = 'MEDIUM';
-
-    // Temporary dropdown data until your actual Class,
-    // Section and Teacher API response is connected.
-    final classOptions = <Map<String, dynamic>>[
-      {'id': 1, 'name': 'Class 1'},
-      {'id': 2, 'name': 'Class 2'},
-      {'id': 3, 'name': 'Class 3'},
-      {'id': 4, 'name': 'Class 4'},
-      {'id': 5, 'name': 'Class 5'},
-    ];
-
-    final teacherOptions = <Map<String, dynamic>>[
-      {'id': 10, 'name': 'Teacher 10'},
-    ];
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text(
-                'Create Homework',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              content: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _dialogTextField(
-                        controller: titleController,
-                        label: 'Homework Title',
-                        hint: 'Enter homework title',
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      _dialogTextField(
-                        controller: descriptionController,
-                        label: 'Description',
-                        hint: 'Enter homework instructions',
-                        maxLines: 3,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      DropdownButtonFormField<int>(
-                        value: classId,
-                        decoration: _dialogDecoration('Class'),
-                        items: classOptions.map((item) {
-                          return DropdownMenuItem<int>(
-                            value: item['id'] as int,
-                            child: Text(item['name']),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            classId = value;
-                            sectionId = null;
-                          });
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      DropdownButtonFormField<int>(
-                        value: sectionId,
-                        decoration: _dialogDecoration('Section (Optional)'),
-                        items: const [
-                          DropdownMenuItem(value: 1, child: Text('A')),
-                          DropdownMenuItem(value: 2, child: Text('B')),
-                        ],
-                        onChanged: (value) {
-                          setDialogState(() {
-                            sectionId = value;
-                          });
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      DropdownButtonFormField<int>(
-                        value: teacherId,
-                        decoration: _dialogDecoration('Teacher'),
-                        items: teacherOptions.map((item) {
-                          return DropdownMenuItem<int>(
-                            value: item['id'] as int,
-                            child: Text(item['name']),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            teacherId = value;
-                          });
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      DropdownButtonFormField<String>(
-                        value: subject,
-                        decoration: _dialogDecoration('Subject'),
-                        items:
-                            const [
-                              'Mathematics',
-                              'English',
-                              'Science',
-                              'Telugu',
-                              'Social Studies',
-                            ].map((value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              subject = value;
-                            });
-                          }
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      TextFormField(
-                        readOnly: true,
-                        controller: TextEditingController(text: dueDate),
-                        decoration: _dialogDecoration('Due Date').copyWith(
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 18,
-                          ),
-                        ),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: DateTime.now().add(
-                              const Duration(days: 1),
-                            ),
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime(2035),
-                          );
-
-                          if (picked != null) {
-                            setDialogState(() {
-                              dueDate =
-                                  '${picked.year}-'
-                                  '${picked.month.toString().padLeft(2, '0')}-'
-                                  '${picked.day.toString().padLeft(2, '0')}';
-                            });
-                          }
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      DropdownButtonFormField<String>(
-                        value: priority,
-                        decoration: _dialogDecoration('Priority'),
-                        items: const ['LOW', 'MEDIUM', 'HIGH'].map((value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              priority = value;
-                            });
-                          }
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      DropdownButtonFormField<String>(
-                        value: status,
-                        decoration: _dialogDecoration('Status'),
-                        items: const ['ACTIVE', 'DRAFT', 'CLOSED'].map((value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              status = value;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          if (titleController.text.trim().isEmpty) {
-                            _showError('Homework title is required.');
-                            return;
-                          }
-
-                          if (classId == null) {
-                            _showError('Please select a class.');
-                            return;
-                          }
-
-                          if (teacherId == null) {
-                            _showError('Please select a teacher.');
-                            return;
-                          }
-
-                          Navigator.pop(dialogContext);
-
-                          await _createHomework(
-                            classId: classId!,
-                            sectionId: sectionId,
-                            teacherId: teacherId!,
-                            subject: subject,
-                            title: titleController.text.trim(),
-                            description: descriptionController.text.trim(),
-                            dueDate: dueDate,
-                            status: status,
-                            priority: priority,
-                          );
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Create Homework'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ============================================================
   // DETAILS
   // ============================================================
 
@@ -654,12 +374,10 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     if (homework.id != null) {
       try {
         final prefs = await SharedPreferences.getInstance();
-
         final token = prefs.getString('jwt_token');
 
         if (token != null && token.isNotEmpty) {
           _service.setToken(token);
-
           details = await _service.getHomeworkById(homework.id!);
         }
       } catch (_) {}
@@ -669,41 +387,189 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            details.title ?? 'Homework',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
           ),
-          content: SizedBox(
-            width: 450,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
             child: SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _detailRow('Class', _classDisplay(details)),
-                  _detailRow('Subject', details.subject ?? '-'),
-                  _detailRow('Teacher', details.assignedByTeacherName ?? '-'),
-                  _detailRow('Employee ID', details.teacherEmployeeId ?? '-'),
-                  _detailRow('Assigned Date', _formatDate(details.createdAt)),
-                  _detailRow('Due Date', _formatDate(details.dueDate)),
-                  _detailRow('Priority', details.priority ?? '-'),
-                  _detailRow('Status', _displayStatus(details.status)),
-                  if ((details.description ?? '').isNotEmpty)
-                    _detailRow('Description', details.description!),
-                  if ((details.attachmentUrl ?? '').isNotEmpty)
-                    _detailRow('Attachment', details.attachmentUrl!),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.assignment_outlined,
+                          color: Color(0xFF2563EB),
+                          size: 27,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              details.title ?? 'Homework',
+                              style: const TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _classDisplay(details),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _statusBadge(details.status),
+                    ],
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  _sectionTitle(
+                    'Homework Information',
+                    Icons.info_outline_rounded,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  _detailGrid([
+                    _infoItem(
+                      'Class',
+                      _classDisplay(details),
+                      Icons.school_outlined,
+                    ),
+                    _infoItem(
+                      'Subject',
+                      details.subject ?? '-',
+                      Icons.menu_book_outlined,
+                    ),
+                    _infoItem(
+                      'Teacher',
+                      details.assignedByTeacherName ?? '-',
+                      Icons.person_outline,
+                    ),
+                    _infoItem(
+                      'Employee ID',
+                      details.teacherEmployeeId ?? '-',
+                      Icons.badge_outlined,
+                    ),
+                    _infoItem(
+                      'Assigned Date',
+                      _formatDate(details.createdAt),
+                      Icons.event_outlined,
+                    ),
+                    _infoItem(
+                      'Due Date',
+                      _formatDate(details.dueDate),
+                      Icons.calendar_today_outlined,
+                    ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
+                  _sectionTitle('Priority & Status', Icons.flag_outlined),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      _priorityBadge(details.priority),
+                      const SizedBox(width: 10),
+                      _statusBadge(details.status),
+                    ],
+                  ),
+
+                  if ((details.description ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _sectionTitle('Description', Icons.notes_outlined),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Text(
+                        details.description!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.5,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  if ((details.attachmentUrl ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _sectionTitle('Attachment', Icons.attach_file_rounded),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: SelectableText(
+                        details.attachmentUrl!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 28),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF111827),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 13,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
         );
       },
     );
@@ -721,15 +587,15 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         onRefresh: _loadHomework,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(),
               const SizedBox(height: 24),
-              _buildFilters(),
-              const SizedBox(height: 24),
               _buildSummaryCards(),
+              const SizedBox(height: 24),
+              _buildFilters(),
               const SizedBox(height: 24),
               _buildHomeworkTable(),
             ],
@@ -746,16 +612,38 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   Widget _buildHeader() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 650) {
+        final compact = constraints.maxWidth < 700;
+
+        final text = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Homework',
+              style: TextStyle(
+                fontSize: 29,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'Create, publish and manage student homework.',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          ],
+        );
+
+        if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [_headerText(), const SizedBox(height: 16), _addButton()],
+            children: [text, const SizedBox(height: 16), _addButton()],
           );
         }
 
         return Row(
           children: [
-            Expanded(child: _headerText()),
+            Expanded(child: text),
             _addButton(),
           ],
         );
@@ -763,38 +651,144 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
-  Widget _headerText() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Homework',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
-          ),
-        ),
-        const SizedBox(height: 7),
-        Text(
-          'Create, publish and manage student homework.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-        ),
-      ],
-    );
-  }
-
   Widget _addButton() {
     return ElevatedButton.icon(
       onPressed: _showAddHomeworkDialog,
-      icon: const Icon(Icons.add, size: 19),
-      label: const Text('Create Homework'),
+      icon: const Icon(Icons.add_rounded, size: 19),
+      label: const Text(
+        'Create Homework',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+      ),
+    );
+  }
+
+  // ============================================================
+  // SUMMARY CARDS
+  // ============================================================
+
+  Widget _buildSummaryCards() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int columns = 4;
+
+        if (constraints.maxWidth < 1050) {
+          columns = 2;
+        }
+
+        if (constraints.maxWidth < 620) {
+          columns = 1;
+        }
+
+        return GridView.count(
+          crossAxisCount: columns,
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: columns == 1 ? 4.2 : 2.15,
+          children: [
+            _summaryCard(
+              title: 'Total Homework',
+              value: '$totalHomework',
+              icon: Icons.assignment_outlined,
+              color: const Color(0xFF2563EB),
+              background: const Color(0xFFEFF6FF),
+            ),
+            _summaryCard(
+              title: 'Published',
+              value: '$publishedCount',
+              icon: Icons.publish_outlined,
+              color: const Color(0xFF15803D),
+              background: const Color(0xFFF0FDF4),
+            ),
+            _summaryCard(
+              title: 'Drafts',
+              value: '$draftCount',
+              icon: Icons.edit_note_outlined,
+              color: const Color(0xFFD97706),
+              background: const Color(0xFFFFFBEB),
+            ),
+            _summaryCard(
+              title: 'Closed',
+              value: '$closedCount',
+              icon: Icons.archive_outlined,
+              color: const Color(0xFF7C3AED),
+              background: const Color(0xFFF5F3FF),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _summaryCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required Color background,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -809,12 +803,12 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < 750) {
+          if (constraints.maxWidth < 800) {
             return Column(
               children: [
                 _searchBox(),
@@ -849,7 +843,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       height: 46,
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: TextField(
@@ -860,10 +854,11 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
           });
         },
         decoration: const InputDecoration(
-          hintText: 'Search homework...',
+          hintText: 'Search homework, teacher, subject...',
           hintStyle: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-          prefixIcon: Icon(Icons.search, size: 19),
+          prefixIcon: Icon(Icons.search_rounded, size: 19),
           border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(vertical: 13),
         ),
       ),
     );
@@ -899,8 +894,10 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     final subjects = <String>{'All Subjects'};
 
     for (final item in homeworkList) {
-      if ((item.subject ?? '').trim().isNotEmpty) {
-        subjects.add(item.subject!.trim());
+      final value = item.subject?.trim() ?? '';
+
+      if (value.isNotEmpty) {
+        subjects.add(value);
       }
     }
 
@@ -938,134 +935,29 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   }) {
     return Container(
       height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isExpanded: true,
           value: value,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 19),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
           items: items.map((item) {
-            return DropdownMenuItem(
+            return DropdownMenuItem<String>(
               value: item,
-              child: Text(item, style: const TextStyle(fontSize: 12)),
+              child: Text(
+                item,
+                style: const TextStyle(fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: onChanged,
         ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // SUMMARY
-  // ============================================================
-
-  Widget _buildSummaryCards() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        int columns = 4;
-
-        if (constraints.maxWidth < 1000) {
-          columns = 2;
-        }
-
-        if (constraints.maxWidth < 600) {
-          columns = 1;
-        }
-
-        return GridView.count(
-          crossAxisCount: columns,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: columns == 1 ? 4 : 2.4,
-          children: [
-            _summaryCard(
-              'Total Homework',
-              '$totalHomework',
-              Icons.menu_book_outlined,
-              const Color(0xFF2563EB),
-              const Color(0xFFEFF6FF),
-            ),
-            _summaryCard(
-              'Published',
-              '$publishedCount',
-              Icons.publish_outlined,
-              const Color(0xFF15803D),
-              const Color(0xFFF0FDF4),
-            ),
-            _summaryCard(
-              'Drafts',
-              '$draftCount',
-              Icons.edit_note_outlined,
-              const Color(0xFFD97706),
-              const Color(0xFFFFFBEB),
-            ),
-            _summaryCard(
-              'Submission Rate',
-              'N/A',
-              Icons.bar_chart_outlined,
-              const Color(0xFF7C3AED),
-              const Color(0xFFF5F3FF),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _summaryCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-    Color background,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1082,33 +974,62 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              const Icon(
+                Icons.assignment_outlined,
+                size: 19,
+                color: Color(0xFF2563EB),
+              ),
+              const SizedBox(width: 9),
               const Text(
                 'Homework List',
                 style: TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                   color: Color(0xFF111827),
                 ),
               ),
               const Spacer(),
-              Text(
-                '${data.length} records',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${data.length} records',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
               ),
             ],
           ),
+
           const SizedBox(height: 18),
+
           if (isLoading)
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 60),
+              padding: EdgeInsets.symmetric(vertical: 70),
               child: Center(child: CircularProgressIndicator()),
             )
           else if (data.isEmpty)
@@ -1125,10 +1046,12 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       scrollDirection: Axis.horizontal,
       child: DataTable(
         columnSpacing: 28,
-        horizontalMargin: 10,
+        horizontalMargin: 8,
         dataRowMinHeight: 72,
         dataRowMaxHeight: 82,
-        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
+        headingRowHeight: 48,
+        dividerThickness: 0.5,
+        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF8FAFC)),
         columns: const [
           DataColumn(label: Text('Homework')),
           DataColumn(label: Text('Class')),
@@ -1141,12 +1064,18 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         ],
         rows: data.map((homework) {
           return DataRow(
+            onSelectChanged: (_) {
+              _showHomeworkDetails(homework);
+            },
             cells: [
               DataCell(_homeworkCell(homework)),
               DataCell(
                 Text(
                   _classDisplay(homework),
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               DataCell(_subjectBadge(homework.subject ?? '-')),
@@ -1174,15 +1103,15 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
 
   Widget _homeworkCell(HomeworkModel homework) {
     return SizedBox(
-      width: 210,
+      width: 220,
       child: Row(
         children: [
           Container(
-            height: 40,
             width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(11),
             ),
             child: const Icon(
               Icons.assignment_outlined,
@@ -1202,12 +1131,15 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
-                  homework.assignedByTeacherName ?? '-',
+                  homework.sectionName?.isNotEmpty == true
+                      ? 'Section ${homework.sectionName}'
+                      : 'All sections',
                   style: const TextStyle(
                     fontSize: 10,
                     color: Color(0xFF9CA3AF),
@@ -1221,12 +1153,65 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     );
   }
 
+  // ============================================================
+  // ACTIONS
+  // ============================================================
+
+  Widget _actionButtons(HomeworkModel homework) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _iconAction(
+          tooltip: 'View',
+          icon: Icons.visibility_outlined,
+          onPressed: () => _showHomeworkDetails(homework),
+        ),
+
+        if ((homework.status ?? '').toUpperCase() == 'DRAFT')
+          _iconAction(
+            tooltip: 'Publish',
+            icon: Icons.publish_outlined,
+            iconColor: const Color(0xFF15803D),
+            onPressed: () => _publishHomework(homework),
+          ),
+
+        _iconAction(
+          tooltip: 'Delete',
+          icon: Icons.delete_outline_rounded,
+          iconColor: const Color(0xFFDC2626),
+          onPressed: () => _deleteHomework(homework),
+        ),
+      ],
+    );
+  }
+
+  Widget _iconAction({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onPressed,
+    Color? iconColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 2),
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        splashRadius: 20,
+        icon: Icon(icon, size: 18, color: iconColor ?? const Color(0xFF4B5563)),
+      ),
+    );
+  }
+
+  // ============================================================
+  // BADGES
+  // ============================================================
+
   Widget _subjectBadge(String subject) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         subject,
@@ -1242,8 +1227,8 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   Widget _priorityBadge(String? priority) {
     final value = priority ?? '-';
 
-    Color color;
-    Color background;
+    late Color color;
+    late Color background;
 
     switch (value.toUpperCase()) {
       case 'HIGH':
@@ -1276,7 +1261,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         value,
         style: TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),
@@ -1286,8 +1271,8 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
   Widget _statusBadge(String? status) {
     final display = _displayStatus(status);
 
-    Color color;
-    Color background;
+    late Color color;
+    late Color background;
 
     switch (display) {
       case 'Published':
@@ -1311,7 +1296,7 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
@@ -1320,50 +1305,102 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
         display,
         style: TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),
     );
   }
 
-  Widget _actionButtons(HomeworkModel homework) {
+  // ============================================================
+  // DETAILS HELPERS
+  // ============================================================
+
+  Widget _sectionTitle(String title, IconData icon) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          tooltip: 'View',
-          onPressed: () {
-            _showHomeworkDetails(homework);
-          },
-          icon: const Icon(Icons.visibility_outlined, size: 18),
-        ),
-
-        if ((homework.status ?? '').toUpperCase() == 'DRAFT')
-          IconButton(
-            tooltip: 'Publish',
-            onPressed: () {
-              _publishHomework(homework);
-            },
-            icon: const Icon(
-              Icons.publish_outlined,
-              size: 18,
-              color: Color(0xFF15803D),
-            ),
-          ),
-
-        IconButton(
-          tooltip: 'Delete',
-          onPressed: () {
-            _deleteHomework(homework);
-          },
-          icon: const Icon(
-            Icons.delete_outline,
-            size: 18,
-            color: Color(0xFFDC2626),
+        Icon(icon, size: 17, color: const Color(0xFF2563EB)),
+        const SizedBox(width: 7),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111827),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _detailGrid(List<Widget> children) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth > 500;
+
+        if (!twoColumns) {
+          return Column(
+            children: children
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: item,
+                  ),
+                )
+                .toList(),
+          );
+        }
+
+        return GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 3.2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: children,
+        );
+      },
+    );
+  }
+
+  Widget _infoItem(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: const Color(0xFF6B7280)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 9, color: Color(0xFF9CA3AF)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1419,19 +1456,448 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     }
   }
 
-  String _todayPlusOne() {
-    final date = DateTime.now().add(const Duration(days: 1));
+  // ============================================================
+  // EMPTY
+  // ============================================================
 
-    return '${date.year}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
+  Widget _emptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 70),
+      child: Center(
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.assignment_outlined,
+                size: 34,
+                color: Color(0xFF9CA3AF),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No homework found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF374151),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Try changing your filters or create new homework.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ADD DIALOG
+  // ============================================================
+
+  void _showAddHomeworkDialog() {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+
+    int? classId;
+    int? sectionId;
+    int? teacherId;
+
+    String subject = 'Mathematics';
+    String dueDate = _tomorrow();
+    String status = 'ACTIVE';
+    String priority = 'MEDIUM';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 620,
+                  maxHeight: 760,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.assignment_outlined,
+                              color: Color(0xFF2563EB),
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 13),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Create Homework',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Create a new assignment for students.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 26),
+
+                      _dialogTextField(
+                        controller: titleController,
+                        label: 'Homework Title',
+                        hint: 'Enter homework title',
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      _dialogTextField(
+                        controller: descriptionController,
+                        label: 'Description',
+                        hint: 'Enter homework instructions',
+                        maxLines: 4,
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      _dialogDropdown<int>(
+                        label: 'Class',
+                        value: classId,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('Class 1')),
+                          DropdownMenuItem(value: 2, child: Text('Class 2')),
+                          DropdownMenuItem(value: 3, child: Text('Class 3')),
+                          DropdownMenuItem(value: 4, child: Text('Class 4')),
+                          DropdownMenuItem(value: 5, child: Text('Class 5')),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            classId = value;
+                            sectionId = null;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      _dialogDropdown<int>(
+                        label: 'Section (Optional)',
+                        value: sectionId,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('A')),
+                          DropdownMenuItem(value: 2, child: Text('B')),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            sectionId = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      _dialogDropdown<int>(
+                        label: 'Teacher',
+                        value: teacherId,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 10,
+                            child: Text('Teacher 10'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            teacherId = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      _dialogDropdown<String>(
+                        label: 'Subject',
+                        value: subject,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'Mathematics',
+                            child: Text('Mathematics'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'English',
+                            child: Text('English'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Science',
+                            child: Text('Science'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Telugu',
+                            child: Text('Telugu'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Social Studies',
+                            child: Text('Social Studies'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          setDialogState(() {
+                            subject = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      TextFormField(
+                        readOnly: true,
+                        controller: TextEditingController(text: dueDate),
+                        decoration: _dialogDecoration('Due Date').copyWith(
+                          suffixIcon: const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 18,
+                          ),
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now().add(
+                              const Duration(days: 1),
+                            ),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime(2035),
+                          );
+
+                          if (picked != null) {
+                            setDialogState(() {
+                              dueDate =
+                                  '${picked.year}-'
+                                  '${picked.month.toString().padLeft(2, '0')}-'
+                                  '${picked.day.toString().padLeft(2, '0')}';
+                            });
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _dialogDropdown<String>(
+                              label: 'Priority',
+                              value: priority,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'LOW',
+                                  child: Text('Low'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'MEDIUM',
+                                  child: Text('Medium'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'HIGH',
+                                  child: Text('High'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) {
+                                  return;
+                                }
+
+                                setDialogState(() {
+                                  priority = value;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _dialogDropdown<String>(
+                              label: 'Status',
+                              value: status,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'ACTIVE',
+                                  child: Text('Published'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'DRAFT',
+                                  child: Text('Draft'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'CLOSED',
+                                  child: Text('Closed'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) {
+                                  return;
+                                }
+
+                                setDialogState(() {
+                                  status = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.pop(dialogContext);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: isSaving
+                                  ? null
+                                  : () async {
+                                      if (titleController.text.trim().isEmpty) {
+                                        _showError(
+                                          'Homework title is required.',
+                                        );
+                                        return;
+                                      }
+
+                                      if (classId == null) {
+                                        _showError('Please select a class.');
+                                        return;
+                                      }
+
+                                      if (teacherId == null) {
+                                        _showError('Please select a teacher.');
+                                        return;
+                                      }
+
+                                      Navigator.pop(dialogContext);
+
+                                      await _createHomework(
+                                        classId: classId!,
+                                        sectionId: sectionId,
+                                        teacherId: teacherId!,
+                                        subject: subject,
+                                        title: titleController.text.trim(),
+                                        description: descriptionController.text
+                                            .trim(),
+                                        dueDate: dueDate,
+                                        status: status,
+                                        priority: priority,
+                                      );
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: const Text('Create Homework'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _dialogDropdown<T>({
+    required String label,
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return DropdownButtonFormField<T>(
+      value: value,
+      decoration: _dialogDecoration(label),
+      items: items,
+      onChanged: onChanged,
+    );
   }
 
   InputDecoration _dialogDecoration(String label) {
     return InputDecoration(
       labelText: label,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     );
   }
 
@@ -1444,63 +1910,19 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
+      decoration: _dialogDecoration(label).copyWith(
         hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+        hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  String _tomorrow() {
+    final date = DateTime.now().add(const Duration(days: 1));
 
-  Widget _emptyState() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 60),
-      child: Center(
-        child: Column(
-          children: [
-            Icon(Icons.assignment_outlined, size: 50, color: Color(0xFFD1D5DB)),
-            SizedBox(height: 12),
-            Text(
-              'No homework found',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
-              ),
-            ),
-            SizedBox(height: 5),
-            Text(
-              'Try changing your filters or create new homework.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-            ),
-          ],
-        ),
-      ),
-    );
+    return '${date.year}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
   }
 
   // ============================================================
@@ -1514,6 +1936,9 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: const Color(0xFF15803D),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -1525,6 +1950,9 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
       SnackBar(
         content: Text(message.replaceFirst('Exception: ', '')),
         backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }

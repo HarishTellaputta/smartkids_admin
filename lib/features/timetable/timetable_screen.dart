@@ -16,6 +16,7 @@ import 'package:smartkids_admin/features/timetable/services/timetable_service.da
 import 'package:smartkids_admin/models/section_model.dart';
 import 'package:smartkids_admin/services/section_service.dart';
 import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
+import '../timetable/timetable_details_screen.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -25,470 +26,250 @@ class TimetableScreen extends StatefulWidget {
 }
 
 class _TimetableScreenState extends State<TimetableScreen> {
-  String? _token;
-
   ClassService? _classService;
-  ClassSubjectService? _classSubjectService;
   TeacherService? _teacherService;
   SectionService? _sectionService;
+  ClassSubjectService? _classSubjectService;
   TimetableService? _timetableService;
 
-  bool _loading = true;
-  bool _loadingTimetable = false;
-  bool _importingExcel = false;
-
-  String? _error;
-
   List<SchoolClass> _classes = [];
-  List<Section> _sections = [];
-  List<ClassSubjectModel> _classSubjects = [];
-  List<Teacher> _teachers = [];
+  List<dynamic> _sections = [];
+  List<dynamic> _subjects = [];
+  List<dynamic> _teachers = [];
   List<TimetableEntry> _timetable = [];
 
-  SchoolClass? _selectedClass;
-  Section? _selectedSection;
-
+  int? _selectedClassId;
+  int? _selectedSectionId;
   String _selectedDay = 'MONDAY';
 
-  final List<Map<String, String>> _days = const [
-    {'label': 'Monday', 'value': 'MONDAY'},
-    {'label': 'Tuesday', 'value': 'TUESDAY'},
-    {'label': 'Wednesday', 'value': 'WEDNESDAY'},
-    {'label': 'Thursday', 'value': 'THURSDAY'},
-    {'label': 'Friday', 'value': 'FRIDAY'},
-    {'label': 'Saturday', 'value': 'SATURDAY'},
+  bool _isLoading = true;
+  bool _isRefreshing = false;
+
+  final List<String> _days = const [
+    'MONDAY',
+    'TUESDAY',
+    'WEDNESDAY',
+    'THURSDAY',
+    'FRIDAY',
+    'SATURDAY',
   ];
 
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _loadInitialData();
   }
 
-  // ============================================================
-  // EXCEL IMPORT
-  // ============================================================
-
-  Future<void> _importTimetableExcel() async {
-    try {
-      final selectedFile = await ExcelFilePickerService.pickExcelFile();
-
-      if (selectedFile == null) {
-        return;
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _importingExcel = true;
-        _error = null;
-      });
-
-      final result = await _timetableService!.importTimetableExcel(
-        bytes: selectedFile.bytes,
-        fileName: selectedFile.fileName,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _importingExcel = false;
-      });
-
-      await _refreshTimetable();
-
-      if (!mounted) return;
-
-      await _showTimetableImportResult(result);
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _importingExcel = false;
-      });
-
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+  Future<void> _loadInitialData() async {
+    if (mounted) {
+      setState(() => _isLoading = true);
     }
-  }
 
-  Future<void> _showTimetableImportResult(
-    TimetableImportResponseModel result,
-  ) async {
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.file_upload, color: Colors.green),
-              SizedBox(width: 10),
-              Text('Timetable Import'),
-            ],
-          ),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _importSummaryRow('Total Rows', result.totalRows),
-                  _importSummaryRow('Imported', result.successCount),
-                  _importSummaryRow('Failed', result.failedCount),
-
-                  if (result.errors.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-
-                    const Text(
-                      'Failed Rows',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    ...result.errors.map((error) {
-                      return Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(.06),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Row ${error.row}: ${error.message}',
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _importSummaryRow(String title, int value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text(
-            value.toString(),
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // INITIALIZE
-  // ============================================================
-
-  Future<void> _initialize() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final token = prefs.getString('jwt_token');
 
       if (token == null || token.isEmpty) {
-        if (!mounted) return;
-
-        setState(() {
-          _loading = false;
-          _error = 'JWT token not found. Please login again.';
-        });
-
+        _showSnackBar('Session expired. Please login again.', isError: true);
         return;
       }
 
-      _token = token;
-
       _classService = ClassService(token);
-      _classSubjectService = ClassSubjectService(token);
       _teacherService = TeacherService(token);
       _sectionService = SectionService(token);
+      _classSubjectService = ClassSubjectService(token);
       _timetableService = TimetableService(token);
 
-      await _loadInitialData();
-    } catch (e) {
-      if (!mounted) return;
+      final results = await Future.wait([
+        _classService!.getClasses(),
+        _teacherService!.getTeachers(),
+      ]);
 
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
-    }
-  }
+      _classes = results[0] as List<SchoolClass>;
+      _teachers = results[1] as List<dynamic>;
 
-  // ============================================================
-  // LOAD CLASSES + TEACHERS
-  // ============================================================
-
-  Future<void> _loadInitialData() async {
-    try {
-      final classes = await _classService!.getClasses();
-      final teachers = await _teacherService!.getTeachers();
-
-      if (!mounted) return;
-
-      setState(() {
-        _classes = classes;
-        _teachers = teachers;
-        _loading = false;
-      });
-
-      if (_classes.isNotEmpty) {
-        _selectedClass = _classes.first;
-
-        await _loadClassData(_selectedClass!.id!);
+      if (_classes.isNotEmpty && _classes.first.id != null) {
+        _selectedClassId = _classes.first.id;
+        await _loadClassData(_selectedClassId!);
       }
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
+      _showSnackBar('Failed to load timetable data', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // ============================================================
-  // LOAD SECTION + SUBJECT + TIMETABLE
-  // ============================================================
-
   Future<void> _loadClassData(int classId) async {
-    try {
-      setState(() {
-        _loadingTimetable = true;
-      });
+    if (_sectionService == null ||
+        _classSubjectService == null ||
+        _timetableService == null) {
+      return;
+    }
 
+    try {
       final results = await Future.wait([
         _sectionService!.getSectionsByClassId(classId),
         _classSubjectService!.getClassSubjects(classId),
         _timetableService!.getByClass(classId),
       ]);
 
-      final sections = results[0] as List<Section>;
-      final subjects = results[1] as List<ClassSubjectModel>;
-      final timetable = results[2] as List<TimetableEntry>;
-
       if (!mounted) return;
 
-      Section? selectedSection;
-
-      if (sections.isNotEmpty) {
-        selectedSection = sections.first;
-      }
-
       setState(() {
-        _sections = sections;
-        _classSubjects = subjects;
-        _selectedSection = selectedSection;
-        _timetable = timetable;
-        _loadingTimetable = false;
+        _sections = results[0] as List<dynamic>;
+        _subjects = results[1] as List<dynamic>;
+        _timetable = results[2] as List<TimetableEntry>;
+
+        _selectedSectionId = null;
       });
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loadingTimetable = false;
-        _error = e.toString();
-      });
+      _showSnackBar('Failed to load class timetable', isError: true);
     }
   }
 
-  // ============================================================
-  // REFRESH
-  // ============================================================
+  Future<void> _changeClass(int? classId) async {
+    if (classId == null) return;
 
-  Future<void> _refreshTimetable() async {
-    if (_selectedClass == null || _timetableService == null) {
-      return;
-    }
+    setState(() {
+      _selectedClassId = classId;
+      _isRefreshing = true;
+    });
 
     try {
-      setState(() {
-        _loadingTimetable = true;
-      });
-
-      final data = await _timetableService!.getByClass(_selectedClass!.id!);
-
-      if (!mounted) return;
-
-      setState(() {
-        _timetable = data;
-        _loadingTimetable = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loadingTimetable = false;
-        _error = e.toString();
-      });
+      await _loadClassData(classId);
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
     }
   }
 
-  // ============================================================
-  // FILTER DAY + SECTION
-  // ============================================================
+  Future<void> _refresh() async {
+    if (_selectedClassId == null) return;
+
+    setState(() => _isRefreshing = true);
+
+    try {
+      await _loadClassData(_selectedClassId!);
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
 
   List<TimetableEntry> get _filteredTimetable {
     return _timetable.where((entry) {
-      final dayMatches = entry.dayOfWeek == _selectedDay;
+      final dayMatch = entry.dayOfWeek.toUpperCase() == _selectedDay;
 
-      if (!dayMatches) {
-        return false;
-      }
+      if (!dayMatch) return false;
 
-      if (_selectedSection == null) {
-        return true;
-      }
+      if (_selectedSectionId == null) return true;
 
-      return entry.sectionId == null || entry.sectionId == _selectedSection!.id;
+      return entry.sectionId == null || entry.sectionId == _selectedSectionId;
     }).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
-  // ============================================================
-  // ADD TIMETABLE
-  // ============================================================
+  int get _periodCount => _filteredTimetable.length;
 
-  Future<void> _showAddTimetableDialog() async {
-    if (_selectedClass == null) {
-      _showMessage('Please select a class first.');
-      return;
+  int get _subjectCount {
+    return _filteredTimetable
+        .map((e) => e.subject)
+        .where((e) => e.trim().isNotEmpty)
+        .toSet()
+        .length;
+  }
+
+  int get _teacherCount {
+    return _filteredTimetable.map((e) => e.teacherId).toSet().length;
+  }
+
+  int get _sectionCount {
+    return _filteredTimetable
+        .map((e) => e.sectionId)
+        .where((e) => e != null)
+        .toSet()
+        .length;
+  }
+
+  SchoolClass? get _selectedClass {
+    for (final item in _classes) {
+      if (item.id == _selectedClassId) return item;
     }
+    return null;
+  }
 
-    if (_classSubjects.isEmpty) {
-      _showMessage('No subjects assigned to this class.');
-      return;
+  String _dayShortName(String day) {
+    switch (day) {
+      case 'MONDAY':
+        return 'MON';
+      case 'TUESDAY':
+        return 'TUE';
+      case 'WEDNESDAY':
+        return 'WED';
+      case 'THURSDAY':
+        return 'THU';
+      case 'FRIDAY':
+        return 'FRI';
+      case 'SATURDAY':
+        return 'SAT';
+      default:
+        return day.substring(0, 3);
     }
+  }
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return _AddTimetableDialog(
-          classId: _selectedClass!.id!,
-          className: _selectedClass!.name ?? '',
-          sections: _sections,
-          subjects: _classSubjects,
-          teachers: _teachers,
-          initialDay: _selectedDay,
-          onSave:
-              ({
-                required int teacherId,
-                required int classId,
-                int? sectionId,
-                required int subjectId,
-                required String day,
-                required String startTime,
-                required String endTime,
-                String? room,
-              }) async {
-                await _createTimetable(
-                  teacherId: teacherId,
-                  classId: classId,
-                  sectionId: sectionId,
-                  subjectId: subjectId,
-                  day: day,
-                  startTime: startTime,
-                  endTime: endTime,
-                  room: room,
-                );
-              },
-        );
-      },
+  String _dayFullName(String day) {
+    switch (day) {
+      case 'MONDAY':
+        return 'Monday';
+      case 'TUESDAY':
+        return 'Tuesday';
+      case 'WEDNESDAY':
+        return 'Wednesday';
+      case 'THURSDAY':
+        return 'Thursday';
+      case 'FRIDAY':
+        return 'Friday';
+      case 'SATURDAY':
+        return 'Saturday';
+      default:
+        return day;
+    }
+  }
+
+  Future<void> _openDetails(TimetableEntry entry) async {
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TimetableDetailsScreen(entry: entry)),
     );
-  }
 
-  // ============================================================
-  // CREATE
-  // ============================================================
-
-  Future<void> _createTimetable({
-    required int teacherId,
-    required int classId,
-    int? sectionId,
-    required int subjectId,
-    required String day,
-    required String startTime,
-    required String endTime,
-    String? room,
-  }) async {
-    try {
-      Navigator.of(context).pop();
-
-      setState(() {
-        _loadingTimetable = true;
-      });
-
-      await _timetableService!.createTimetable(
-        teacherId: teacherId,
-        classId: classId,
-        sectionId: sectionId,
-        subjectId: subjectId,
-        dayOfWeek: day,
-        startTime: startTime,
-        endTime: endTime,
-        roomNumber: room,
-      );
-
-      await _refreshTimetable();
-
-      if (!mounted) return;
-
-      _showMessage('Timetable period added successfully.');
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loadingTimetable = false;
-      });
-
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+    if (changed == true) {
+      await _refresh();
     }
   }
-
-  // ============================================================
-  // DELETE
-  // ============================================================
 
   Future<void> _deleteTimetable(TimetableEntry entry) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text('Delete Period'),
-          content: Text('Delete ${entry.subject} ${entry.timeRange}?'),
+          content: Text(
+            'Are you sure you want to delete ${entry.subject} '
+            'from the timetable?',
+          ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
+              onPressed: () => Navigator.pop(context, true),
               child: const Text('Delete'),
             ),
           ],
@@ -496,1037 +277,775 @@ class _TimetableScreenState extends State<TimetableScreen> {
       },
     );
 
-    if (confirmed != true) {
-      return;
-    }
+    if (confirmed != true) return;
 
     try {
-      setState(() {
-        _loadingTimetable = true;
-      });
-
       await _timetableService!.deleteTimetable(entry.id);
+      await _refresh();
 
-      await _refreshTimetable();
-
-      if (!mounted) return;
-
-      _showMessage('Timetable period deleted.');
+      _showSnackBar('Period deleted successfully');
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loadingTimetable = false;
-      });
-
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _showSnackBar('Failed to delete period', isError: true);
     }
   }
 
-  // ============================================================
-  // MESSAGE
-  // ============================================================
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
 
-  void _showMessage(String message, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: Text(message),
-        backgroundColor: error ? Colors.red : null,
       ),
     );
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
+  void _showComingSoon(String text) {
+    _showSnackBar(text);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: const Color(0xFFF6F8FC),
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: _refresh,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 700;
 
-      appBar: AppBar(
-        title: const Text(
-          'Timetable',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: OutlinedButton.icon(
-              onPressed: _loading || _loadingTimetable || _importingExcel
-                  ? null
-                  : _importTimetableExcel,
-
-              icon: _importingExcel
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.table_view_rounded, size: 19),
-
-              label: const Text(
-                'Import Excel',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                    return SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        isMobile ? 16 : 28,
+                        20,
+                        isMobile ? 16 : 28,
+                        32,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(isMobile),
+                          const SizedBox(height: 24),
+                          _buildFilterPanel(isMobile),
+                          const SizedBox(height: 20),
+                          _buildSummaryCards(isMobile),
+                          const SizedBox(height: 24),
+                          _buildDaySelector(isMobile),
+                          const SizedBox(height: 22),
+                          _buildTimetableHeader(isMobile),
+                          const SizedBox(height: 14),
+                          _buildTimetableList(isMobile),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ),
-
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loadingTimetable || _importingExcel
-                ? null
-                : _refreshTimetable,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
       ),
-
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _loading || _importingExcel ? null : _showAddTimetableDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Period'),
-      ),
-
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null && _classes.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+  Widget _buildHeader(bool isMobile) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(.10),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.calendar_month_rounded,
+            color: Colors.white,
+            size: 27,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _error = null;
-                    _loading = true;
-                  });
-
-                  _initialize();
-                },
-                child: const Text('Retry'),
+              Text(
+                'Timetable',
+                style: TextStyle(
+                  fontSize: isMobile ? 24 : 30,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.7,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Manage classes, periods, teachers and weekly schedules',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
             ],
           ),
         ),
+        if (!isMobile)
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  _showComingSoon(
+                    'Excel import can be connected to your existing import dialog.',
+                  );
+                },
+                icon: const Icon(Icons.upload_file_rounded),
+                label: const Text('Import Excel'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: () {
+                  _showComingSoon('Use your existing Add Period dialog here.');
+                },
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add Period'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildFilterPanel(bool isMobile) {
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: isMobile
+          ? Column(
+              children: [
+                _buildClassDropdown(),
+                const SizedBox(height: 12),
+                _buildSectionDropdown(),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: _buildClassDropdown()),
+                const SizedBox(width: 14),
+                Expanded(child: _buildSectionDropdown()),
+                const SizedBox(width: 14),
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: _isRefreshing ? null : _refresh,
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFF3F4F8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _isRefreshing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildClassDropdown() {
+    return DropdownButtonFormField<int>(
+      value: _selectedClassId,
+      decoration: InputDecoration(
+        labelText: 'Class',
+        prefixIcon: const Icon(Icons.school_rounded),
+        filled: true,
+        fillColor: const Color(0xFFF8F9FC),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      items: _classes.map((item) {
+        return DropdownMenuItem<int>(
+          value: item.id,
+          child: Text(item.name ?? 'Class', overflow: TextOverflow.ellipsis),
+        );
+      }).toList(),
+      onChanged: _changeClass,
+    );
+  }
+
+  Widget _buildSectionDropdown() {
+    return DropdownButtonFormField<int?>(
+      value: _selectedSectionId,
+      decoration: InputDecoration(
+        labelText: 'Section',
+        prefixIcon: const Icon(Icons.groups_rounded),
+        filled: true,
+        fillColor: const Color(0xFFF8F9FC),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      items: [
+        const DropdownMenuItem<int?>(value: null, child: Text('All Sections')),
+        ..._sections.map(
+          (section) => DropdownMenuItem<int?>(
+            value: section.id,
+            child: Text(
+              section.name ?? 'Section',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+      onChanged: (value) {
+        setState(() {
+          _selectedSectionId = value;
+        });
+      },
+    );
+  }
+
+  Widget _buildSummaryCards(bool isMobile) {
+    final cards = [
+      _SummaryData(
+        title: 'Periods',
+        value: _periodCount.toString(),
+        subtitle: _dayFullName(_selectedDay),
+        icon: Icons.schedule_rounded,
+      ),
+      _SummaryData(
+        title: 'Subjects',
+        value: _subjectCount.toString(),
+        subtitle: 'Scheduled',
+        icon: Icons.menu_book_rounded,
+      ),
+      _SummaryData(
+        title: 'Teachers',
+        value: _teacherCount.toString(),
+        subtitle: 'Assigned',
+        icon: Icons.person_rounded,
+      ),
+      _SummaryData(
+        title: 'Sections',
+        value: _sectionCount.toString(),
+        subtitle: 'Covered',
+        icon: Icons.groups_rounded,
+      ),
+    ];
+
+    if (isMobile) {
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: cards.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.45,
+        ),
+        itemBuilder: (_, index) {
+          return _buildSummaryCard(cards[index]);
+        },
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _refreshTimetable,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+    return Row(
+      children: cards.map((card) {
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _buildSummaryCard(card),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSummaryCard(_SummaryData data) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
+      ),
+      child: Row(
         children: [
-          _buildClassSelector(),
-          const SizedBox(height: 16),
-          _buildSectionSelector(),
-          const SizedBox(height: 16),
-          _buildStats(),
-          const SizedBox(height: 20),
-          _buildDaySelector(),
-          const SizedBox(height: 16),
-          _buildTimetable(),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F1FF),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              Icons.bar_chart_rounded,
+              color: Color(0xFF4F46E5),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  data.value,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  data.subtitle,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // CLASS SELECTOR
-  // ============================================================
+  Widget _buildDaySelector(bool isMobile) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _days.map((day) {
+            final selected = day == _selectedDay;
 
-  Widget _buildClassSelector() {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: DropdownButtonFormField<SchoolClass>(
-          value: _selectedClass,
-          decoration: const InputDecoration(
-            labelText: 'Class',
-            prefixIcon: Icon(Icons.school_outlined),
-            border: OutlineInputBorder(),
-          ),
-          items: _classes.map((schoolClass) {
-            return DropdownMenuItem<SchoolClass>(
-              value: schoolClass,
-              child: Text(schoolClass.name ?? 'Class'),
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(13),
+                onTap: () {
+                  setState(() {
+                    _selectedDay = day;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 15 : 20,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: selected
+                        ? const LinearGradient(
+                            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                          )
+                        : null,
+                    color: selected ? null : Colors.transparent,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        _dayShortName(day),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          color: selected ? Colors.white : Colors.grey.shade700,
+                        ),
+                      ),
+                      if (selected) ...[
+                        const SizedBox(width: 7),
+                        Text(
+                          _periodCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             );
           }).toList(),
-          onChanged: (value) async {
-            if (value == null) return;
-
-            setState(() {
-              _selectedClass = value;
-              _selectedSection = null;
-            });
-
-            await _loadClassData(value.id!);
-          },
         ),
       ),
     );
   }
 
-  // ============================================================
-  // SECTION SELECTOR
-  // ============================================================
-
-  Widget _buildSectionSelector() {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: DropdownButtonFormField<Section?>(
-          value: _selectedSection,
-          decoration: const InputDecoration(
-            labelText: 'Section',
-            prefixIcon: Icon(Icons.groups_outlined),
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            const DropdownMenuItem<Section?>(
-              value: null,
-              child: Text('All Sections'),
-            ),
-            ..._sections.map((section) {
-              return DropdownMenuItem<Section?>(
-                value: section,
-                child: Text(section.name),
-              );
-            }),
-          ],
-          onChanged: (value) {
-            setState(() {
-              _selectedSection = value;
-            });
-          },
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // STATS
-  // ============================================================
-
-  Widget _buildStats() {
-    final todayCount = _filteredTimetable.length;
-
-    final subjects = _timetable
-        .map((e) => e.subject)
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .length;
-
+  Widget _buildTimetableHeader(bool isMobile) {
     return Row(
       children: [
         Expanded(
-          child: _statCard('Periods', todayCount.toString(), Icons.schedule),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _statCard(
-            'Subjects',
-            subjects.toString(),
-            Icons.menu_book_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _dayFullName(_selectedDay),
+                style: TextStyle(
+                  fontSize: isMobile ? 19 : 21,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${_selectedClass?.name ?? 'Class'} • '
+                '${_selectedSectionId == null ? 'All Sections' : 'Selected Section'}',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _statCard(
-            'Sections',
-            _sections.length.toString(),
-            Icons.groups_outlined,
+        Text(
+          '${_filteredTimetable.length} periods',
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
           ),
         ),
       ],
     );
   }
 
-  Widget _statCard(String title, String value, IconData icon) {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Icon(icon, size: 24, color: Colors.blue),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              title,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // DAYS
-  // ============================================================
-
-  Widget _buildDaySelector() {
-    return SizedBox(
-      height: 46,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _days.length,
-        separatorBuilder: (_, __) {
-          return const SizedBox(width: 8);
-        },
-        itemBuilder: (context, index) {
-          final day = _days[index];
-
-          final selected = _selectedDay == day['value'];
-
-          return ChoiceChip(
-            label: Text(day['label']!),
-            selected: selected,
-            onSelected: (_) {
-              setState(() {
-                _selectedDay = day['value']!;
-              });
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  // ============================================================
-  // TIMETABLE
-  // ============================================================
-
-  Widget _buildTimetable() {
-    if (_loadingTimetable) {
-      return const Padding(
-        padding: EdgeInsets.all(40),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final entries = _filteredTimetable;
-
-    if (entries.isEmpty) {
-      return Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            children: [
-              Icon(
-                Icons.event_busy_outlined,
-                size: 52,
-                color: Colors.grey.shade400,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'No timetable periods',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'No periods found for the selected day and section.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
-            ],
-          ),
-        ),
-      );
+  Widget _buildTimetableList(bool isMobile) {
+    if (_filteredTimetable.isEmpty) {
+      return _buildEmptyState();
     }
 
     return Column(
-      children: entries.map((entry) {
-        return _buildTimetableCard(entry);
+      children: _filteredTimetable.asMap().entries.map((item) {
+        final index = item.key;
+        final entry = item.value;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildTimetableCard(entry, index, isMobile),
+        );
       }).toList(),
     );
   }
 
-  Widget _buildTimetableCard(TimetableEntry entry) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
+  Widget _buildTimetableCard(TimetableEntry entry, int index, bool isMobile) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          _showTimetableDetails(entry);
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openDetails(entry),
+        child: Container(
+          padding: EdgeInsets.all(isMobile ? 15 : 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE8EAF0)),
+          ),
+          child: isMobile
+              ? _buildMobileTimetableContent(entry, index)
+              : _buildDesktopTimetableContent(entry, index),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTimetableContent(TimetableEntry entry, int index) {
+    return Row(
+      children: [
+        Container(
+          width: 92,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F6FF),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Column(
+            children: [
+              Text(
+                'PERIOD ${index + 1}',
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF6366F1),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                entry.timeRange,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(child: _buildPeriodMainInfo(entry)),
+        const SizedBox(width: 18),
+        _buildSectionChip(entry),
+        const SizedBox(width: 18),
+        Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+      ],
+    );
+  }
+
+  Widget _buildMobileTimetableContent(TimetableEntry entry, int index) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F1FF),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Text(
+                'PERIOD ${index + 1}',
+                style: const TextStyle(
+                  color: Color(0xFF4F46E5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              entry.timeRange,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _buildPeriodMainInfo(entry),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildSectionChip(entry),
+            const Spacer(),
+            Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPeriodMainInfo(TimetableEntry entry) {
+    return Row(
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFEEF2FF), Color(0xFFF5F3FF)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.menu_book_rounded, color: Color(0xFF4F46E5)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 82,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 6,
+              Text(
+                entry.subject,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      TimetableEntry.formatTime(entry.startTime),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
+              ),
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  Icon(
+                    Icons.person_outline_rounded,
+                    size: 15,
+                    color: Colors.grey.shade500,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      entry.teacherName ?? 'Teacher not assigned',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                  ),
+                ],
+              ),
+              if (entry.roomNumber != null &&
+                  entry.roomNumber!.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.meeting_room_outlined,
+                      size: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                    const SizedBox(width: 5),
                     Text(
-                      'to',
+                      'Room ${entry.roomNumber}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey.shade600,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      TimetableEntry.formatTime(entry.endTime),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.subject,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (entry.teacherName != null)
-                      _infoRow(Icons.person_outline, entry.teacherName!),
-                    if (entry.sectionName != null)
-                      _infoRow(
-                        Icons.groups_outlined,
-                        'Section ${entry.sectionName}',
-                      ),
-                    if (entry.roomNumber != null &&
-                        entry.roomNumber!.isNotEmpty)
-                      _infoRow(Icons.meeting_room_outlined, entry.roomNumber!),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    _deleteTimetable(entry);
-                  }
-                },
-                itemBuilder: (context) {
-                  return const [
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Delete'),
-                        ],
-                      ),
-                    ),
-                  ];
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 5),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.grey.shade600),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // DETAILS
-  // ============================================================
-
-  void _showTimetableDetails(TimetableEntry entry) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(entry.subject),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _detailRow('Day', _dayLabel(entry.dayOfWeek)),
-              _detailRow('Time', entry.timeRange),
-              _detailRow('Teacher', entry.teacherName ?? '-'),
-              _detailRow('Class', entry.className ?? '-'),
-              _detailRow('Section', entry.sectionName ?? 'All Sections'),
-              _detailRow('Room', entry.roomNumber ?? '-'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _detailRow(String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
-  }
-
-  String _dayLabel(String day) {
-    final match = _days.where((item) => item['value'] == day);
-
-    if (match.isNotEmpty) {
-      return match.first['label']!;
-    }
-
-    return day;
-  }
-}
-
-// ===================================================================
-// ADD TIMETABLE DIALOG
-// ===================================================================
-
-class _AddTimetableDialog extends StatefulWidget {
-  final int classId;
-  final String className;
-  final List<Section> sections;
-  final List<ClassSubjectModel> subjects;
-  final List<Teacher> teachers;
-  final String initialDay;
-
-  final Future<void> Function({
-    required int teacherId,
-    required int classId,
-    int? sectionId,
-    required int subjectId,
-    required String day,
-    required String startTime,
-    required String endTime,
-    String? room,
-  })
-  onSave;
-
-  const _AddTimetableDialog({
-    required this.classId,
-    required this.className,
-    required this.sections,
-    required this.subjects,
-    required this.teachers,
-    required this.initialDay,
-    required this.onSave,
-  });
-
-  @override
-  State<_AddTimetableDialog> createState() => _AddTimetableDialogState();
-}
-
-class _AddTimetableDialogState extends State<_AddTimetableDialog> {
-  final _formKey = GlobalKey<FormState>();
-
-  Section? _selectedSection;
-
-  ClassSubjectModel? _selectedSubject;
-
-  Teacher? _selectedTeacher;
-
-  late String _selectedDay;
-
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
-
-  final _roomController = TextEditingController();
-
-  bool _saving = false;
-
-  final List<Map<String, String>> _days = const [
-    {'label': 'Monday', 'value': 'MONDAY'},
-    {'label': 'Tuesday', 'value': 'TUESDAY'},
-    {'label': 'Wednesday', 'value': 'WEDNESDAY'},
-    {'label': 'Thursday', 'value': 'THURSDAY'},
-    {'label': 'Friday', 'value': 'FRIDAY'},
-    {'label': 'Saturday', 'value': 'SATURDAY'},
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-
-    _selectedDay = widget.initialDay;
-
-    if (widget.sections.isNotEmpty) {
-      _selectedSection = widget.sections.first;
-    }
-
-    if (widget.subjects.isNotEmpty) {
-      _selectedSubject = widget.subjects.first;
-    }
-  }
-
-  @override
-  void dispose() {
-    _roomController.dispose();
-    super.dispose();
-  }
-
-  // ============================================================
-  // TIME PICKER
-  // ============================================================
-
-  Future<void> _pickStartTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _startTime ?? const TimeOfDay(hour: 9, minute: 0),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _startTime = picked;
-      });
-    }
-  }
-
-  Future<void> _pickEndTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _endTime ?? const TimeOfDay(hour: 9, minute: 40),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _endTime = picked;
-      });
-    }
-  }
-
-  // ============================================================
-  // SAVE
-  // ============================================================
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_selectedSubject == null) {
-      _showError('Please select a subject.');
-      return;
-    }
-
-    if (_selectedTeacher == null) {
-      _showError('Please select a teacher.');
-      return;
-    }
-
-    if (_startTime == null) {
-      _showError('Please select start time.');
-      return;
-    }
-
-    if (_endTime == null) {
-      _showError('Please select end time.');
-      return;
-    }
-
-    final startMinutes = _startTime!.hour * 60 + _startTime!.minute;
-
-    final endMinutes = _endTime!.hour * 60 + _endTime!.minute;
-
-    if (endMinutes <= startMinutes) {
-      _showError('End time must be after start time.');
-      return;
-    }
-
-    final subjectId = _subjectId;
-
-    if (subjectId <= 0) {
-      _showError('Invalid subject selected.');
-      return;
-    }
-
-    final teacherId = _teacherId;
-
-    if (teacherId <= 0) {
-      _showError('Invalid teacher selected.');
-      return;
-    }
-
-    try {
-      setState(() {
-        _saving = true;
-      });
-
-      await widget.onSave(
-        teacherId: teacherId,
-        classId: widget.classId,
-        sectionId: _selectedSection?.id,
-        subjectId: subjectId,
-        day: _selectedDay,
-        startTime: _formatBackendTime(_startTime!),
-        endTime: _formatBackendTime(_endTime!),
-        room: _roomController.text.trim().isEmpty
-            ? null
-            : _roomController.text.trim(),
-      );
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-        });
-      }
-    }
-  }
-
-  // ============================================================
-  // IDs
-  // ============================================================
-
-  int get _teacherId {
-    final dynamic teacher = _selectedTeacher;
-
-    try {
-      return teacher.id as int;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  int get _subjectId {
-    final dynamic subject = _selectedSubject;
-
-    try {
-      return subject.id as int;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  // ============================================================
-  // TIME FORMAT
-  // ============================================================
-
-  String _formatBackendTime(TimeOfDay time) {
-    return '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}:00';
-  }
-
-  String _formatDisplayTime(TimeOfDay? time) {
-    if (time == null) {
-      return 'Select time';
-    }
-
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-
-    final minute = time.minute.toString().padLeft(2, '0');
-
-    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-
-    return '$hour:$minute $period';
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-  }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Timetable Period'),
-      content: SizedBox(
-        width: 500,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextFormField(
-                  initialValue: widget.className,
-                  readOnly: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Class',
-                    prefixIcon: Icon(Icons.school_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                DropdownButtonFormField<Section?>(
-                  value: _selectedSection,
-                  decoration: const InputDecoration(
-                    labelText: 'Section',
-                    prefixIcon: Icon(Icons.groups_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<Section?>(
-                      value: null,
-                      child: Text('All Sections'),
-                    ),
-                    ...widget.sections.map((section) {
-                      return DropdownMenuItem<Section?>(
-                        value: section,
-                        child: Text(section.name),
-                      );
-                    }),
-                  ],
-                  onChanged: _saving
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedSection = value;
-                          });
-                        },
-                ),
-
-                const SizedBox(height: 14),
-
-                DropdownButtonFormField<ClassSubjectModel>(
-                  value: _selectedSubject,
-                  decoration: const InputDecoration(
-                    labelText: 'Subject',
-                    prefixIcon: Icon(Icons.menu_book_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: widget.subjects.map((subject) {
-                    return DropdownMenuItem<ClassSubjectModel>(
-                      value: subject,
-                      child: Text(_getSubjectName(subject)),
-                    );
-                  }).toList(),
-                  onChanged: _saving
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedSubject = value;
-                          });
-                        },
-                ),
-
-                const SizedBox(height: 14),
-
-                DropdownButtonFormField<Teacher>(
-                  value: _selectedTeacher,
-                  decoration: const InputDecoration(
-                    labelText: 'Teacher',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: widget.teachers.map((teacher) {
-                    return DropdownMenuItem<Teacher>(
-                      value: teacher,
-                      child: Text(_getTeacherName(teacher)),
-                    );
-                  }).toList(),
-                  onChanged: _saving
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedTeacher = value;
-                          });
-                        },
-                  validator: (value) {
-                    if (value == null) {
-                      return 'Please select teacher';
-                    }
-
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 14),
-
-                DropdownButtonFormField<String>(
-                  value: _selectedDay,
-                  decoration: const InputDecoration(
-                    labelText: 'Day',
-                    prefixIcon: Icon(Icons.calendar_today_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _days.map((day) {
-                    return DropdownMenuItem<String>(
-                      value: day['value'],
-                      child: Text(day['label']!),
-                    );
-                  }).toList(),
-                  onChanged: _saving
-                      ? null
-                      : (value) {
-                          if (value == null) {
-                            return;
-                          }
-
-                          setState(() {
-                            _selectedDay = value;
-                          });
-                        },
-                ),
-
-                const SizedBox(height: 14),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _saving ? null : _pickStartTime,
-                        icon: const Icon(Icons.access_time),
-                        label: Text(_formatDisplayTime(_startTime)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _saving ? null : _pickEndTime,
-                        icon: const Icon(Icons.access_time_filled),
-                        label: Text(_formatDisplayTime(_endTime)),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-
-                TextFormField(
-                  controller: _roomController,
-                  enabled: !_saving,
-                  decoration: const InputDecoration(
-                    labelText: 'Room Number',
-                    prefixIcon: Icon(Icons.meeting_room_outlined),
-                    border: OutlineInputBorder(),
-                  ),
                 ),
               ],
-            ),
+            ],
           ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _saving
-              ? null
-              : () {
-                  Navigator.pop(context);
-                },
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.save),
-          label: Text(_saving ? 'Saving...' : 'Save'),
         ),
       ],
     );
   }
 
-  // ============================================================
-  // DISPLAY HELPERS
-  // ============================================================
-
-  String _getSubjectName(ClassSubjectModel subject) {
-    try {
-      return subject.subjectName;
-    } catch (_) {
-      return subject.toString();
-    }
+  Widget _buildSectionChip(TimetableEntry entry) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.groups_outlined, size: 14, color: Colors.grey.shade600),
+          const SizedBox(width: 5),
+          Text(
+            entry.sectionName ?? 'All Sections',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  String _getTeacherName(Teacher teacher) {
-    try {
-      return teacher.name ?? 'Teacher ${teacher.id}';
-    } catch (_) {
-      return 'Teacher ${teacher.id}';
-    }
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 55, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F1FF),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.event_busy_rounded,
+              size: 32,
+              color: Color(0xFF6366F1),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'No periods scheduled',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'There are no timetable entries for '
+            '${_dayFullName(_selectedDay).toLowerCase()} '
+            'with the selected filters.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+class _SummaryData {
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const _SummaryData({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+  });
 }

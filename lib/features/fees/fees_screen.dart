@@ -14,8 +14,7 @@ import '../teachers/services/class_service.dart';
 import '../teachers/models/class_model.dart';
 import '../../services/section_service.dart';
 import '../../services/student_service.dart';
-
-import 'fee_details_screen.dart';
+import '../../features/fees/paid_payments_screen.dart';
 
 class FeesScreen extends StatefulWidget {
   const FeesScreen({super.key});
@@ -103,8 +102,7 @@ class _FeesScreenState extends State<FeesScreen> {
 
       setState(() {
         feeRecords = results[0] as List<StudentFeeModel>;
-        dashboardSummary =
-            results[1] as FeeDashboardSummaryModel;
+        dashboardSummary = results[1] as FeeDashboardSummaryModel;
         classes = results[2] as List<SchoolClass>;
         students = studentPage.content;
 
@@ -117,10 +115,7 @@ class _FeesScreenState extends State<FeesScreen> {
       setState(() {
         isLoading = false;
         isSummaryLoading = false;
-        errorMessage = e.toString().replaceFirst(
-              'Exception: ',
-              '',
-            );
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
@@ -156,57 +151,41 @@ class _FeesScreenState extends State<FeesScreen> {
         isFilterLoading = false;
       });
 
-      _showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
     }
   }
 
   List<StudentFeeModel> get filteredRecords {
     return feeRecords.where((record) {
       final student = students.cast<Student?>().firstWhere(
-            (s) => s?.id == record.studentId,
-            orElse: () => null,
-          );
+        (s) => s?.id == record.studentId,
+        orElse: () => null,
+      );
 
       final matchesSearch =
           searchQuery.isEmpty ||
           record.studentName.toLowerCase().contains(searchQuery) ||
-          (record.studentId?.toString() ?? '')
-              .contains(searchQuery) ||
+          (record.studentId?.toString() ?? '').contains(searchQuery) ||
           record.feeName.toLowerCase().contains(searchQuery) ||
-          (student?.admissionNo ?? '')
-              .toLowerCase()
-              .contains(searchQuery);
+          (student?.admissionNo ?? '').toLowerCase().contains(searchQuery);
 
-      final matchesClass = selectedClassId == null ||
+      final matchesClass =
+          selectedClassId == null ||
           student?.sectionId == null ||
-          _sectionBelongsToClass(
-            student!.sectionId!,
-            selectedClassId!,
-          );
+          _sectionBelongsToClass(student!.sectionId!, selectedClassId!);
 
-      final matchesSection = selectedSectionId == null ||
-          student?.sectionId == selectedSectionId;
+      final matchesSection =
+          selectedSectionId == null || student?.sectionId == selectedSectionId;
 
       final status = _displayStatus(record);
 
-      final matchesStatus =
-          selectedStatus == 'All' ||
-          status == selectedStatus;
+      final matchesStatus = selectedStatus == 'All' || status == selectedStatus;
 
-      return matchesSearch &&
-          matchesClass &&
-          matchesSection &&
-          matchesStatus;
+      return matchesSearch && matchesClass && matchesSection && matchesStatus;
     }).toList();
   }
 
-  bool _sectionBelongsToClass(
-    int sectionId,
-    int classId,
-  ) {
+  bool _sectionBelongsToClass(int sectionId, int classId) {
     final section = _findSectionById(sectionId);
 
     if (section == null) {
@@ -290,9 +269,7 @@ class _FeesScreenState extends State<FeesScreen> {
       return '-';
     }
 
-    final section = _findSectionFromAllClasses(
-      student.sectionId!,
-    );
+    final section = _findSectionFromAllClasses(student.sectionId!);
 
     if (section != null && section.className != null) {
       return section.className!;
@@ -319,16 +296,10 @@ class _FeesScreenState extends State<FeesScreen> {
     return null;
   }
 
-  Future<void> _openFeeDetails(
-    StudentFeeModel record,
-  ) async {
+  Future<void> _openFeeDetails(StudentFeeModel record) async {
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => FeeDetailsScreen(
-          record: record,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => FeeDetailsScreen(record: record)),
     );
 
     if (result == true && mounted) {
@@ -336,9 +307,7 @@ class _FeesScreenState extends State<FeesScreen> {
     }
   }
 
-  Future<void> _showAddPaymentDialog(
-    StudentFeeModel record,
-  ) async {
+  Future<void> _showAddPaymentDialog(StudentFeeModel record) async {
     final amountController = TextEditingController();
     final remarksController = TextEditingController();
 
@@ -355,15 +324,12 @@ class _FeesScreenState extends State<FeesScreen> {
                 borderRadius: BorderRadius.circular(22),
               ),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 460,
-                ),
+                constraints: const BoxConstraints(maxWidth: 460),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Collect Payment',
@@ -387,12 +353,10 @@ class _FeesScreenState extends State<FeesScreen> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
-                          borderRadius:
-                              BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
                               'Outstanding',
@@ -402,9 +366,7 @@ class _FeesScreenState extends State<FeesScreen> {
                               ),
                             ),
                             Text(
-                              _formatCurrency(
-                                record.pendingAmount,
-                              ),
+                              _formatCurrency(record.pendingAmount),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
@@ -417,16 +379,14 @@ class _FeesScreenState extends State<FeesScreen> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: amountController,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(
+                        keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         decoration: InputDecoration(
                           labelText: 'Amount',
                           prefixText: '₹ ',
                           border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
@@ -436,27 +396,17 @@ class _FeesScreenState extends State<FeesScreen> {
                         decoration: InputDecoration(
                           labelText: 'Payment Method',
                           border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         items: const [
-                          DropdownMenuItem(
-                            value: 'CASH',
-                            child: Text('Cash'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'UPI',
-                            child: Text('UPI'),
-                          ),
+                          DropdownMenuItem(value: 'CASH', child: Text('Cash')),
+                          DropdownMenuItem(value: 'UPI', child: Text('UPI')),
                           DropdownMenuItem(
                             value: 'BANK_TRANSFER',
                             child: Text('Bank Transfer'),
                           ),
-                          DropdownMenuItem(
-                            value: 'CARD',
-                            child: Text('Card'),
-                          ),
+                          DropdownMenuItem(value: 'CARD', child: Text('Card')),
                           DropdownMenuItem(
                             value: 'CHEQUE',
                             child: Text('Cheque'),
@@ -479,8 +429,7 @@ class _FeesScreenState extends State<FeesScreen> {
                         decoration: InputDecoration(
                           labelText: 'Remarks',
                           border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
@@ -492,14 +441,11 @@ class _FeesScreenState extends State<FeesScreen> {
                           onPressed: saving
                               ? null
                               : () async {
-                                  final amount =
-                                      double.tryParse(
-                                    amountController.text
-                                        .trim(),
+                                  final amount = double.tryParse(
+                                    amountController.text.trim(),
                                   );
 
-                                  if (amount == null ||
-                                      amount <= 0) {
+                                  if (amount == null || amount <= 0) {
                                     _showMessage(
                                       'Enter a valid amount.',
                                       isError: true,
@@ -507,8 +453,7 @@ class _FeesScreenState extends State<FeesScreen> {
                                     return;
                                   }
 
-                                  if (amount >
-                                      record.pendingAmount) {
+                                  if (amount > record.pendingAmount) {
                                     _showMessage(
                                       'Amount exceeds pending fee.',
                                       isError: true,
@@ -521,33 +466,23 @@ class _FeesScreenState extends State<FeesScreen> {
                                   });
 
                                   try {
-                                    await _feeService
-                                        .recordPayment(
-                                      studentFeeId:
-                                          record.id!,
+                                    await _feeService.recordPayment(
+                                      studentFeeId: record.id!,
                                       amount: amount,
-                                      paymentMethod:
-                                          paymentMethod,
-                                      remarks:
-                                          remarksController
-                                              .text
-                                              .trim(),
+                                      paymentMethod: paymentMethod,
+                                      remarks: remarksController.text.trim(),
                                     );
 
                                     if (!mounted) return;
 
-                                    Navigator.pop(
-                                      dialogContext,
-                                      true,
-                                    );
+                                    Navigator.pop(dialogContext, true);
                                   } catch (e) {
                                     setDialogState(() {
                                       saving = false;
                                     });
 
                                     _showMessage(
-                                      e.toString()
-                                          .replaceFirst(
+                                      e.toString().replaceFirst(
                                         'Exception: ',
                                         '',
                                       ),
@@ -555,34 +490,26 @@ class _FeesScreenState extends State<FeesScreen> {
                                     );
                                   }
                                 },
-                          style:
-                              ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFF2563EB),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            shape:
-                                RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: saving
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child:
-                                      CircularProgressIndicator(
+                                  child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     color: Colors.white,
                                   ),
                                 )
                               : const Text(
                                   'Record Payment',
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight.w700,
-                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.w700),
                                 ),
                         ),
                       ),
@@ -604,17 +531,13 @@ class _FeesScreenState extends State<FeesScreen> {
     }
   }
 
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
+  void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? const Color(0xFFDC2626) : null,
+        backgroundColor: isError ? const Color(0xFFDC2626) : null,
       ),
     );
   }
@@ -632,11 +555,9 @@ class _FeesScreenState extends State<FeesScreen> {
           padding: const EdgeInsets.all(24),
           child: Center(
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(maxWidth: 1250),
+              constraints: const BoxConstraints(maxWidth: 1250),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
                   const SizedBox(height: 22),
@@ -659,8 +580,7 @@ class _FeesScreenState extends State<FeesScreen> {
       children: [
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'Fees & Payments',
@@ -673,14 +593,30 @@ class _FeesScreenState extends State<FeesScreen> {
               const SizedBox(height: 5),
               Text(
                 'Manage student fees and payment collection',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.blueGrey.shade500,
-                ),
+                style: TextStyle(fontSize: 13, color: Colors.blueGrey.shade500),
               ),
             ],
           ),
         ),
+
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PaidPaymentsScreen()),
+            );
+          },
+          icon: const Icon(Icons.receipt_long_rounded, size: 18),
+          label: const Text('Paid Payments'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF059669),
+            side: const BorderSide(color: Color(0xFF059669)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
         IconButton(
           tooltip: 'Refresh',
           onPressed: isLoading ? null : _loadData,
@@ -696,8 +632,7 @@ class _FeesScreenState extends State<FeesScreen> {
     final total = summary?.totalFee ?? 0;
     final collected = summary?.collected ?? 0;
     final outstanding = summary?.pending ?? 0;
-    final percentage =
-        summary?.collectionPercentage ?? 0;
+    final percentage = summary?.collectionPercentage ?? 0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -736,8 +671,7 @@ class _FeesScreenState extends State<FeesScreen> {
             children: cards
                 .map(
                   (card) => Padding(
-                    padding:
-                        const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: card,
                   ),
                 )
@@ -774,9 +708,7 @@ class _FeesScreenState extends State<FeesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x080F172A),
@@ -786,8 +718,7 @@ class _FeesScreenState extends State<FeesScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -796,32 +727,21 @@ class _FeesScreenState extends State<FeesScreen> {
                 width: 40,
                 decoration: BoxDecoration(
                   color: iconBackground,
-                  borderRadius:
-                      BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: iconColor,
-                ),
+                child: Icon(icon, size: 20, color: iconColor),
               ),
               const Spacer(),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF94A3B8),
-                ),
+                style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
               ),
             ],
           ),
           const Spacer(),
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xFF64748B),
-            ),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 3),
           Text(
@@ -840,8 +760,7 @@ class _FeesScreenState extends State<FeesScreen> {
   }
 
   Widget _collectionRateCard(double percentage) {
-    final value =
-        percentage.clamp(0.0, 100.0).toDouble();
+    final value = percentage.clamp(0.0, 100.0).toDouble();
 
     return Container(
       height: 142,
@@ -871,12 +790,8 @@ class _FeesScreenState extends State<FeesScreen> {
                   child: CircularProgressIndicator(
                     value: value / 100,
                     strokeWidth: 8,
-                    backgroundColor:
-                        const Color(0x33475569),
-                    valueColor:
-                        const AlwaysStoppedAnimation(
-                      Color(0xFF60A5FA),
-                    ),
+                    backgroundColor: const Color(0x33475569),
+                    valueColor: const AlwaysStoppedAnimation(Color(0xFF60A5FA)),
                   ),
                 ),
                 Text(
@@ -893,10 +808,8 @@ class _FeesScreenState extends State<FeesScreen> {
           const SizedBox(width: 13),
           const Expanded(
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Collection Rate',
@@ -909,10 +822,7 @@ class _FeesScreenState extends State<FeesScreen> {
                 SizedBox(height: 5),
                 Text(
                   'Current fee collection',
-                  style: TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
                 ),
               ],
             ),
@@ -928,9 +838,7 @@ class _FeesScreenState extends State<FeesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -939,43 +847,35 @@ class _FeesScreenState extends State<FeesScreen> {
           final search = TextField(
             controller: searchController,
             decoration: InputDecoration(
-              hintText:
-                  'Search student, admission no. or fee...',
-              prefixIcon:
-                  const Icon(Icons.search_rounded),
+              hintText: 'Search student, admission no. or fee...',
+              prefixIcon: const Icon(Icons.search_rounded),
               suffixIcon: searchQuery.isNotEmpty
                   ? IconButton(
                       onPressed: () {
                         searchController.clear();
                       },
-                      icon: const Icon(
-                        Icons.close_rounded,
-                      ),
+                      icon: const Icon(Icons.close_rounded),
                     )
                   : null,
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
             ),
           );
 
-          final classDropdown =
-              DropdownButtonFormField<int?>(
+          final classDropdown = DropdownButtonFormField<int?>(
             initialValue: selectedClassId,
             isExpanded: true,
             decoration: InputDecoration(
               labelText: 'Class',
-              prefixIcon:
-                  const Icon(Icons.school_outlined),
+              prefixIcon: const Icon(Icons.school_outlined),
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
             ),
@@ -988,9 +888,7 @@ class _FeesScreenState extends State<FeesScreen> {
                 (item) => DropdownMenuItem<int?>(
                   value: item.id,
                   child: Text(
-                    item.name ??
-                        item.grade ??
-                        'Class ${item.id}',
+                    item.name ?? item.grade ?? 'Class ${item.id}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1009,19 +907,16 @@ class _FeesScreenState extends State<FeesScreen> {
             },
           );
 
-          final sectionDropdown =
-              DropdownButtonFormField<int?>(
+          final sectionDropdown = DropdownButtonFormField<int?>(
             initialValue: selectedSectionId,
             isExpanded: true,
             decoration: InputDecoration(
               labelText: 'Section',
-              prefixIcon:
-                  const Icon(Icons.groups_outlined),
+              prefixIcon: const Icon(Icons.groups_outlined),
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
             ),
@@ -1033,10 +928,7 @@ class _FeesScreenState extends State<FeesScreen> {
               ...sections.map(
                 (item) => DropdownMenuItem<int?>(
                   value: item.id,
-                  child: Text(
-                    item.name,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(item.name, overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],
@@ -1049,38 +941,23 @@ class _FeesScreenState extends State<FeesScreen> {
                   },
           );
 
-          final statusDropdown =
-              DropdownButtonFormField<String>(
+          final statusDropdown = DropdownButtonFormField<String>(
             initialValue: selectedStatus,
             decoration: InputDecoration(
               labelText: 'Status',
-              prefixIcon:
-                  const Icon(Icons.filter_alt_outlined),
+              prefixIcon: const Icon(Icons.filter_alt_outlined),
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
             ),
             items: const [
-              DropdownMenuItem(
-                value: 'All',
-                child: Text('All Status'),
-              ),
-              DropdownMenuItem(
-                value: 'PENDING',
-                child: Text('Pending'),
-              ),
-              DropdownMenuItem(
-                value: 'PARTIAL',
-                child: Text('Partial'),
-              ),
-              DropdownMenuItem(
-                value: 'PAID',
-                child: Text('Paid'),
-              ),
+              DropdownMenuItem(value: 'All', child: Text('All Status')),
+              DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
+              DropdownMenuItem(value: 'PARTIAL', child: Text('Partial')),
+              DropdownMenuItem(value: 'PAID', child: Text('Paid')),
             ],
             onChanged: (value) {
               if (value == null) return;
@@ -1107,19 +984,13 @@ class _FeesScreenState extends State<FeesScreen> {
 
           return Row(
             children: [
-              Expanded(
-                flex: 2,
-                child: search,
-              ),
+              Expanded(flex: 2, child: search),
               const SizedBox(width: 12),
               Expanded(child: classDropdown),
               const SizedBox(width: 12),
               Expanded(child: sectionDropdown),
               const SizedBox(width: 12),
-              SizedBox(
-                width: 190,
-                child: statusDropdown,
-              ),
+              SizedBox(width: 190, child: statusDropdown),
             ],
           );
         },
@@ -1127,35 +998,24 @@ class _FeesScreenState extends State<FeesScreen> {
     );
   }
 
-  Widget _buildFeeTable(
-    List<StudentFeeModel> records,
-  ) {
+  Widget _buildFeeTable(List<StudentFeeModel> records) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              19,
-              20,
-              14,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 19, 20, 14),
             child: Row(
               children: [
                 const Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Fee Records',
@@ -1177,15 +1037,13 @@ class _FeesScreenState extends State<FeesScreen> {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 11,
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F5F9),
-                    borderRadius:
-                        BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     '${records.length} records',
@@ -1199,18 +1057,11 @@ class _FeesScreenState extends State<FeesScreen> {
               ],
             ),
           ),
-          const Divider(
-            height: 1,
-            color: Color(0xFFE2E8F0),
-          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
           if (isLoading)
             const Padding(
-              padding: EdgeInsets.symmetric(
-                vertical: 70,
-              ),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              padding: EdgeInsets.symmetric(vertical: 70),
+              child: Center(child: CircularProgressIndicator()),
             )
           else if (errorMessage != null)
             _errorState()
@@ -1222,9 +1073,7 @@ class _FeesScreenState extends State<FeesScreen> {
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: constraints.maxWidth,
-                    ),
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
                     child: DataTable(
                       headingRowHeight: 48,
                       dataRowMinHeight: 68,
@@ -1232,40 +1081,21 @@ class _FeesScreenState extends State<FeesScreen> {
                       columnSpacing: 26,
                       horizontalMargin: 20,
                       showCheckboxColumn: false,
-                      headingTextStyle:
-                          const TextStyle(
+                      headingTextStyle: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF64748B),
                       ),
                       columns: const [
-                        DataColumn(
-                          label: Text('STUDENT'),
-                        ),
-                        DataColumn(
-                          label: Text('CLASS'),
-                        ),
-                        DataColumn(
-                          label: Text('FEE'),
-                        ),
-                        DataColumn(
-                          label: Text('TOTAL'),
-                        ),
-                        DataColumn(
-                          label: Text('PAID'),
-                        ),
-                        DataColumn(
-                          label: Text('OUTSTANDING'),
-                        ),
-                        DataColumn(
-                          label: Text('DUE DATE'),
-                        ),
-                        DataColumn(
-                          label: Text('STATUS'),
-                        ),
-                        DataColumn(
-                          label: Text('ACTION'),
-                        ),
+                        DataColumn(label: Text('STUDENT')),
+                        DataColumn(label: Text('CLASS')),
+                        DataColumn(label: Text('FEE')),
+                        DataColumn(label: Text('TOTAL')),
+                        DataColumn(label: Text('PAID')),
+                        DataColumn(label: Text('OUTSTANDING')),
+                        DataColumn(label: Text('DUE DATE')),
+                        DataColumn(label: Text('STATUS')),
+                        DataColumn(label: Text('ACTION')),
                       ],
                       rows: records.map((record) {
                         return DataRow(
@@ -1275,110 +1105,68 @@ class _FeesScreenState extends State<FeesScreen> {
                           cells: [
                             DataCell(
                               _studentCell(record),
-                              onTap: () =>
-                                  _openFeeDetails(record),
+                              onTap: () => _openFeeDetails(record),
                             ),
-                            DataCell(
-                              Text(
-                                _classNameForFee(record),
-                              ),
-                            ),
+                            DataCell(Text(_classNameForFee(record))),
                             DataCell(
                               SizedBox(
                                 width: 130,
                                 child: Text(
                                   record.feeName,
-                                  overflow:
-                                      TextOverflow.ellipsis,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontSize: 12,
-                                    fontWeight:
-                                        FontWeight.w600,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
-                              onTap: () =>
-                                  _openFeeDetails(record),
+                              onTap: () => _openFeeDetails(record),
+                            ),
+                            DataCell(
+                              Text(_formatCurrency(record.totalAmount)),
+                              onTap: () => _openFeeDetails(record),
                             ),
                             DataCell(
                               Text(
-                                _formatCurrency(
-                                  record.totalAmount,
-                                ),
-                              ),
-                              onTap: () =>
-                                  _openFeeDetails(record),
-                            ),
-                            DataCell(
-                              Text(
-                                _formatCurrency(
-                                  record.paidAmount,
-                                ),
+                                _formatCurrency(record.paidAmount),
                                 style: const TextStyle(
-                                  color:
-                                      Color(0xFF059669),
-                                  fontWeight:
-                                      FontWeight.w700,
+                                  color: Color(0xFF059669),
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              onTap: () =>
-                                  _openFeeDetails(record),
+                              onTap: () => _openFeeDetails(record),
                             ),
                             DataCell(
                               Text(
-                                _formatCurrency(
-                                  record.pendingAmount,
-                                ),
+                                _formatCurrency(record.pendingAmount),
                                 style: TextStyle(
-                                  color:
-                                      record.pendingAmount >
-                                              0
-                                          ? const Color(
-                                              0xFFDC2626,
-                                            )
-                                          : const Color(
-                                              0xFF059669,
-                                            ),
-                                  fontWeight:
-                                      FontWeight.w700,
+                                  color: record.pendingAmount > 0
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFF059669),
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              onTap: () =>
-                                  _openFeeDetails(record),
+                              onTap: () => _openFeeDetails(record),
                             ),
                             DataCell(
-                              Text(
-                                _formatDate(
-                                  record.dueDate,
-                                ),
-                              ),
-                              onTap: () =>
-                                  _openFeeDetails(record),
+                              Text(_formatDate(record.dueDate)),
+                              onTap: () => _openFeeDetails(record),
                             ),
                             DataCell(
-                              _statusChip(
-                                _displayStatus(record),
-                              ),
-                              onTap: () =>
-                                  _openFeeDetails(record),
+                              _statusChip(_displayStatus(record)),
+                              onTap: () => _openFeeDetails(record),
                             ),
                             DataCell(
                               IconButton(
                                 tooltip: 'Collect Payment',
-                                onPressed:
-                                    record.pendingAmount >
-                                            0
-                                        ? () =>
-                                            _showAddPaymentDialog(
-                                              record,
-                                            )
-                                        : null,
+                                onPressed: record.pendingAmount > 0
+                                    ? () => _showAddPaymentDialog(record)
+                                    : null,
                                 icon: const Icon(
                                   Icons.add_card_rounded,
                                   size: 20,
                                 ),
-                                color:
-                                    const Color(0xFF2563EB),
+                                color: const Color(0xFF2563EB),
                               ),
                             ),
                           ],
@@ -1408,19 +1196,13 @@ class _FeesScreenState extends State<FeesScreen> {
             width: 38,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF2563EB),
-                  Color(0xFF4F46E5),
-                ],
+                colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
               ),
-              borderRadius:
-                  BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(11),
             ),
             child: Center(
               child: Text(
-                name.isEmpty
-                    ? '?'
-                    : name[0].toUpperCase(),
+                name.isEmpty ? '?' : name[0].toUpperCase(),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
@@ -1432,10 +1214,8 @@ class _FeesScreenState extends State<FeesScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   name,
@@ -1481,10 +1261,7 @@ class _FeesScreenState extends State<FeesScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
@@ -1514,18 +1291,12 @@ class _FeesScreenState extends State<FeesScreen> {
             SizedBox(height: 12),
             Text(
               'No fee records found',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             SizedBox(height: 5),
             Text(
               'Try changing your search or filters.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF94A3B8),
-              ),
+              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
             ),
           ],
         ),

@@ -1665,7 +1665,7 @@ class _McqScreenState extends State<McqScreen> {
         labelText: 'Section',
         prefixIcon: const Icon(Icons.groups_outlined),
         border: const OutlineInputBorder(),
-       // helperText: _selectedClass == null ? 'Select class first' : null,
+        // helperText: _selectedClass == null ? 'Select class first' : null,
       ),
       items: [
         const DropdownMenuItem<Section>(
@@ -1833,45 +1833,81 @@ class _McqScreenState extends State<McqScreen> {
     required String value,
     required IconData icon,
   }) {
-    return Card(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 45,
-              height: 45,
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+    final primary = Theme.of(context).colorScheme.primary;
+
+    Color accent = primary;
+
+    if (title == 'Scheduled') {
+      accent = Colors.orange;
+    } else if (title == 'Completed') {
+      accent = Colors.green;
+    } else if (title == 'Cancelled') {
+      accent = Colors.red;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            child: Icon(icon, color: accent, size: 24),
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade600,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+        ],
       ),
     );
   }
@@ -2038,14 +2074,74 @@ class _McqScreenState extends State<McqScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: const Color(0xFFF6F8FC),
+        body: Center(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+          ),
+        ),
+      );
     }
 
     final filteredTests = _filteredTests;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FC),
+
       appBar: AppBar(
-        title: const Text('Daily MCQ Tests'),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+
+        titleSpacing: 20,
+
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.quiz_outlined,
+                color: Theme.of(context).colorScheme.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Daily MCQ Tests',
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+
         actions: [
           IconButton(
             tooltip: 'Question Manager',
@@ -2061,6 +2157,9 @@ class _McqScreenState extends State<McqScreen> {
             },
             icon: const Icon(Icons.library_books_outlined),
           ),
+
+          const SizedBox(width: 4),
+
           IconButton(
             tooltip: 'Refresh',
             onPressed: _loadingTests ? null : _refresh,
@@ -2070,198 +2169,283 @@ class _McqScreenState extends State<McqScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.refresh),
+                : const Icon(Icons.refresh_rounded),
           ),
-          const SizedBox(width: 8),
+
+          const SizedBox(width: 12),
         ],
       ),
 
       floatingActionButton: FloatingActionButton.extended(
+        elevation: 5,
         onPressed: _creatingTest ? null : _showCreateTestDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Create Test'),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text(
+          'Create Test',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
       ),
 
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 110),
           children: [
-            // ========================================================
-            // HEADER
-            // ========================================================
-            Card(
-              elevation: 1,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 650;
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1450),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildPremiumHeader(),
 
-                    final title = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Daily MCQ Tests',
-                          style: TextStyle(
-                            fontSize: 25,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    const SizedBox(height: 18),
+
+                    _buildSummarySection(),
+
+                    const SizedBox(height: 18),
+
+                    _buildFilters(),
+
+                    const SizedBox(height: 18),
+
+                    if (_errorMessage != null) _buildPremiumError(),
+
+                    if (!_loadingTests && filteredTests.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Scheduled Tests',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 9),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Text(
+                                '${filteredTests.length}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Create, schedule and manage daily MCQ tests for students.',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    );
+                      ),
 
-                    final button = OutlinedButton.icon(
-                      onPressed: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const McqQuestionManagerScreen(),
-                          ),
-                        );
-
-                        await _loadTests();
-                      },
-                      icon: const Icon(Icons.question_mark_outlined),
-                      label: const Text('Question Manager'),
-                    );
-
-                    if (compact) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [title, const SizedBox(height: 16), button],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(child: title),
-                        const SizedBox(width: 20),
-                        button,
-                      ],
-                    );
-                  },
+                    if (_loadingTests)
+                      _buildPremiumLoading()
+                    else if (filteredTests.isEmpty)
+                      _buildEmptyState()
+                    else
+                      ...filteredTests.map(_buildTestCard),
+                  ],
                 ),
               ),
             ),
-
-            const SizedBox(height: 18),
-
-            // ========================================================
-            // SUMMARY
-            // ========================================================
-            _buildSummarySection(),
-
-            const SizedBox(height: 18),
-
-            // ========================================================
-            // FILTERS
-            // ========================================================
-            _buildFilters(),
-
-            const SizedBox(height: 18),
-
-            // ========================================================
-            // ERROR
-            // ========================================================
-            if (_errorMessage != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: Colors.red, height: 1.4),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _errorMessage = null;
-                        });
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-            // ========================================================
-            // LIST HEADER
-            // ========================================================
-            if (!_loadingTests && filteredTests.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Tests',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${filteredTests.length}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // ========================================================
-            // LOADING
-            // ========================================================
-            if (_loadingTests)
-              const Padding(
-                padding: EdgeInsets.all(50),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            // ========================================================
-            // EMPTY
-            // ========================================================
-            else if (filteredTests.isEmpty)
-              _buildEmptyState()
-            // ========================================================
-            // TESTS
-            // ========================================================
-            else
-              ...filteredTests.map(_buildTestCard),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumError() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.error_outline_rounded, color: Colors.red),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: const TextStyle(color: Colors.red, height: 1.4),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            onPressed: () {
+              setState(() {
+                _errorMessage = null;
+              });
+            },
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumLoading() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 70),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 34,
+            height: 34,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Loading tests...',
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumHeader() {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, primary.withValues(alpha: 0.035)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 650;
+
+          final titleSection = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.quiz_rounded, color: primary, size: 27),
+              ),
+
+              const SizedBox(width: 15),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Daily MCQ Tests',
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+
+                    const SizedBox(height: 7),
+
+                    Text(
+                      'Create, schedule and manage daily MCQ tests for students.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final managerButton = ElevatedButton.icon(
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const McqQuestionManagerScreen(),
+                ),
+              );
+
+              await _loadTests();
+            },
+            icon: const Icon(Icons.library_books_outlined, size: 19),
+            label: const Text('Question Manager'),
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                titleSection,
+                const SizedBox(height: 18),
+                managerButton,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: titleSection),
+              const SizedBox(width: 20),
+              managerButton,
+            ],
+          );
+        },
       ),
     );
   }

@@ -1101,25 +1101,63 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FC),
       appBar: AppBar(
-        title: const Text('MCQ Question Bank'),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        titleSpacing: 24,
+        title: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(
+                Icons.quiz_outlined,
+                color: Color(0xFF2563EB),
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'MCQ Question Bank',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loadingQuestions ? null : _loadQuestions,
-            icon: const Icon(Icons.refresh),
+          Padding(
+            padding: const EdgeInsets.only(right: 18),
+            child: IconButton(
+              tooltip: 'Refresh',
+              onPressed: _loadingQuestions ? null : _loadQuestions,
+              icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
+            ),
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2.5))
           : _error != null
           ? _buildErrorState()
           : LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: constraints.maxWidth < 600 ? 16 : 28,
+                    vertical: 26,
+                  ),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1400),
@@ -1127,11 +1165,11 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildHeader(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
                           _buildSummaryCards(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 22),
                           _buildFilters(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 22),
                           _buildQuestionContent(),
                         ],
                       ),
@@ -1150,34 +1188,53 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
   Widget _buildHeader() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final small = constraints.maxWidth < 700;
+        final small = constraints.maxWidth < 760;
 
         final title = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'MCQ Question Bank',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: Color(0xFF111827),
+              ),
             ),
-            const SizedBox(height: 5),
-            Text(
-              'Create, manage and import daily MCQ questions',
-              style: Theme.of(context).textTheme.bodyMedium,
+            const SizedBox(height: 6),
+            const Text(
+              'Create, manage and organize your daily MCQ questions',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         );
 
         final buttons = Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 9,
+          runSpacing: 9,
           children: [
             OutlinedButton.icon(
               onPressed: _showExcelTemplate,
-              icon: const Icon(Icons.description_outlined),
+              icon: const Icon(Icons.description_outlined, size: 17),
               label: const Text('Excel Format'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF475569),
+                side: const BorderSide(color: Color(0xFFD7DEE8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
             ),
+
             OutlinedButton.icon(
               onPressed: _importing ? null : _importExcel,
               icon: _importing
@@ -1186,13 +1243,38 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.upload_file),
+                  : const Icon(Icons.upload_file_outlined, size: 17),
               label: Text(_importing ? 'Importing...' : 'Import Excel'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF2563EB),
+                side: const BorderSide(color: Color(0xFFBFDBFE)),
+                backgroundColor: const Color(0xFFF8FBFF),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
             ),
+
             FilledButton.icon(
               onPressed: _showAddQuestionDialog,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Add Question'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 17,
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
             ),
           ],
         );
@@ -1200,7 +1282,7 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
         if (small) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [title, const SizedBox(height: 16), buttons],
+            children: [title, const SizedBox(height: 18), buttons],
           );
         }
 
@@ -1262,43 +1344,59 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
   Widget _summaryCard(double width, String title, String value, IconData icon) {
     return SizedBox(
       width: width,
-      child: Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                ),
-                child: Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE7ECF3)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x080F172A),
+              blurRadius: 18,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(13),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 3),
-                    Text(
-                      value,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+              child: Icon(icon, color: const Color(0xFF2563EB), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2232,9 +2330,7 @@ Future<ExcelFileData?> pickExcelFile() async {
 
         if (result == null) {
           if (!completer.isCompleted) {
-            completer.completeError(
-              Exception('FileReader returned null.'),
-            );
+            completer.completeError(Exception('FileReader returned null.'));
           }
           return;
         }
@@ -2261,10 +2357,7 @@ Future<ExcelFileData?> pickExcelFile() async {
 
         if (!completer.isCompleted) {
           completer.complete(
-            ExcelFileData(
-              name: file.name,
-              bytes: bytes.toList(),
-            ),
+            ExcelFileData(name: file.name, bytes: bytes.toList()),
           );
         }
       } catch (e) {

@@ -20,15 +20,15 @@ class NoticeService {
 
   // ============================================================
   // GET ALL ADMIN NOTICES
-  // GET /api/v1/notifications/admin
+  // GET /api/v1/notices
   // ============================================================
 
   Future<List<NoticeModel>> getNotices() async {
     try {
-      final response = await _dio.get('/api/v1/notifications/admin');
+      final response = await _dio.get('/api/v1/notices');
 
       print('========================================');
-      print('GET ADMIN NOTICES');
+      print('GET NOTICES');
       print('STATUS: ${response.statusCode}');
       print('RESPONSE: ${response.data}');
       print('========================================');
@@ -43,7 +43,7 @@ class NoticeService {
 
   // ============================================================
   // CREATE NOTICE
-  // POST /api/v1/notifications/admin
+  // POST /api/v1/notices
   // ============================================================
 
   Future<NoticeModel> createNotice({
@@ -55,11 +55,10 @@ class NoticeService {
   }) async {
     try {
       final body = {
-        'type': 'SCHOOL_NOTICE',
         'title': title.trim(),
-        'message': message.trim(),
-        'category': category,
-        'audience': audience,
+        'content': message.trim(),
+        'category': category.trim(),
+        'audience': _mapAudience(audience),
         'status': status,
       };
 
@@ -68,17 +67,12 @@ class NoticeService {
       print('REQUEST: $body');
       print('========================================');
 
-      final response = await _dio.post(
-        '/api/v1/notifications/admin',
-        data: body,
-      );
+      final response = await _dio.post('/api/v1/notices', data: body);
 
       print('STATUS: ${response.statusCode}');
       print('RESPONSE: ${response.data}');
 
-      return NoticeModel.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return _noticeFromBackend(response.data);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -88,7 +82,7 @@ class NoticeService {
 
   // ============================================================
   // UPDATE NOTICE
-  // PUT /api/v1/notifications/admin/{id}
+  // PUT /api/v1/notices/{id}
   // ============================================================
 
   Future<NoticeModel> updateNotice({
@@ -101,11 +95,10 @@ class NoticeService {
   }) async {
     try {
       final body = {
-        'type': 'SCHOOL_NOTICE',
         'title': title.trim(),
-        'message': message.trim(),
-        'category': category,
-        'audience': audience,
+        'content': message.trim(),
+        'category': category.trim(),
+        'audience': _mapAudience(audience),
         'status': status,
       };
 
@@ -114,17 +107,12 @@ class NoticeService {
       print('REQUEST: $body');
       print('========================================');
 
-      final response = await _dio.put(
-        '/api/v1/notifications/admin/$id',
-        data: body,
-      );
+      final response = await _dio.put('/api/v1/notices/$id', data: body);
 
       print('STATUS: ${response.statusCode}');
       print('RESPONSE: ${response.data}');
 
-      return NoticeModel.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return _noticeFromBackend(response.data);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -134,7 +122,7 @@ class NoticeService {
 
   // ============================================================
   // DELETE NOTICE
-  // DELETE /api/v1/notifications/admin/{id}
+  // DELETE /api/v1/notices/{id}
   // ============================================================
 
   Future<void> deleteNotice(int id) async {
@@ -143,9 +131,7 @@ class NoticeService {
       print('DELETE NOTICE ID: $id');
       print('========================================');
 
-      final response = await _dio.delete(
-        '/api/v1/notifications/admin/$id',
-      );
+      final response = await _dio.delete('/api/v1/notices/$id');
 
       print('STATUS: ${response.statusCode}');
       print('RESPONSE: ${response.data}');
@@ -158,7 +144,7 @@ class NoticeService {
 
   // ============================================================
   // PUBLISH NOTICE
-  // PATCH /api/v1/notifications/admin/{id}/publish
+  // PATCH /api/v1/notices/{id}/publish?published=true
   // ============================================================
 
   Future<NoticeModel> publishNotice(int id) async {
@@ -168,15 +154,14 @@ class NoticeService {
       print('========================================');
 
       final response = await _dio.patch(
-        '/api/v1/notifications/admin/$id/publish',
+        '/api/v1/notices/$id/publish',
+        queryParameters: {'published': true},
       );
 
       print('STATUS: ${response.statusCode}');
       print('RESPONSE: ${response.data}');
 
-      return NoticeModel.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return _noticeFromBackend(response.data);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -192,10 +177,7 @@ class NoticeService {
     if (data is List) {
       return data
           .whereType<Map>()
-          .map(
-            (item) =>
-                NoticeModel.fromJson(Map<String, dynamic>.from(item)),
-          )
+          .map((item) => _noticeFromBackend(Map<String, dynamic>.from(item)))
           .toList();
     }
 
@@ -205,10 +187,7 @@ class NoticeService {
       if (content is List) {
         return content
             .whereType<Map>()
-            .map(
-              (item) =>
-                  NoticeModel.fromJson(Map<String, dynamic>.from(item)),
-            )
+            .map((item) => _noticeFromBackend(Map<String, dynamic>.from(item)))
             .toList();
       }
     }
@@ -216,6 +195,46 @@ class NoticeService {
     return [];
   }
 
+  // ============================================================
+  // BACKEND RESPONSE MAPPING
+  // Backend returns "content"
+  // Existing Flutter model uses "message"
+  // ============================================================
+
+  NoticeModel _noticeFromBackend(dynamic data) {
+    final json = Map<String, dynamic>.from(data);
+
+    if (json['message'] == null && json['content'] != null) {
+      json['message'] = json['content'];
+    }
+
+    return NoticeModel.fromJson(json);
+  }
+
+  String _mapAudience(String audience) {
+    switch (audience) {
+      case 'All Students':
+        return 'STUDENTS';
+
+      case 'Parents':
+        return 'ALL_PARENTS';
+
+      case 'Students':
+        return 'STUDENTS';
+
+      case 'Students & Parents':
+        return 'STUDENTS_AND_PARENTS';
+
+      case 'Teachers':
+        return 'TEACHERS';
+
+      case 'All':
+        return 'ALL';
+
+      default:
+        return audience.toUpperCase();
+    }
+  }
   // ============================================================
   // ERROR HANDLER
   // ============================================================
@@ -225,8 +244,7 @@ class NoticeService {
     final data = e.response?.data;
 
     if (data is Map) {
-      final message =
-          data['message'] ?? data['error'] ?? data['detail'];
+      final message = data['message'] ?? data['error'] ?? data['detail'];
 
       if (message != null) {
         return message.toString();

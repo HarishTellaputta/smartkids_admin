@@ -466,12 +466,17 @@ class McqTestService {
 // MCQ ATTEMPT MODEL
 // ============================================================
 
+
 class McqAttemptModel {
   final int? attemptId;
   final int? testId;
 
-  final String status;
+  // Student details
+  final int? studentId;
+  final String? studentName;
+  final String? admissionNo;
 
+  final String status;
   final String? startedAt;
   final String? expiresAt;
   final String? submittedAt;
@@ -480,7 +485,6 @@ class McqAttemptModel {
   final int? totalQuestions;
   final int? correctAnswers;
   final int? wrongAnswers;
-
   final double? percentage;
 
   final McqTestModel? test;
@@ -488,6 +492,9 @@ class McqAttemptModel {
   McqAttemptModel({
     this.attemptId,
     this.testId,
+    this.studentId,
+    this.studentName,
+    this.admissionNo,
     required this.status,
     this.startedAt,
     this.expiresAt,
@@ -502,33 +509,57 @@ class McqAttemptModel {
 
   factory McqAttemptModel.fromJson(Map<String, dynamic> json) {
     return McqAttemptModel(
-      attemptId: json['attemptId'] as int?,
-      testId: json['testId'] as int?,
+      attemptId: _parseInt(json['attemptId']),
+      testId: _parseInt(json['testId']),
+
+      // Student details from backend
+      studentId: _parseInt(json['studentId']),
+      studentName: json['studentName']?.toString(),
+      admissionNo: json['admissionNo']?.toString(),
+
       status: json['status']?.toString() ?? '',
+
       startedAt: json['startedAt']?.toString(),
       expiresAt: json['expiresAt']?.toString(),
       submittedAt: json['submittedAt']?.toString(),
-      score: json['score'] as int?,
-      totalQuestions: json['totalQuestions'] as int?,
-      correctAnswers: json['correctAnswers'] as int?,
-      wrongAnswers: json['wrongAnswers'] as int?,
+
+      score: _parseInt(json['score']),
+      totalQuestions: _parseInt(json['totalQuestions']),
+      correctAnswers: _parseInt(json['correctAnswers']),
+      wrongAnswers: _parseInt(json['wrongAnswers']),
+
       percentage: _parseDouble(json['percentage']),
+
       test: json['test'] is Map
-          ? McqTestModel.fromJson(Map<String, dynamic>.from(json['test']))
+          ? McqTestModel.fromJson(
+              Map<String, dynamic>.from(json['test']),
+            )
           : null,
     );
   }
 
-  static double? _parseDouble(dynamic value) {
-    if (value == null) {
-      return null;
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+
+    if (value is int) {
+      return value;
     }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(value.toString());
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
 
     if (value is double) {
       return value;
     }
 
-    if (value is int) {
+    if (value is num) {
       return value.toDouble();
     }
 

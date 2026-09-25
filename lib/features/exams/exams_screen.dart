@@ -8,6 +8,7 @@ import 'package:smartkids_admin/features/exams/services/examination_excel_picker
 import 'package:smartkids_admin/features/exams/models/excel_import_response_model.dart';
 import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
 import 'package:smartkids_admin/features/exams/services/examination_bulk_import_service.dart';
+import '../../features/exams/exam_details_screen.dart';
 
 class ExamsScreen extends StatefulWidget {
   const ExamsScreen({super.key});
@@ -34,6 +35,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   String selectedStatus = 'All';
   String selectedExamType = 'All';
+  String searchQuery = '';
 
   String? errorMessage;
 
@@ -50,15 +52,16 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Future<void> _initialize() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final token = prefs.getString('jwt_token');
 
-      print('========================================');
-      print('EXAM SCREEN INITIALIZE');
-      print('TOKEN EXISTS: ${token != null && token.isNotEmpty}');
-      print('========================================');
+      debugPrint('========================================');
+      debugPrint('EXAM SCREEN INITIALIZE');
+      debugPrint('TOKEN EXISTS: ${token != null && token.isNotEmpty}');
+      debugPrint('========================================');
 
       if (token == null || token.isEmpty) {
+        if (!mounted) return;
+
         setState(() {
           isLoading = false;
           errorMessage = 'Authentication token not found.';
@@ -113,8 +116,9 @@ class _ExamsScreenState extends State<ExamsScreen> {
   }
 
   // ============================================================
-  // IMPORT EXAMINATIONS FROM EXCEL
+  // IMPORT EXAMINATIONS
   // ============================================================
+
   Future<void> _importExaminationsExcel() async {
     if (_importService == null) {
       _showSnack('Examination import service is not initialized.');
@@ -122,38 +126,18 @@ class _ExamsScreenState extends State<ExamsScreen> {
     }
 
     try {
-      debugPrint('========================================');
-      debugPrint('EXAMINATION IMPORT BUTTON CLICKED');
-      debugPrint('IMPORT SERVICE EXISTS: ${_importService != null}');
-      debugPrint('========================================');
-
-      debugPrint('OPENING EXAMINATION EXCEL FILE PICKER...');
-
       final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
 
-      debugPrint('EXAMINATION EXCEL PICKER RESULT: $selectedFile');
-
-      if (selectedFile == null) {
-        debugPrint('NO EXAMINATION EXCEL FILE SELECTED');
-        return;
-      }
-
-      debugPrint('FILE NAME: ${selectedFile.fileName}');
-
-      debugPrint('FILE BYTES: ${selectedFile.bytes.length}');
+      if (selectedFile == null) return;
 
       setState(() {
         isSaving = true;
       });
 
-      debugPrint('CALLING EXAMINATION IMPORT API...');
-
       final importResult = await _importService!.importExaminationsExcel(
         bytes: selectedFile.bytes,
         fileName: selectedFile.fileName,
       );
-
-      debugPrint('EXAMINATION IMPORT API SUCCESS');
 
       if (!mounted) return;
 
@@ -170,8 +154,6 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
       await _loadExaminations();
     } catch (e) {
-      debugPrint('EXAMINATION IMPORT ERROR: $e');
-
       if (!mounted) return;
 
       setState(() {
@@ -182,29 +164,22 @@ class _ExamsScreenState extends State<ExamsScreen> {
     }
   }
 
+  // ============================================================
+  // BULK RESULTS IMPORT
+  // ============================================================
+
   Future<void> _importResultsExcel() async {
     if (_bulkImportService == null) {
       _showSnack('Bulk import service is not initialized.');
       return;
     }
 
-    if (isImportingResults) {
-      return;
-    }
-
-    debugPrint('========================================');
-    debugPrint('RESULTS IMPORT BUTTON CLICKED');
-    debugPrint('========================================');
+    if (isImportingResults) return;
 
     try {
       final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
 
-      if (selectedFile == null) {
-        debugPrint('NO RESULTS EXCEL FILE SELECTED');
-        return;
-      }
-
-      debugPrint('SELECTED RESULTS FILE: ${selectedFile.fileName}');
+      if (selectedFile == null) return;
 
       if (!mounted) return;
 
@@ -225,12 +200,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
       await _showBulkImportResult(title: 'Exam Results Import', result: result);
 
-      if (mounted) {
-        await _loadExaminations();
-      }
+      await _loadExaminations();
     } catch (e) {
-      debugPrint('RESULTS IMPORT ERROR: $e');
-
       if (!mounted) return;
 
       setState(() {
@@ -241,29 +212,22 @@ class _ExamsScreenState extends State<ExamsScreen> {
     }
   }
 
+  // ============================================================
+  // BULK SCHEDULE IMPORT
+  // ============================================================
+
   Future<void> _importSchedulesExcel() async {
     if (_bulkImportService == null) {
       _showSnack('Bulk import service is not initialized.');
       return;
     }
 
-    if (isImportingSchedules) {
-      return;
-    }
-
-    debugPrint('========================================');
-    debugPrint('SCHEDULES IMPORT BUTTON CLICKED');
-    debugPrint('========================================');
+    if (isImportingSchedules) return;
 
     try {
       final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
 
-      if (selectedFile == null) {
-        debugPrint('NO SCHEDULES EXCEL FILE SELECTED');
-        return;
-      }
-
-      debugPrint('SELECTED SCHEDULES FILE: ${selectedFile.fileName}');
+      if (selectedFile == null) return;
 
       if (!mounted) return;
 
@@ -287,12 +251,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
         result: result,
       );
 
-      if (mounted) {
-        await _loadExaminations();
-      }
+      await _loadExaminations();
     } catch (e) {
-      debugPrint('SCHEDULES IMPORT ERROR: $e');
-
       if (!mounted) return;
 
       setState(() {
@@ -303,29 +263,22 @@ class _ExamsScreenState extends State<ExamsScreen> {
     }
   }
 
+  // ============================================================
+  // BULK GRADE RULE IMPORT
+  // ============================================================
+
   Future<void> _importGradeRulesExcel() async {
     if (_bulkImportService == null) {
       _showSnack('Bulk import service is not initialized.');
       return;
     }
 
-    if (isImportingGradeRules) {
-      return;
-    }
-
-    debugPrint('========================================');
-    debugPrint('GRADE RULES IMPORT BUTTON CLICKED');
-    debugPrint('========================================');
+    if (isImportingGradeRules) return;
 
     try {
       final selectedFile = await ExaminationExcelPickerService.pickExcelFile();
 
-      if (selectedFile == null) {
-        debugPrint('NO GRADE RULES EXCEL FILE SELECTED');
-        return;
-      }
-
-      debugPrint('SELECTED GRADE RULES FILE: ${selectedFile.fileName}');
+      if (selectedFile == null) return;
 
       if (!mounted) return;
 
@@ -346,12 +299,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
       await _showBulkImportResult(title: 'Grade Rules Import', result: result);
 
-      if (mounted) {
-        await _loadExaminations();
-      }
+      await _loadExaminations();
     } catch (e) {
-      debugPrint('GRADE RULES IMPORT ERROR: $e');
-
       if (!mounted) return;
 
       setState(() {
@@ -362,6 +311,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
     }
   }
 
+  // ============================================================
+  // BULK IMPORT RESULT
+  // ============================================================
+
   Future<void> _showBulkImportResult({
     required String title,
     required ExcelImportResponseModel result,
@@ -370,11 +323,32 @@ class _ExamsScreenState extends State<ExamsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A)),
-              const SizedBox(width: 10),
-              Expanded(child: Text(title)),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.check_circle_outline,
+                  color: Color(0xFF16A34A),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
           content: SizedBox(
@@ -411,7 +385,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                         'Updated',
                         result.updated.toString(),
                         Icons.edit_outlined,
-                        const Color(0xFFCA8A04),
+                        const Color(0xFFD97706),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -425,14 +399,16 @@ class _ExamsScreenState extends State<ExamsScreen> {
                     ),
                   ],
                 ),
-
                 if (result.errorDetails.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Error Details',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -444,13 +420,18 @@ class _ExamsScreenState extends State<ExamsScreen> {
                       itemBuilder: (context, index) {
                         final error = result.errorDetails[index];
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           child: Text(
                             'Row ${error.row}: ${error.message}',
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Color(0xFFDC2626),
+                              color: Color(0xFF991B1B),
                             ),
                           ),
                         );
@@ -462,10 +443,15 @@ class _ExamsScreenState extends State<ExamsScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
               child: const Text('Done'),
             ),
           ],
@@ -481,16 +467,16 @@ class _ExamsScreenState extends State<ExamsScreen> {
     Color color,
   ) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.15)),
+        color: color.withOpacity(.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(.14)),
       ),
       child: Row(
         children: [
           Icon(icon, size: 20, color: color),
-          const SizedBox(width: 8),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -507,7 +493,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   value,
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                     color: color,
                   ),
                 ),
@@ -536,7 +522,13 @@ class _ExamsScreenState extends State<ExamsScreen> {
           selectedExamType == 'All' ||
           examType == selectedExamType.trim().toUpperCase();
 
-      return statusMatch && typeMatch;
+      final searchMatch =
+          searchQuery.isEmpty ||
+          exam.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          exam.examType.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          exam.status.toLowerCase().contains(searchQuery.toLowerCase());
+
+      return statusMatch && typeMatch && searchMatch;
     }).toList();
   }
 
@@ -546,45 +538,28 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   int get totalExams => exams.length;
 
-  int get upcomingExams {
-    return exams.where((e) {
-      return e.status.toUpperCase() == 'UPCOMING';
-    }).length;
-  }
+  int get upcomingExams =>
+      exams.where((e) => e.status.toUpperCase() == 'UPCOMING').length;
 
-  int get scheduledExams {
-    return exams.where((e) {
-      return e.status.toUpperCase() == 'SCHEDULED';
-    }).length;
-  }
+  int get scheduledExams =>
+      exams.where((e) => e.status.toUpperCase() == 'SCHEDULED').length;
 
-  int get completedExams {
-    return exams.where((e) {
-      return e.status.toUpperCase() == 'COMPLETED';
-    }).length;
-  }
+  int get completedExams =>
+      exams.where((e) => e.status.toUpperCase() == 'COMPLETED').length;
 
-  int get draftExams {
-    return exams.where((e) => e.status.trim().toUpperCase() == 'DRAFT').length;
-  }
+  int get draftExams =>
+      exams.where((e) => e.status.trim().toUpperCase() == 'DRAFT').length;
 
-  int get publishedExams {
-    return exams
-        .where((e) => e.status.trim().toUpperCase() == 'PUBLISHED')
-        .length;
-  }
+  int get publishedExams =>
+      exams.where((e) => e.status.trim().toUpperCase() == 'PUBLISHED').length;
 
   // ============================================================
-  // CREATE EXAMINATION
+  // CREATE / EDIT
   // ============================================================
 
   void _showCreateExamDialog() {
     _showExamDialog();
   }
-
-  // ============================================================
-  // EDIT EXAMINATION
-  // ============================================================
 
   void _showEditExamDialog(ExaminationModel exam) {
     _showExamDialog(exam: exam);
@@ -619,12 +594,42 @@ class _ExamsScreenState extends State<ExamsScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text(
-                exam == null ? 'Create New Examination' : 'Edit Examination',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+              title: Row(
+                children: [
+                  Container(
+                    height: 42,
+                    width: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.assignment_outlined,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      exam == null
+                          ? 'Create New Examination'
+                          : 'Edit Examination',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               content: SizedBox(
-                width: 500,
+                width: 520,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -632,24 +637,20 @@ class _ExamsScreenState extends State<ExamsScreen> {
                       TextField(
                         controller: nameController,
                         decoration: _inputDecoration(
-                          'Exam Name',
-                          Icons.assignment_outlined,
+                          label: 'Exam Name',
+                          icon: Icons.assignment_outlined,
                         ),
                       ),
-
                       const SizedBox(height: 14),
-
                       TextField(
                         controller: descriptionController,
                         maxLines: 3,
                         decoration: _inputDecoration(
-                          'Description',
-                          Icons.description_outlined,
+                          label: 'Description',
+                          icon: Icons.description_outlined,
                         ),
                       ),
-
                       const SizedBox(height: 14),
-
                       Row(
                         children: [
                           Expanded(
@@ -657,8 +658,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
                               controller: academicYearController,
                               keyboardType: TextInputType.number,
                               decoration: _inputDecoration(
-                                'Academic Year ID',
-                                Icons.school_outlined,
+                                label: 'Academic Year ID',
+                                icon: Icons.school_outlined,
                               ),
                             ),
                           ),
@@ -668,21 +669,19 @@ class _ExamsScreenState extends State<ExamsScreen> {
                               controller: yearController,
                               keyboardType: TextInputType.number,
                               decoration: _inputDecoration(
-                                'Year',
-                                Icons.calendar_today_outlined,
+                                label: 'Year',
+                                icon: Icons.calendar_today_outlined,
                               ),
                             ),
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 14),
-
                       DropdownButtonFormField<String>(
                         value: examType,
                         decoration: _inputDecoration(
-                          'Exam Type',
-                          Icons.category_outlined,
+                          label: 'Exam Type',
+                          icon: Icons.category_outlined,
                         ),
                         items:
                             const [
@@ -707,14 +706,12 @@ class _ExamsScreenState extends State<ExamsScreen> {
                           }
                         },
                       ),
-
                       const SizedBox(height: 14),
-
                       DropdownButtonFormField<String>(
                         value: status,
                         decoration: _inputDecoration(
-                          'Status',
-                          Icons.flag_outlined,
+                          label: 'Status',
+                          icon: Icons.flag_outlined,
                         ),
                         items:
                             const [
@@ -742,22 +739,19 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   ),
                 ),
               ),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
               actions: [
                 TextButton(
                   onPressed: isSaving
                       ? null
-                      : () {
-                          Navigator.pop(dialogContext);
-                        },
+                      : () => Navigator.pop(dialogContext),
                   child: const Text('Cancel'),
                 ),
-
                 ElevatedButton(
                   onPressed: isSaving
                       ? null
                       : () async {
                           final name = nameController.text.trim();
-
                           final description = descriptionController.text.trim();
 
                           final academicYearId = int.tryParse(
@@ -813,14 +807,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
                             Navigator.pop(dialogContext);
 
-                            if (exam == null) {
-                              setState(() {
+                            setState(() {
+                              if (exam == null) {
                                 exams.insert(0, result);
-                              });
-
-                              _showSnack('Examination created successfully.');
-                            } else {
-                              setState(() {
+                              } else {
                                 final index = exams.indexWhere(
                                   (e) => e.id == exam.id,
                                 );
@@ -828,10 +818,14 @@ class _ExamsScreenState extends State<ExamsScreen> {
                                 if (index != -1) {
                                   exams[index] = result;
                                 }
-                              });
+                              }
+                            });
 
-                              _showSnack('Examination updated successfully.');
-                            }
+                            _showSnack(
+                              exam == null
+                                  ? 'Examination created successfully.'
+                                  : 'Examination updated successfully.',
+                            );
                           } catch (e) {
                             if (!mounted) return;
 
@@ -849,6 +843,13 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: isSaving
                       ? const SizedBox(
@@ -873,129 +874,134 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // DETAILS
   // ============================================================
 
-  Future<void> _showExamDetails(ExaminationModel exam) async {
-    setState(() {
-      selectedSchedules = [];
-      isLoadingSchedules = true;
-    });
+  void _showExamDetails(ExaminationModel exam) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ExamDetailsScreen(
+        exam: exam,
+        service: _service!,
+      ),
+    ),
+  );
+}
 
-    if (exam.id != null) {
-      try {
-        final schedules = await _service!.getSchedulesByExamination(exam.id!);
-
-        if (!mounted) return;
-
-        setState(() {
-          selectedSchedules = schedules;
-          isLoadingSchedules = false;
-        });
-      } catch (e) {
-        if (!mounted) return;
-
-        setState(() {
-          isLoadingSchedules = false;
-        });
-
-        _showSnack(e.toString().replaceFirst('Exception: ', ''));
-      }
-    } else {
-      setState(() {
-        isLoadingSchedules = false;
-      });
-    }
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(
-            exam.name,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: SizedBox(
-            width: 650,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _detailRow('Exam ID', '${exam.id ?? '-'}'),
-                  _detailRow('Academic Year', '${exam.academicYearId ?? '-'}'),
-                  _detailRow('Exam Type', _prettyEnum(exam.examType)),
-                  _detailRow('Year', '${exam.year}'),
-                  _detailRow('Status', _prettyEnum(exam.status)),
-                  _detailRow(
-                    'Description',
-                    exam.description.isEmpty ? '-' : exam.description,
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  const Text(
-                    'Exam Schedules',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  if (isLoadingSchedules)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(25),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  else if (selectedSchedules.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'No exam schedules found.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF6B7280),
-                        ),
-                      ),
-                    )
-                  else
-                    _scheduleTable(),
-                ],
+  Widget _detailHeaderCard(ExaminationModel exam) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFEFF6FF), Color(0xFFF5F3FF)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDBEAFE)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _detailMetric(
+                  'Exam ID',
+                  '${exam.id ?? '-'}',
+                  Icons.tag_outlined,
+                ),
               ),
-            ),
+              Expanded(
+                child: _detailMetric(
+                  'Year',
+                  '${exam.year}',
+                  Icons.calendar_today_outlined,
+                ),
+              ),
+              Expanded(
+                child: _detailMetric(
+                  'Academic Year',
+                  '${exam.academicYearId ?? '-'}',
+                  Icons.school_outlined,
+                ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Close'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-
-                _showEditExamDialog(exam);
-              },
-              icon: const Icon(Icons.edit_outlined, size: 17),
-              label: const Text('Edit'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _detailMetric(
+                  'Exam Type',
+                  _prettyEnum(exam.examType),
+                  Icons.category_outlined,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Status',
+                      style: TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
+                    ),
+                    const SizedBox(height: 6),
+                    _statusBadge(exam.status),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (exam.description.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.75),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                exam.description,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF4B5563),
+                  height: 1.5,
+                ),
               ),
             ),
           ],
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _detailMetric(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: const Color(0xFF4F46E5)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1008,12 +1014,14 @@ class _ExamsScreenState extends State<ExamsScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columnSpacing: 22,
+          headingRowHeight: 46,
+          dataRowMinHeight: 56,
           headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
           columns: const [
             DataColumn(label: Text('Subject')),
@@ -1058,7 +1066,10 @@ class _ExamsScreenState extends State<ExamsScreen> {
                 DataCell(
                   Text(
                     '${schedule.maxMarks}',
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 DataCell(
@@ -1083,18 +1094,19 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Widget _buildHeader() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 650) {
+        if (constraints.maxWidth < 700) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _headerText(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               _headerActionButtons(),
             ],
           );
         }
 
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(child: _headerText()),
             _headerActionButtons(),
@@ -1105,21 +1117,52 @@ class _ExamsScreenState extends State<ExamsScreen> {
   }
 
   Widget _headerText() {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Examinations',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
+        Container(
+          height: 52,
+          width: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
+            ),
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2563EB).withOpacity(.20),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.assignment_rounded,
+            color: Colors.white,
+            size: 26,
           ),
         ),
-        const SizedBox(height: 7),
-        Text(
-          'Create and manage school examinations and schedules.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Examinations',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF111827),
+                  letterSpacing: -.5,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Create, schedule and manage school examinations.',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1128,14 +1171,14 @@ class _ExamsScreenState extends State<ExamsScreen> {
   Widget _addExamButton() {
     return ElevatedButton.icon(
       onPressed: _showCreateExamDialog,
-      icon: const Icon(Icons.add, size: 19),
+      icon: const Icon(Icons.add_rounded, size: 19),
       label: const Text('Create Examination'),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
       ),
     );
   }
@@ -1147,18 +1190,24 @@ class _ExamsScreenState extends State<ExamsScreen> {
       children: [
         OutlinedButton.icon(
           onPressed: isSaving ? null : _importExaminationsExcel,
-          icon: const Icon(Icons.upload_file_outlined, size: 18),
-          label: const Text('Import Excel'),
+          icon: isSaving
+              ? const SizedBox(
+                  height: 17,
+                  width: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.upload_file_outlined, size: 18),
+          label: Text(isSaving ? 'Importing...' : 'Import Excel'),
           style: OutlinedButton.styleFrom(
             foregroundColor: const Color(0xFF2563EB),
-            side: const BorderSide(color: Color(0xFF2563EB)),
+            side: const BorderSide(color: Color(0xFFBFDBFE)),
+            backgroundColor: const Color(0xFFEFF6FF),
             padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 15),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(11),
             ),
           ),
         ),
-
         _addExamButton(),
       ],
     );
@@ -1174,19 +1223,19 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: Color(0x06000000),
+            blurRadius: 18,
+            offset: Offset(0, 6),
           ),
         ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isMobile = constraints.maxWidth < 650;
+          final isMobile = constraints.maxWidth < 750;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1194,24 +1243,24 @@ class _ExamsScreenState extends State<ExamsScreen> {
               Row(
                 children: [
                   Container(
-                    height: 36,
-                    width: 36,
+                    height: 38,
+                    width: 38,
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
-                      Icons.filter_list_rounded,
+                      Icons.tune_rounded,
                       size: 19,
                       color: Color(0xFF2563EB),
                     ),
                   ),
                   const SizedBox(width: 10),
                   const Text(
-                    'Filters',
+                    'Filter Examinations',
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                       color: Color(0xFF111827),
                     ),
                   ),
@@ -1221,89 +1270,48 @@ class _ExamsScreenState extends State<ExamsScreen> {
                       setState(() {
                         selectedStatus = 'All';
                         selectedExamType = 'All';
+                        searchQuery = '';
                       });
                     },
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Clear'),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: const Text('Reset'),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF6B7280),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
-
               if (isMobile)
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Status',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    _statusDropdown(),
-
+                    _searchField(),
                     const SizedBox(height: 14),
-
-                    const Text(
-                      'Exam Type',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6B7280),
-                      ),
+                    _filterDropdown(label: 'Status', child: _statusDropdown()),
+                    const SizedBox(height: 14),
+                    _filterDropdown(
+                      label: 'Exam Type',
+                      child: _examTypeDropdown(),
                     ),
-                    const SizedBox(height: 7),
-                    _examTypeDropdown(),
                   ],
                 )
               else
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(
-                      width: 240,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Status',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                          const SizedBox(height: 7),
-                          _statusDropdown(),
-                        ],
+                    Expanded(flex: 2, child: _searchField()),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _filterDropdown(
+                        label: 'Status',
+                        child: _statusDropdown(),
                       ),
                     ),
-
-                    const SizedBox(width: 16),
-
-                    SizedBox(
-                      width: 240,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Exam Type',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                          const SizedBox(height: 7),
-                          _examTypeDropdown(),
-                        ],
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _filterDropdown(
+                        label: 'Exam Type',
+                        child: _examTypeDropdown(),
                       ),
                     ),
                   ],
@@ -1312,6 +1320,56 @@ class _ExamsScreenState extends State<ExamsScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _searchField() {
+    return TextField(
+      onChanged: (value) {
+        setState(() {
+          searchQuery = value.trim();
+        });
+      },
+      decoration: InputDecoration(
+        hintText: 'Search examinations...',
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(11),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(11),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(11),
+          borderSide: const BorderSide(color: Color(0xFF93C5FD)),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+      ),
+    );
+  }
+
+  Widget _filterDropdown({required String label, required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(height: 7),
+        child,
+      ],
     );
   }
 
@@ -1370,20 +1428,23 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 11),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 19),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
           items: items.map((item) {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
                 _prettyEnum(item),
-                style: const TextStyle(fontSize: 12),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             );
           }).toList(),
@@ -1394,7 +1455,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
   }
 
   // ============================================================
-  // SUMMARY
+  // SUMMARY CARDS
   // ============================================================
 
   Widget _buildSummaryCards() {
@@ -1402,66 +1463,61 @@ class _ExamsScreenState extends State<ExamsScreen> {
       builder: (context, constraints) {
         int columns = 3;
 
-        if (constraints.maxWidth < 900) {
+        if (constraints.maxWidth < 1000) {
           columns = 2;
         }
 
-        if (constraints.maxWidth < 550) {
+        if (constraints.maxWidth < 560) {
           columns = 1;
         }
 
         return GridView.count(
           crossAxisCount: columns,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: columns == 1 ? 4 : 2.5,
+          childAspectRatio: columns == 1 ? 4.2 : 2.25,
           children: [
             _summaryCard(
-              'Total Exams',
+              'Total Examinations',
               '$totalExams',
-              Icons.assignment_outlined,
+              Icons.assignment_rounded,
               const Color(0xFF2563EB),
               const Color(0xFFEFF6FF),
             ),
-
             _summaryCard(
               'Draft',
               '$draftExams',
-              Icons.edit_note_outlined,
+              Icons.edit_note_rounded,
               const Color(0xFF6B7280),
               const Color(0xFFF3F4F6),
             ),
-
             _summaryCard(
               'Upcoming',
               '$upcomingExams',
-              Icons.event_available_outlined,
+              Icons.event_available_rounded,
               const Color(0xFF7C3AED),
               const Color(0xFFF5F3FF),
             ),
-
             _summaryCard(
               'Scheduled',
               '$scheduledExams',
-              Icons.schedule_outlined,
+              Icons.schedule_rounded,
               const Color(0xFFD97706),
               const Color(0xFFFFFBEB),
             ),
-
             _summaryCard(
               'Published',
               '$publishedExams',
-              Icons.publish_outlined,
-              const Color(0xFF7C3AED),
+              Icons.publish_rounded,
+              const Color(0xFF9333EA),
               const Color(0xFFF3E8FF),
             ),
-
             _summaryCard(
               'Completed',
               '$completedExams',
-              Icons.task_alt_outlined,
+              Icons.task_alt_rounded,
               const Color(0xFF15803D),
               const Color(0xFFF0FDF4),
             ),
@@ -1482,39 +1538,54 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(15),
         border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x05000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            height: 48,
-            width: 48,
+            height: 50,
+            width: 50,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 23),
           ),
           const SizedBox(width: 14),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1533,26 +1604,62 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x05000000),
+            blurRadius: 15,
+            offset: Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text(
-                'Examination Schedule',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
+              Container(
+                height: 36,
+                width: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F3FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.list_alt_rounded,
+                  size: 19,
+                  color: Color(0xFF7C3AED),
                 ),
               ),
-              const Spacer(),
-              Text(
-                '${data.length} exams',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Examinations',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${data.length} exams',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1571,6 +1678,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
         horizontalMargin: 8,
         dataRowMinHeight: 72,
         dataRowMaxHeight: 82,
+        headingRowHeight: 48,
         headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
         columns: const [
           DataColumn(label: Text('Examination')),
@@ -1584,14 +1692,15 @@ class _ExamsScreenState extends State<ExamsScreen> {
           return DataRow(
             cells: [
               DataCell(_examNameCell(exam)),
+              DataCell(_typeBadge(exam.examType)),
               DataCell(
                 Text(
-                  _prettyEnum(exam.examType),
-                  style: const TextStyle(fontSize: 12),
+                  '${exam.year}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              DataCell(
-                Text('${exam.year}', style: const TextStyle(fontSize: 12)),
               ),
               DataCell(
                 Text(
@@ -1610,23 +1719,25 @@ class _ExamsScreenState extends State<ExamsScreen> {
 
   Widget _examNameCell(ExaminationModel exam) {
     return SizedBox(
-      width: 240,
+      width: 250,
       child: Row(
         children: [
           Container(
-            height: 40,
-            width: 40,
+            height: 42,
+            width: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(10),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFEFF6FF), Color(0xFFF5F3FF)],
+              ),
+              borderRadius: BorderRadius.circular(11),
             ),
             child: const Icon(
-              Icons.assignment_outlined,
+              Icons.assignment_rounded,
               size: 20,
               color: Color(0xFF2563EB),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1638,21 +1749,50 @@ class _ExamsScreenState extends State<ExamsScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  'EX${exam.id ?? '-'}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF9CA3AF),
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.tag_rounded,
+                      size: 11,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      'EX${exam.id ?? '-'}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _typeBadge(String type) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        _prettyEnum(type),
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF4B5563),
+        ),
       ),
     );
   }
@@ -1696,19 +1836,31 @@ class _ExamsScreenState extends State<ExamsScreen> {
         color = const Color(0xFF6B7280);
         background = const Color(0xFFF3F4F6);
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        _prettyEnum(status),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 6,
+            width: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _prettyEnum(status),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1717,22 +1869,35 @@ class _ExamsScreenState extends State<ExamsScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          tooltip: 'View Details',
-          onPressed: () {
-            _showExamDetails(exam);
-          },
-          icon: const Icon(Icons.visibility_outlined, size: 18),
+        Tooltip(
+          message: 'View Details',
+          child: IconButton(
+            onPressed: () => _showExamDetails(exam),
+            icon: const Icon(Icons.visibility_outlined, size: 18),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFF9FAFB),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(9),
+              ),
+            ),
+          ),
         ),
-        IconButton(
-          tooltip: 'Edit',
-          onPressed: () {
-            _showEditExamDialog(exam);
-          },
-          icon: const Icon(
-            Icons.edit_outlined,
-            size: 18,
-            color: Color(0xFF2563EB),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: 'Edit',
+          child: IconButton(
+            onPressed: () => _showEditExamDialog(exam),
+            icon: const Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: Color(0xFF2563EB),
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFEFF6FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(9),
+              ),
+            ),
           ),
         ),
       ],
@@ -1744,26 +1909,42 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // ============================================================
 
   Widget _emptyState() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 60),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 65),
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.assignment_outlined, size: 52, color: Color(0xFFD1D5DB)),
-            SizedBox(height: 12),
-            Text(
+            Container(
+              height: 70,
+              width: 70,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.assignment_outlined,
+                size: 34,
+                color: Color(0xFFD1D5DB),
+              ),
+            ),
+            const SizedBox(height: 15),
+            const Text(
               'No examinations found',
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: Color(0xFF374151),
               ),
             ),
-            SizedBox(height: 5),
+            const SizedBox(height: 5),
             Text(
-              'Try changing your filters or create a new examination.',
+              searchQuery.isNotEmpty ||
+                      selectedStatus != 'All' ||
+                      selectedExamType != 'All'
+                  ? 'Try changing your filters.'
+                  : 'Create a new examination to get started.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
             ),
           ],
         ),
@@ -1775,11 +1956,27 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // INPUT DECORATION
   // ============================================================
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+  }) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, size: 19),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+      prefixIcon: Icon(icon, size: 19, color: const Color(0xFF6B7280)),
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: Color(0xFF93C5FD), width: 1.3),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
     );
   }
@@ -1812,6 +2009,176 @@ class _ExamsScreenState extends State<ExamsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // EXCEL IMPORT SECTION
+  // ============================================================
+
+  Widget _buildExcelImportSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFF)],
+        ),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x05000000),
+            blurRadius: 16,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final mobile = constraints.maxWidth < 700;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 44,
+                    width: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.table_view_rounded,
+                      color: Color(0xFF059669),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Bulk Excel Import',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Quickly import schedules, results and grade rules.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              if (mobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _bulkImportButton(
+                      label: 'Import Schedules',
+                      icon: Icons.calendar_month_outlined,
+                      isLoading: isImportingSchedules,
+                      onPressed: isImportingSchedules
+                          ? null
+                          : _importSchedulesExcel,
+                    ),
+                    const SizedBox(height: 9),
+                    _bulkImportButton(
+                      label: 'Import Results',
+                      icon: Icons.assessment_outlined,
+                      isLoading: isImportingResults,
+                      onPressed: isImportingResults
+                          ? null
+                          : _importResultsExcel,
+                    ),
+                    const SizedBox(height: 9),
+                    _bulkImportButton(
+                      label: 'Import Grade Rules',
+                      icon: Icons.rule_outlined,
+                      isLoading: isImportingGradeRules,
+                      onPressed: isImportingGradeRules
+                          ? null
+                          : _importGradeRulesExcel,
+                    ),
+                  ],
+                )
+              else
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _bulkImportButton(
+                      label: 'Import Schedules',
+                      icon: Icons.calendar_month_outlined,
+                      isLoading: isImportingSchedules,
+                      onPressed: isImportingSchedules
+                          ? null
+                          : _importSchedulesExcel,
+                    ),
+                    _bulkImportButton(
+                      label: 'Import Results',
+                      icon: Icons.assessment_outlined,
+                      isLoading: isImportingResults,
+                      onPressed: isImportingResults
+                          ? null
+                          : _importResultsExcel,
+                    ),
+                    _bulkImportButton(
+                      label: 'Import Grade Rules',
+                      icon: Icons.rule_outlined,
+                      isLoading: isImportingGradeRules,
+                      onPressed: isImportingGradeRules
+                          ? null
+                          : _importGradeRulesExcel,
+                    ),
+                  ],
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _bulkImportButton({
+    required String label,
+    required IconData icon,
+    required bool isLoading,
+    required VoidCallback? onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: 18),
+      label: Text(isLoading ? 'Importing...' : label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF374151),
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFFD1D5DB)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -1874,10 +2241,18 @@ class _ExamsScreenState extends State<ExamsScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -1885,33 +2260,39 @@ class _ExamsScreenState extends State<ExamsScreen> {
       backgroundColor: const Color(0xFFF5F7FB),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
+          : RefreshIndicator(
+              onRefresh: _loadExaminations,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  _buildExcelImportSection(),
+                    _buildExcelImportSection(),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  if (errorMessage != null) _errorBanner(),
+                    if (errorMessage != null) _errorBanner(),
 
-                  if (errorMessage != null) const SizedBox(height: 16),
+                    if (errorMessage != null) const SizedBox(height: 16),
 
-                  _buildFilters(),
+                    _buildSummaryCards(),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  _buildSummaryCards(),
+                    _buildFilters(),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  _buildExamList(),
-                ],
+                    _buildExamList(),
+
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
     );
@@ -1923,12 +2304,24 @@ class _ExamsScreenState extends State<ExamsScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFFECACA)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
+          Container(
+            height: 34,
+            width: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEE2E2),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              color: Color(0xFFDC2626),
+              size: 19,
+            ),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1939,95 +2332,9 @@ class _ExamsScreenState extends State<ExamsScreen> {
           IconButton(
             tooltip: 'Retry',
             onPressed: _loadExaminations,
-            icon: const Icon(Icons.refresh, size: 18),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildExcelImportSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Bulk Excel Import',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
-            ),
-          ),
-
-          const SizedBox(height: 5),
-
-          const Text(
-            'Import exam schedules, results and grade rules using Excel files.',
-            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
-
-          const SizedBox(height: 16),
-
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _bulkImportButton(
-                label: 'Import Schedules',
-                icon: Icons.calendar_month_outlined,
-                isLoading: isImportingSchedules,
-                onPressed: isImportingSchedules ? null : _importSchedulesExcel,
-              ),
-
-              _bulkImportButton(
-                label: 'Import Results',
-                icon: Icons.assessment_outlined,
-                isLoading: isImportingResults,
-                onPressed: isImportingResults ? null : _importResultsExcel,
-              ),
-
-              _bulkImportButton(
-                label: 'Import Grade Rules',
-                icon: Icons.rule_outlined,
-                isLoading: isImportingGradeRules,
-                onPressed: isImportingGradeRules
-                    ? null
-                    : _importGradeRulesExcel,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _bulkImportButton({
-    required String label,
-    required IconData icon,
-    required bool isLoading,
-    required VoidCallback? onPressed,
-  }) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(icon, size: 18),
-      label: Text(isLoading ? 'Importing...' : label),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }

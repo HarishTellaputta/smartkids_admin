@@ -48,7 +48,7 @@ class _PaidPaymentsScreenState extends State<PaidPaymentsScreen> {
     });
 
     try {
-      final result = await _feeService.getPayments();
+      final result = await _feeService.getPaidPayments();
 
       if (!mounted) return;
 

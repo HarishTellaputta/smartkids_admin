@@ -6,6 +6,7 @@ import '../models/attendance_response_model.dart';
 import '../models/attendance_report_model.dart';
 import '../models/attendance_update_model.dart';
 import '../models/bulk_attendance_request_model.dart';
+import '../models/bulk_attendance_update_request_model.dart';
 
 class AttendanceService {
   final Dio _dio;
@@ -390,4 +391,28 @@ class AttendanceService {
       throw _handleError(e);
     }
   }
+
+
+  Future<List<AttendanceResponseModel>> updateBulkAttendance(
+  BulkAttendanceUpdateRequestModel request,
+) async {
+  try {
+    final response = await _dio.put(
+      '/api/v1/attendances/bulk',
+      data: request.toJson(),
+    );
+
+    final List<dynamic> data = response.data;
+
+    return data
+        .map(
+          (json) => AttendanceResponseModel.fromJson(json),
+        )
+        .toList();
+  } on DioException catch (e) {
+    throw Exception(_handleError(e));
+  } catch (e) {
+    throw Exception(e.toString());
+  }
+}
 }

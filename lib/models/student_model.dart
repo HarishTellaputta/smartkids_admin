@@ -8,6 +8,8 @@ class Student {
   final String? gender;
   final String? bloodGroup;
   final String? admissionDate;
+  final int?    classId;
+  final String? className;
   final int? sectionId;
   final String? sectionName;
   final int? parentId;
@@ -28,6 +30,8 @@ class Student {
     this.gender,
     this.bloodGroup,
     this.admissionDate,
+    this.classId,
+    this.className,
     this.sectionId,
     this.sectionName,
     this.parentId,
@@ -50,6 +54,8 @@ class Student {
       gender: json['gender'],
       bloodGroup: json['bloodGroup'],
       admissionDate: json['admissionDate'],
+      classId: json['classId'],
+      className: json['className'],
       sectionId: json['sectionId'],
       sectionName: json['sectionName'],
       parentId: json['parentId'],

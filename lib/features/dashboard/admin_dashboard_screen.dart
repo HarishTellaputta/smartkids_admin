@@ -34,6 +34,8 @@ import '../auth/login_screen.dart';
 import '../../services/admin_dashboard_service.dart';
 import '../subjects/subjects_screen.dart';
 import 'package:smartkids_admin/models/student_gender_summary.dart';
+import '../../report_cards/screens/report_cards_screen.dart';
+import '../reports/screens/reports_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -265,9 +267,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'Results',
       'Notices',
       'Events',
-      'Admissions',
+      'Reports',
       'Settings',
       'Logout',
+      'Report Cards'
     ];
 
     if (index >= 0 && index < names.length) {
@@ -2679,15 +2682,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       case 14:
         return const EventsScreen();
-
       case 15:
-        return const AdmissionsScreen();
+        return const ReportsScreen();
 
       case 16:
         return const SettingsScreen();
 
       case 17:
         return _buildLogoutScreen();
+
+      case 18:
+        return const ReportCardsScreen();
 
       default:
         return SingleChildScrollView(

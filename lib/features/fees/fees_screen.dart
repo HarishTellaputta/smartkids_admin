@@ -956,8 +956,7 @@ class _FeesScreenState extends State<FeesScreen> {
             items: const [
               DropdownMenuItem(value: 'All', child: Text('All Status')),
               DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
-              DropdownMenuItem(value: 'PARTIAL', child: Text('Partial')),
-              DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+              DropdownMenuItem(value: 'PARTIAL', child: Text('Partial'))
             ],
             onChanged: (value) {
               if (value == null) return;
@@ -1088,7 +1087,7 @@ class _FeesScreenState extends State<FeesScreen> {
                       ),
                       columns: const [
                         DataColumn(label: Text('STUDENT')),
-                        DataColumn(label: Text('CLASS')),
+                        //DataColumn(label: Text('CLASS')),
                         DataColumn(label: Text('FEE')),
                         DataColumn(label: Text('TOTAL')),
                         DataColumn(label: Text('PAID')),
@@ -1107,7 +1106,7 @@ class _FeesScreenState extends State<FeesScreen> {
                               _studentCell(record),
                               onTap: () => _openFeeDetails(record),
                             ),
-                            DataCell(Text(_classNameForFee(record))),
+                           // DataCell(Text(_classNameForFee(record))),
                             DataCell(
                               SizedBox(
                                 width: 130,

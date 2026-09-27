@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,18 +18,13 @@ import 'package:smartkids_admin/features/fees/services/fee_service.dart';
 class StudentDetailsScreen extends StatefulWidget {
   final Student student;
 
-  const StudentDetailsScreen({
-    super.key,
-    required this.student,
-  });
+  const StudentDetailsScreen({super.key, required this.student});
 
   @override
-  State<StudentDetailsScreen> createState() =>
-      _StudentDetailsScreenState();
+  State<StudentDetailsScreen> createState() => _StudentDetailsScreenState();
 }
 
-class _StudentDetailsScreenState
-    extends State<StudentDetailsScreen> {
+class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   // ============================================================
   // PARENT
   // ============================================================
@@ -144,10 +138,7 @@ class _StudentDetailsScreenState
     try {
       final service = FeeService();
 
-      final result = await service.getStudentFees(
-        studentId,
-        pending: true,
-      );
+      final result = await service.getStudentFees(studentId, pending: true);
 
       if (!mounted) return;
 
@@ -249,9 +240,7 @@ class _StudentDetailsScreenState
       final service = ExaminationService(token);
 
       // Actual student results.
-      final results = await service.getResultsByStudent(
-        studentId,
-      );
+      final results = await service.getResultsByStudent(studentId);
 
       // Schedules are required to resolve subject.
       final schedules = await service.getSchedules();
@@ -285,9 +274,7 @@ class _StudentDetailsScreenState
     return attendanceRecords.where((record) {
       final status = record.status.toUpperCase().trim();
 
-      return status == 'PRESENT' ||
-          status == 'P' ||
-          status == 'PRESENTED';
+      return status == 'PRESENT' || status == 'P' || status == 'PRESENTED';
     }).length;
   }
 
@@ -303,9 +290,7 @@ class _StudentDetailsScreenState
     return attendanceRecords.where((record) {
       final status = record.status.toUpperCase().trim();
 
-      return status == 'LEAVE' ||
-          status == 'L' ||
-          status == 'ON_LEAVE';
+      return status == 'LEAVE' || status == 'L' || status == 'ON_LEAVE';
     }).length;
   }
 
@@ -354,12 +339,9 @@ class _StudentDetailsScreenState
       return 'Exam';
     }
 
-    final examination =
-        _findExamination(schedule.examinationId!);
+    final examination = _findExamination(schedule.examinationId!);
 
-    return examination?.name.isNotEmpty == true
-        ? examination!.name
-        : 'Exam';
+    return examination?.name.isNotEmpty == true ? examination!.name : 'Exam';
   }
 
   String _subjectName(ExamResultResponseModel result) {
@@ -421,8 +403,7 @@ class _StudentDetailsScreenState
   // STATUS
   // ============================================================
 
-  bool get _isActive =>
-      widget.student.status?.toUpperCase() == 'ACTIVE';
+  bool get _isActive => widget.student.status?.toUpperCase() == 'ACTIVE';
 
   String get _statusText {
     final status = widget.student.status;
@@ -454,9 +435,7 @@ class _StudentDetailsScreenState
             color: Color(0xFF172033),
           ),
         ),
-        iconTheme: const IconThemeData(
-          color: Color(0xFF172033),
-        ),
+        iconTheme: const IconThemeData(color: Color(0xFF172033)),
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -464,17 +443,12 @@ class _StudentDetailsScreenState
             final isMobile = constraints.maxWidth < 760;
 
             return SingleChildScrollView(
-              padding: EdgeInsets.all(
-                isMobile ? 16 : 28,
-              ),
+              padding: EdgeInsets.all(isMobile ? 16 : 28),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 1250,
-                  ),
+                  constraints: const BoxConstraints(maxWidth: 1250),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildProfileHeader(isMobile),
 
@@ -506,23 +480,17 @@ class _StudentDetailsScreenState
   Widget _buildProfileHeader(bool isMobile) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(
-        isMobile ? 20 : 26,
-      ),
+      padding: EdgeInsets.all(isMobile ? 20 : 26),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF172554),
-            Color(0xFF1E3A8A),
-          ],
+          colors: [Color(0xFF172554), Color(0xFF1E3A8A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF172554)
-                .withOpacity(.16),
+            color: const Color(0xFF172554).withOpacity(.16),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -557,8 +525,7 @@ class _StudentDetailsScreenState
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.student.name ?? 'Student',
@@ -579,13 +546,11 @@ class _StudentDetailsScreenState
                   children: [
                     _headerChip(
                       Icons.badge_outlined,
-                      widget.student.admissionNo ??
-                          'No Admission No',
+                      widget.student.admissionNo ?? 'No Admission No',
                     ),
                     _headerChip(
                       Icons.school_outlined,
-                      widget.student.sectionName ??
-                          'Section',
+                      widget.student.sectionName ?? 'Section',
                     ),
                   ],
                 ),
@@ -601,14 +566,9 @@ class _StudentDetailsScreenState
 
   Widget _statusBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: _isActive
-            ? const Color(0xFFDCFCE7)
-            : const Color(0xFFFEE2E2),
+        color: _isActive ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
@@ -640,15 +600,9 @@ class _StudentDetailsScreenState
     );
   }
 
-  Widget _headerChip(
-    IconData icon,
-    String text,
-  ) {
+  Widget _headerChip(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(.10),
         borderRadius: BorderRadius.circular(9),
@@ -656,11 +610,7 @@ class _StudentDetailsScreenState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: Colors.white70,
-          ),
+          Icon(icon, size: 14, color: Colors.white70),
           const SizedBox(width: 5),
           Text(
             text,
@@ -683,64 +633,44 @@ class _StudentDetailsScreenState
     return Column(
       children: [
         Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildPersonalInformation(),
-            ),
+            Expanded(child: _buildPersonalInformation()),
             const SizedBox(width: 18),
-            Expanded(
-              child: _buildParentInformation(),
-            ),
+            Expanded(child: _buildParentInformation()),
           ],
         ),
 
         const SizedBox(height: 18),
 
         Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildAcademicInformation(),
-            ),
+            Expanded(child: _buildAcademicInformation()),
             const SizedBox(width: 18),
-            Expanded(
-              child: _buildAttendanceCard(),
-            ),
+            Expanded(child: _buildAttendanceCard()),
           ],
         ),
 
         const SizedBox(height: 18),
 
         Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildExamResultsCard(),
-            ),
+            Expanded(child: _buildExamResultsCard()),
             const SizedBox(width: 18),
-            Expanded(
-              child: _buildFeeInformation(),
-            ),
+            Expanded(child: _buildFeeInformation()),
           ],
         ),
 
         const SizedBox(height: 18),
 
         Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildContactInformation(),
-            ),
+            Expanded(child: _buildContactInformation()),
             const SizedBox(width: 18),
-            Expanded(
-              child: _buildRecordInformation(),
-            ),
+            Expanded(child: _buildRecordInformation()),
           ],
         ),
       ],
@@ -831,15 +761,13 @@ class _StudentDetailsScreenState
           _infoRow(
             Icons.class_outlined,
             'Class / Section',
-            _displayValue(widget.student.sectionName),
+            '${_displayValue(widget.student.className)} / ${_displayValue(widget.student.sectionName)}',
           ),
           _divider(),
           _infoRow(
             Icons.calendar_month_outlined,
             'Academic Year',
-            _displayValue(
-              widget.student.academicYearName,
-            ),
+            _displayValue(widget.student.academicYearName),
           ),
           _divider(),
           _infoRow(
@@ -865,9 +793,7 @@ class _StudentDetailsScreenState
       subtitle: parent == null
           ? 'Parent information'
           : 'Click to view complete details',
-      onTap: parent == null
-          ? null
-          : _showParentDetails,
+      onTap: parent == null ? null : _showParentDetails,
       child: _buildParentContent(),
     );
   }
@@ -876,26 +802,19 @@ class _StudentDetailsScreenState
     if (isParentLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (parentError != null) {
       return Row(
         children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: Color(0xFFD97706),
-          ),
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               parentError!,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(color: Color(0xFF64748B)),
             ),
           ),
           IconButton(
@@ -911,9 +830,7 @@ class _StudentDetailsScreenState
         padding: EdgeInsets.symmetric(vertical: 10),
         child: Text(
           'Parent information not available',
-          style: TextStyle(
-            color: Color(0xFF64748B),
-          ),
+          style: TextStyle(color: Color(0xFF64748B)),
         ),
       );
     }
@@ -929,18 +846,14 @@ class _StudentDetailsScreenState
                 color: const Color(0xFFF3E8FF),
                 borderRadius: BorderRadius.circular(15),
               ),
-              child: const Icon(
-                Icons.person,
-                color: Color(0xFFA21CAF),
-              ),
+              child: const Icon(Icons.person, color: Color(0xFFA21CAF)),
             ),
 
             const SizedBox(width: 13),
 
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     parent!.displayName,
@@ -976,10 +889,7 @@ class _StudentDetailsScreenState
         const SizedBox(height: 16),
 
         if (parent!.contactPhone != null)
-          _contactMiniChip(
-            Icons.phone_outlined,
-            parent!.contactPhone!,
-          ),
+          _contactMiniChip(Icons.phone_outlined, parent!.contactPhone!),
       ],
     );
   }
@@ -996,16 +906,14 @@ class _StudentDetailsScreenState
     // Refresh parent so linked students are latest.
     if (parent!.id != null) {
       try {
-        final prefs =
-            await SharedPreferences.getInstance();
+        final prefs = await SharedPreferences.getInstance();
 
         final token = prefs.getString('jwt_token');
 
         if (token != null && token.isNotEmpty) {
           final service = ParentService(token);
 
-          selectedParent =
-              await service.getParent(parent!.id!);
+          selectedParent = await service.getParent(parent!.id!);
         }
       } catch (_) {
         // Existing parent object remains available.
@@ -1022,15 +930,10 @@ class _StudentDetailsScreenState
             borderRadius: BorderRadius.circular(22),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 680,
-              maxHeight: 720,
-            ),
+            constraints: const BoxConstraints(maxWidth: 680, maxHeight: 720),
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: _parentDetailsContent(
-                selectedParent,
-              ),
+              child: _parentDetailsContent(selectedParent),
             ),
           ),
         );
@@ -1041,15 +944,13 @@ class _StudentDetailsScreenState
   Widget _parentDetailsContent(Parent parent) {
     return SingleChildScrollView(
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               CircleAvatar(
                 radius: 28,
-                backgroundColor:
-                    const Color(0xFFF3E8FF),
+                backgroundColor: const Color(0xFFF3E8FF),
                 child: Text(
                   parent.initials,
                   style: const TextStyle(
@@ -1064,8 +965,7 @@ class _StudentDetailsScreenState
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       parent.displayName,
@@ -1088,8 +988,7 @@ class _StudentDetailsScreenState
               ),
 
               IconButton(
-                onPressed: () =>
-                    Navigator.pop(context),
+                onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close),
               ),
             ],
@@ -1097,38 +996,32 @@ class _StudentDetailsScreenState
 
           const SizedBox(height: 24),
 
-          _dialogSectionTitle(
-            'Contact Information',
-          ),
+          _dialogSectionTitle('Contact Information'),
 
           const SizedBox(height: 12),
 
           _detailTile(
             Icons.phone_outlined,
             'Phone',
-            parent.contactPhone ??
-                'Not provided',
+            parent.contactPhone ?? 'Not provided',
           ),
 
           _detailTile(
             Icons.email_outlined,
             'Email',
-            parent.contactEmail ??
-                'Not provided',
+            parent.contactEmail ?? 'Not provided',
           ),
 
           _detailTile(
             Icons.location_on_outlined,
             'Address',
-            parent.address ??
-                'Not provided',
+            parent.address ?? 'Not provided',
           ),
 
           _detailTile(
             Icons.family_restroom_outlined,
             'Relationship',
-            parent.relationship ??
-                'Not provided',
+            parent.relationship ?? 'Not provided',
           ),
 
           const SizedBox(height: 18),
@@ -1138,8 +1031,7 @@ class _StudentDetailsScreenState
               Expanded(
                 child: _infoCard(
                   title: 'Father',
-                  value: parent.fatherName ??
-                      'Not provided',
+                  value: parent.fatherName ?? 'Not provided',
                   icon: Icons.person_outline,
                 ),
               ),
@@ -1147,8 +1039,7 @@ class _StudentDetailsScreenState
               Expanded(
                 child: _infoCard(
                   title: 'Mother',
-                  value: parent.motherName ??
-                      'Not provided',
+                  value: parent.motherName ?? 'Not provided',
                   icon: Icons.person_outline,
                 ),
               ),
@@ -1157,37 +1048,27 @@ class _StudentDetailsScreenState
 
           const SizedBox(height: 24),
 
-          _dialogSectionTitle(
-            'Linked Students',
-          ),
+          _dialogSectionTitle('Linked Students'),
 
           const SizedBox(height: 12),
 
           if (parent.students.isEmpty)
             _emptyLinkedStudents()
           else
-            ...parent.students.map(
-              _linkedStudentTile,
-            ),
+            ...parent.students.map(_linkedStudentTile),
         ],
       ),
     );
   }
 
-  Widget _linkedStudentTile(
-    ParentStudent student,
-  ) {
+  Widget _linkedStudentTile(ParentStudent student) {
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 9,
-      ),
+      margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
-        ),
+        border: Border.all(color: const Color(0xFFE7EBF2)),
       ),
       child: Row(
         children: [
@@ -1198,22 +1079,17 @@ class _StudentDetailsScreenState
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.school_outlined,
-              color: Color(0xFF2563EB),
-            ),
+            child: const Icon(Icons.school_outlined, color: Color(0xFF2563EB)),
           ),
 
           const SizedBox(width: 12),
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  student.name ??
-                      'Unnamed Student',
+                  student.name ?? 'Unnamed Student',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -1252,17 +1128,11 @@ class _StudentDetailsScreenState
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
-        ),
+        border: Border.all(color: const Color(0xFFE7EBF2)),
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.school_outlined,
-            size: 34,
-            color: Color(0xFF94A3B8),
-          ),
+          const Icon(Icons.school_outlined, size: 34, color: Color(0xFF94A3B8)),
           const SizedBox(height: 8),
           const Text(
             'No students linked',
@@ -1295,26 +1165,19 @@ class _StudentDetailsScreenState
     if (isAttendanceLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (attendanceError != null) {
       return Row(
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: Color(0xFFDC2626),
-          ),
+          const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               attendanceError!,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(color: Color(0xFF64748B)),
             ),
           ),
           IconButton(
@@ -1325,8 +1188,7 @@ class _StudentDetailsScreenState
       );
     }
 
-    final percentage =
-        _attendancePercentage;
+    final percentage = _attendancePercentage;
 
     return Column(
       children: [
@@ -1341,10 +1203,8 @@ class _StudentDetailsScreenState
                   CircularProgressIndicator(
                     value: percentage / 100,
                     strokeWidth: 8,
-                    backgroundColor:
-                        const Color(0xFFE2E8F0),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(
+                    backgroundColor: const Color(0xFFE2E8F0),
+                    valueColor: AlwaysStoppedAnimation<Color>(
                       percentage >= 75
                           ? const Color(0xFF10B981)
                           : const Color(0xFFF59E0B),
@@ -1436,18 +1296,14 @@ class _StudentDetailsScreenState
           ),
           title: const Text(
             'Year Attendance',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
           content: SizedBox(
             width: 520,
             child: attendanceRecords.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text(
-                      'No attendance records available.',
-                    ),
+                    child: Text('No attendance records available.'),
                   )
                 : Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1477,8 +1333,7 @@ class _StudentDetailsScreenState
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(context),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
           ],
@@ -1487,11 +1342,7 @@ class _StudentDetailsScreenState
     );
   }
 
-  Widget _attendanceSummaryTile(
-    String title,
-    int value,
-    Color color,
-  ) {
+  Widget _attendanceSummaryTile(String title, int value, Color color) {
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(13),
@@ -1504,10 +1355,7 @@ class _StudentDetailsScreenState
           Container(
             width: 9,
             height: 9,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1521,10 +1369,7 @@ class _StudentDetailsScreenState
           ),
           Text(
             '$value',
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w900, color: color),
           ),
         ],
       ),
@@ -1550,26 +1395,19 @@ class _StudentDetailsScreenState
     if (isExamLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (examError != null) {
       return Row(
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: Color(0xFFDC2626),
-          ),
+          const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               examError!,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(color: Color(0xFF64748B)),
             ),
           ),
           IconButton(
@@ -1584,14 +1422,10 @@ class _StudentDetailsScreenState
       return Column(
         children: [
           const Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: 10,
-            ),
+            padding: EdgeInsets.symmetric(vertical: 10),
             child: Text(
               'No exam results available.',
-              style: TextStyle(
-                color: Color(0xFF64748B),
-              ),
+              style: TextStyle(color: Color(0xFF64748B)),
             ),
           ),
           const SizedBox(height: 10),
@@ -1628,9 +1462,7 @@ class _StudentDetailsScreenState
 
         const SizedBox(height: 14),
 
-        ..._latestExamResults.map(
-          _examResultRow,
-        ),
+        ..._latestExamResults.map(_examResultRow),
 
         const SizedBox(height: 8),
 
@@ -1643,21 +1475,15 @@ class _StudentDetailsScreenState
     );
   }
 
-  Widget _examResultRow(
-    ExamResultResponseModel result,
-  ) {
+  Widget _examResultRow(ExamResultResponseModel result) {
     final percentage =
         result.percentage ??
         (result.maxMarks > 0
-            ? (result.marksObtained /
-                    result.maxMarks) *
-                100
+            ? (result.marksObtained / result.maxMarks) * 100
             : 0);
 
     return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 10,
-      ),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Container(
@@ -1665,8 +1491,7 @@ class _StudentDetailsScreenState
             height: 34,
             decoration: BoxDecoration(
               color: const Color(0xFFFFF7ED),
-              borderRadius:
-                  BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(9),
             ),
             child: const Icon(
               Icons.menu_book_outlined,
@@ -1679,14 +1504,12 @@ class _StudentDetailsScreenState
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _subjectName(result),
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -1697,8 +1520,7 @@ class _StudentDetailsScreenState
                 Text(
                   _examName(result),
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 10,
                     color: Color(0xFF94A3B8),
@@ -1744,36 +1566,26 @@ class _StudentDetailsScreenState
           ),
           title: const Text(
             'Exam Performance',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
           content: SizedBox(
             width: 650,
             child: examResults.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text(
-                      'No exam results available.',
-                    ),
+                    child: Text('No exam results available.'),
                   )
                 : SingleChildScrollView(
                     child: Column(
                       children: examResults
-                          .map(
-                            (result) =>
-                                _examDetailTile(
-                              result,
-                            ),
-                          )
+                          .map((result) => _examDetailTile(result))
                           .toList(),
                     ),
                   ),
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(context),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
           ],
@@ -1782,42 +1594,31 @@ class _StudentDetailsScreenState
     );
   }
 
-  Widget _examDetailTile(
-    ExamResultResponseModel result,
-  ) {
+  Widget _examDetailTile(ExamResultResponseModel result) {
     final percentage =
         result.percentage ??
         (result.maxMarks > 0
-            ? (result.marksObtained /
-                    result.maxMarks) *
-                100
+            ? (result.marksObtained / result.maxMarks) * 100
             : 0);
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(
-        bottom: 9,
-      ),
+      margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
-        ),
+        border: Border.all(color: const Color(0xFFE7EBF2)),
       ),
       child: Row(
         children: [
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _subjectName(result),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -1832,9 +1633,7 @@ class _StudentDetailsScreenState
           ),
           Text(
             '${result.marksObtained}/${result.maxMarks}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(width: 12),
           _smallBadge(
@@ -1853,10 +1652,11 @@ class _StudentDetailsScreenState
 
   Widget _buildFeeInformation() {
     double pendingAmount = 0;
+    double paidAmount = 0;
 
     for (final fee in pendingFees) {
-      pendingAmount +=
-          fee.pendingAmount ?? 0;
+      pendingAmount += fee.pendingAmount ?? 0;
+      paidAmount += fee.paidAmount ?? 0;
     }
 
     return _sectionCard(
@@ -1869,34 +1669,23 @@ class _StudentDetailsScreenState
         children: [
           if (isFeeLoading)
             const Padding(
-              padding: EdgeInsets.symmetric(
-                vertical: 20,
-              ),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator()),
             )
           else if (feeError != null)
             Row(
               children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: Color(0xFFDC2626),
-                ),
+                const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     feeError!,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                    ),
+                    style: const TextStyle(color: Color(0xFF64748B)),
                   ),
                 ),
                 IconButton(
                   onPressed: _loadPendingFees,
-                  icon: const Icon(
-                    Icons.refresh,
-                  ),
+                  icon: const Icon(Icons.refresh),
                 ),
               ],
             )
@@ -1912,9 +1701,8 @@ class _StudentDetailsScreenState
                 ),
                 Expanded(
                   child: _amountMetric(
-                    'Pending Items',
-                    pendingFees.length
-                        .toString(),
+                    'Paid Amount',
+                    paidAmount.toString(),
                     const Color(0xFFD97706),
                   ),
                 ),
@@ -1944,84 +1732,50 @@ class _StudentDetailsScreenState
           ),
           title: const Text(
             'Pending Fee Details',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
           content: SizedBox(
             width: 620,
             child: pendingFees.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text(
-                      'No pending fees.',
-                    ),
+                    child: Text('No pending fees.'),
                   )
                 : SingleChildScrollView(
                     child: Column(
                       children: pendingFees
                           .map(
                             (fee) => Container(
-                              width:
-                                  double.infinity,
-                              margin:
-                                  const EdgeInsets.only(
-                                bottom: 9,
-                              ),
-                              padding:
-                                  const EdgeInsets.all(
-                                14,
-                              ),
-                              decoration:
-                                  BoxDecoration(
-                                color:
-                                    const Color(
-                                  0xFFF8FAFC,
-                                ),
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  13,
-                                ),
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 9),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(13),
                                 border: Border.all(
-                                  color:
-                                      const Color(
-                                    0xFFE7EBF2,
-                                  ),
+                                  color: const Color(0xFFE7EBF2),
                                 ),
                               ),
                               child: Row(
                                 children: [
                                   const Icon(
-                                    Icons
-                                        .receipt_long_outlined,
-                                    color:
-                                        Color(
-                                      0xFFD97706,
-                                    ),
+                                    Icons.receipt_long_outlined,
+                                    color: Color(0xFFD97706),
                                   ),
-                                  const SizedBox(
-                                    width: 12,
-                                  ),
+                                  const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
                                       'Pending Fee',
-                                      style:
-                                          const TextStyle(
-                                        fontWeight:
-                                            FontWeight.w700,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
                                   Text(
                                     '₹${(fee.pendingAmount ?? 0).toStringAsFixed(0)}',
-                                    style:
-                                        const TextStyle(
-                                      color:
-                                          Color(
-                                        0xFFDC2626,
-                                      ),
-                                      fontWeight:
-                                          FontWeight.w900,
+                                    style: const TextStyle(
+                                      color: Color(0xFFDC2626),
+                                      fontWeight: FontWeight.w900,
                                     ),
                                   ),
                                 ],
@@ -2034,8 +1788,7 @@ class _StudentDetailsScreenState
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(context),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
           ],
@@ -2089,17 +1842,13 @@ class _StudentDetailsScreenState
           _infoRow(
             Icons.add_circle_outline,
             'Created At',
-            _formatDateTime(
-              widget.student.createdAt,
-            ),
+            _formatDateTime(widget.student.createdAt),
           ),
           _divider(),
           _infoRow(
             Icons.update_rounded,
             'Updated At',
-            _formatDateTime(
-              widget.student.updatedAt,
-            ),
+            _formatDateTime(widget.student.updatedAt),
           ),
         ],
       ),
@@ -2124,9 +1873,7 @@ class _StudentDetailsScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
-        ),
+        border: Border.all(color: const Color(0xFFE7EBF2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.035),
@@ -2136,8 +1883,7 @@ class _StudentDetailsScreenState
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -2146,22 +1892,16 @@ class _StudentDetailsScreenState
                 height: 43,
                 decoration: BoxDecoration(
                   color: iconBackground,
-                  borderRadius:
-                      BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 21,
-                ),
+                child: Icon(icon, color: iconColor, size: 21),
               ),
 
               const SizedBox(width: 12),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
@@ -2218,21 +1958,17 @@ class _StudentDetailsScreenState
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xFFE7EBF2),
-            ),
+            border: Border.all(color: const Color(0xFFE7EBF2)),
             boxShadow: [
               BoxShadow(
-                color:
-                    Colors.black.withOpacity(.035),
+                color: Colors.black.withOpacity(.035),
                 blurRadius: 18,
                 offset: const Offset(0, 7),
               ),
             ],
           ),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -2241,30 +1977,23 @@ class _StudentDetailsScreenState
                     height: 43,
                     decoration: BoxDecoration(
                       color: iconBackground,
-                      borderRadius:
-                          BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(13),
                     ),
-                    child: Icon(
-                      icon,
-                      color: iconColor,
-                      size: 21,
-                    ),
+                    child: Icon(icon, color: iconColor, size: 21),
                   ),
 
                   const SizedBox(width: 12),
 
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           title,
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color:
-                                Color(0xFF172033),
+                            color: Color(0xFF172033),
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -2272,10 +2001,8 @@ class _StudentDetailsScreenState
                           subtitle,
                           style: const TextStyle(
                             fontSize: 11,
-                            color:
-                                Color(0xFF94A3B8),
-                            fontWeight:
-                                FontWeight.w600,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -2284,8 +2011,7 @@ class _StudentDetailsScreenState
 
                   if (onTap != null)
                     const Icon(
-                      Icons
-                          .arrow_forward_ios_rounded,
+                      Icons.arrow_forward_ios_rounded,
                       size: 15,
                       color: Color(0xFFCBD5E1),
                     ),
@@ -2306,18 +2032,10 @@ class _StudentDetailsScreenState
   // INFO ROW
   // ============================================================
 
-  Widget _infoRow(
-    IconData icon,
-    String label,
-    String value,
-  ) {
+  Widget _infoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 18,
-          color: const Color(0xFF94A3B8),
-        ),
+        Icon(icon, size: 18, color: const Color(0xFF94A3B8)),
 
         const SizedBox(width: 11),
 
@@ -2354,14 +2072,9 @@ class _StudentDetailsScreenState
   // METRICS
   // ============================================================
 
-  Widget _metric(
-    String title,
-    String value,
-    Color color,
-  ) {
+  Widget _metric(String title, String value, Color color) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
@@ -2384,14 +2097,9 @@ class _StudentDetailsScreenState
     );
   }
 
-  Widget _amountMetric(
-    String title,
-    String value,
-    Color color,
-  ) {
+  Widget _amountMetric(String title, String value, Color color) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
@@ -2427,30 +2135,17 @@ class _StudentDetailsScreenState
       width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: onTap,
-        icon: Icon(
-          icon,
-          size: 16,
-        ),
+        icon: Icon(icon, size: 16),
         label: Text(
           label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
         ),
         style: OutlinedButton.styleFrom(
-          foregroundColor:
-              const Color(0xFF334155),
-          side: const BorderSide(
-            color: Color(0xFFE2E8F0),
-          ),
-          padding: const EdgeInsets.symmetric(
-            vertical: 11,
-            horizontal: 12,
-          ),
+          foregroundColor: const Color(0xFF334155),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
           shape: RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(11),
           ),
         ),
       ),
@@ -2461,16 +2156,9 @@ class _StudentDetailsScreenState
   // SMALL BADGE
   // ============================================================
 
-  Widget _smallBadge(
-    String text,
-    Color background,
-    Color foreground,
-  ) {
+  Widget _smallBadge(String text, Color background, Color foreground) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
@@ -2490,27 +2178,17 @@ class _StudentDetailsScreenState
   // CONTACT CHIP
   // ============================================================
 
-  Widget _contactMiniChip(
-    IconData icon,
-    String text,
-  ) {
+  Widget _contactMiniChip(IconData icon, String text) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(11),
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: const Color(0xFF64748B),
-          ),
+          Icon(icon, size: 16, color: const Color(0xFF64748B)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -2533,13 +2211,8 @@ class _StudentDetailsScreenState
 
   Widget _divider() {
     return const Padding(
-      padding: EdgeInsets.symmetric(
-        vertical: 12,
-      ),
-      child: Divider(
-        height: 1,
-        color: Color(0xFFF1F5F9),
-      ),
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: Divider(height: 1, color: Color(0xFFF1F5F9)),
     );
   }
 
@@ -2558,15 +2231,9 @@ class _StudentDetailsScreenState
     );
   }
 
-  Widget _detailTile(
-    IconData icon,
-    String title,
-    String value,
-  ) {
+  Widget _detailTile(IconData icon, String title, String value) {
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 8,
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
@@ -2574,16 +2241,11 @@ class _StudentDetailsScreenState
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: const Color(0xFF64748B),
-          ),
+          Icon(icon, size: 20, color: const Color(0xFF64748B)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
@@ -2621,15 +2283,11 @@ class _StudentDetailsScreenState
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFF2563EB),
-          ),
+          Icon(icon, color: const Color(0xFF2563EB)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
@@ -2642,8 +2300,7 @@ class _StudentDetailsScreenState
                 Text(
                   value,
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF334155),
@@ -2664,19 +2321,12 @@ class _StudentDetailsScreenState
   Widget _buildFooterInfo() {
     return Row(
       children: [
-        const Icon(
-          Icons.info_outline,
-          size: 15,
-          color: Color(0xFF94A3B8),
-        ),
+        const Icon(Icons.info_outline, size: 15, color: Color(0xFF94A3B8)),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             'Student information is based on the latest available school records.',
-            style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xFF94A3B8),
-            ),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
           ),
         ),
       ],
@@ -2688,8 +2338,7 @@ class _StudentDetailsScreenState
   // ============================================================
 
   String _displayValue(String? value) {
-    if (value == null ||
-        value.trim().isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'Not available';
     }
 
@@ -2702,11 +2351,7 @@ class _StudentDetailsScreenState
     }
 
     try {
-      final parsed = date is DateTime
-          ? date
-          : DateTime.parse(
-              date.toString(),
-            );
+      final parsed = date is DateTime ? date : DateTime.parse(date.toString());
 
       return '${parsed.day.toString().padLeft(2, '0')}/'
           '${parsed.month.toString().padLeft(2, '0')}/'
@@ -2722,11 +2367,7 @@ class _StudentDetailsScreenState
     }
 
     try {
-      final parsed = date is DateTime
-          ? date
-          : DateTime.parse(
-              date.toString(),
-            );
+      final parsed = date is DateTime ? date : DateTime.parse(date.toString());
 
       return '${parsed.day.toString().padLeft(2, '0')}/'
           '${parsed.month.toString().padLeft(2, '0')}/'
@@ -2739,22 +2380,18 @@ class _StudentDetailsScreenState
   }
 
   String _initials(String? name) {
-    if (name == null ||
-        name.trim().isEmpty) {
+    if (name == null || name.trim().isEmpty) {
       return 'S';
     }
 
-    final parts =
-        name.trim().split(RegExp(r'\s+'));
+    final parts = name.trim().split(RegExp(r'\s+'));
 
     if (parts.length == 1) {
-      return parts.first
-          .substring(0, 1)
-          .toUpperCase();
+      return parts.first.substring(0, 1).toUpperCase();
     }
 
     return '${parts.first.substring(0, 1)}'
-        '${parts.last.substring(0, 1)}'
+            '${parts.last.substring(0, 1)}'
         .toUpperCase();
   }
 }

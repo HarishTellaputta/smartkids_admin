@@ -131,16 +131,26 @@ class AdminSidebar extends StatelessWidget {
                   title: 'Notices',
                 ),
 
-                _buildMenuItem(
-                  index: 14,
-                  icon: Icons.celebration_rounded,
-                  title: 'Events',
-                ),
+                // _buildMenuItem(
+                //   index: 14,
+                //   icon: Icons.celebration_rounded,
+                //   title: 'Events',
+                // ),
+
+                const SizedBox(height: 12),
+
+                _buildSectionTitle('REPORTS'),
 
                 _buildMenuItem(
                   index: 15,
-                  icon: Icons.how_to_reg_rounded,
-                  title: 'Admissions',
+                  icon: Icons.analytics_rounded,
+                  title: 'Reports',
+                ),
+
+                _buildMenuItem(
+                  index: 18,
+                  icon: Icons.description_rounded,
+                  title: 'Report Cards',
                 ),
               ],
             ),

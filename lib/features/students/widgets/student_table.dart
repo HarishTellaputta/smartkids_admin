@@ -23,9 +23,7 @@ class StudentTable extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x06000000),
@@ -40,39 +38,19 @@ class StudentTable extends StatelessWidget {
           children: [
             // TABLE HEADER
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 15,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
               color: const Color(0xFFF9FAFB),
               child: Row(
                 children: [
-                  const Expanded(
-                    flex: 3,
-                    child: _HeaderText('Student'),
-                  ),
-                  const Expanded(
-                    flex: 2,
-                    child: _HeaderText('Section'),
-                  ),
-                  const Expanded(
-                    flex: 2,
-                    child: _HeaderText('Parent'),
-                  ),
-                  const Expanded(
-                    flex: 2,
-                    child: _HeaderText('Phone'),
-                  ),
-                  const Expanded(
-                    flex: 1,
-                    child: _HeaderText('Status'),
-                  ),
+                  const Expanded(flex: 3, child: _HeaderText('Student')),
+                  const Expanded(flex: 2, child: _HeaderText('Class')),
+                  const Expanded(flex: 2, child: _HeaderText('Section')),
+                  const Expanded(flex: 2, child: _HeaderText('Parent')),
+                  const Expanded(flex: 2, child: _HeaderText('Phone')),
+                  const Expanded(flex: 1, child: _HeaderText('Status')),
                   SizedBox(
                     width: 70,
-                    child: _HeaderText(
-                      'Action',
-                      textAlign: TextAlign.center,
-                    ),
+                    child: _HeaderText('Action', textAlign: TextAlign.center),
                   ),
                 ],
               ),
@@ -82,10 +60,8 @@ class StudentTable extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 itemCount: students.length,
-                separatorBuilder: (_, __) => const Divider(
-                  height: 1,
-                  color: Color(0xFFE5E7EB),
-                ),
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
                 itemBuilder: (context, index) {
                   return _StudentRow(
                     student: students[index],
@@ -111,10 +87,7 @@ class _HeaderText extends StatelessWidget {
   final String text;
   final TextAlign textAlign;
 
-  const _HeaderText(
-    this.text, {
-    this.textAlign = TextAlign.left,
-  });
+  const _HeaderText(this.text, {this.textAlign = TextAlign.left});
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +127,10 @@ class _StudentRow extends StatelessWidget {
         ? student.name!.trim()
         : 'Unknown Student';
 
+    final className = student.className?.trim().isNotEmpty == true
+        ? student.className!.trim()
+        : '-';
+
     final section = student.sectionName?.trim().isNotEmpty == true
         ? student.sectionName!.trim()
         : '-';
@@ -173,10 +150,7 @@ class _StudentRow extends StatelessWidget {
     return InkWell(
       onTap: () => onView(student),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 14,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         child: Row(
           children: [
             // STUDENT
@@ -220,7 +194,15 @@ class _StudentRow extends StatelessWidget {
                 ],
               ),
             ),
-
+            Expanded(
+              flex: 2,
+              child: Text(
+                className,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+              ),
+            ),
             // SECTION
             Expanded(
               flex: 2,
@@ -228,10 +210,7 @@ class _StudentRow extends StatelessWidget {
                 section,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF374151),
-                ),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
               ),
             ),
 
@@ -258,10 +237,7 @@ class _StudentRow extends StatelessWidget {
                 phone,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF374151),
-                ),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
               ),
             ),
 
@@ -304,10 +280,7 @@ class _StudentRow extends StatelessWidget {
                     value: 'view',
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.visibility_outlined,
-                          size: 18,
-                        ),
+                        Icon(Icons.visibility_outlined, size: 18),
                         SizedBox(width: 10),
                         Text('View'),
                       ],
@@ -317,10 +290,7 @@ class _StudentRow extends StatelessWidget {
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                        ),
+                        Icon(Icons.edit_outlined, size: 18),
                         SizedBox(width: 10),
                         Text('Edit'),
                       ],
@@ -336,12 +306,7 @@ class _StudentRow extends StatelessWidget {
                           color: Colors.red,
                         ),
                         SizedBox(width: 10),
-                        Text(
-                          'Delete',
-                          style: TextStyle(
-                            color: Colors.red,
-                          ),
-                        ),
+                        Text('Delete', style: TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
@@ -362,9 +327,7 @@ class _StudentRow extends StatelessWidget {
 class _StudentAvatar extends StatelessWidget {
   final String name;
 
-  const _StudentAvatar({
-    required this.name,
-  });
+  const _StudentAvatar({required this.name});
 
   @override
   Widget build(BuildContext context) {
@@ -376,9 +339,7 @@ class _StudentAvatar extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .primaryColor
-            .withOpacity(0.10),
+        color: Theme.of(context).primaryColor.withOpacity(0.10),
         borderRadius: BorderRadius.circular(10),
       ),
       alignment: Alignment.center,
@@ -401,9 +362,7 @@ class _StudentAvatar extends StatelessWidget {
 class _StatusBadge extends StatelessWidget {
   final String status;
 
-  const _StatusBadge({
-    required this.status,
-  });
+  const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -426,10 +385,7 @@ class _StatusBadge extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),

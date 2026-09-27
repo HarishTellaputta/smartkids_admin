@@ -634,19 +634,20 @@ class _HomeworkScreenState extends State<HomeworkScreen> {
           ],
         );
 
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [text, const SizedBox(height: 16), _addButton()],
-          );
-        }
+        // if (compact) {
+        //   return Column(
+        //     crossAxisAlignment: CrossAxisAlignment.start,
+        //     children: [text, const SizedBox(height: 16), _addButton()],
+        //   );
+        // }
 
-        return Row(
-          children: [
-            Expanded(child: text),
-            _addButton(),
-          ],
-        );
+        // return Row(
+        //   children: [
+        //     Expanded(child: text),
+        //     _addButton(),
+        //   ],
+        // );
+        return text;
       },
     );
   }

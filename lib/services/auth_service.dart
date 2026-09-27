@@ -1,4 +1,3 @@
-
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -36,9 +35,7 @@ class AuthService {
       print('REGISTER ERROR: ${e.response?.data}');
       print('REGISTER STATUS: ${e.response?.statusCode}');
 
-      throw Exception(
-        e.response?.data?['message'] ?? 'Registration failed',
-      );
+      throw Exception(e.response?.data?['message'] ?? 'Registration failed');
     }
   }
 
@@ -53,33 +50,50 @@ class AuthService {
     try {
       final response = await apiClient.dio.post(
         '/auth/login',
-        data: {
-          'username': username,
-          'password': password,
-        },
+        data: {'username': username, 'password': password},
       );
 
       print('LOGIN STATUS: ${response.statusCode}');
       print('LOGIN RESPONSE: ${response.data}');
 
       final token = response.data['token'];
+      final userId = response.data['userId'];
+      final responseUsername = response.data['username'];
+      final role = response.data['role'];
 
       if (token == null || token.toString().isEmpty) {
         throw Exception('Token not received');
       }
 
+      if (userId == null) {
+        throw Exception('User ID not received');
+      }
+
+      if (role == null || role.toString().isEmpty) {
+        throw Exception('User role not received');
+      }
+
       final jwtToken = token.toString();
 
-      // Save JWT
+      // Save login information
       final prefs = await SharedPreferences.getInstance();
 
+      await prefs.setString('jwt_token', jwtToken);
+
+      await prefs.setInt('user_id', int.parse(userId.toString()));
+
       await prefs.setString(
-        'jwt_token',
-        jwtToken,
+        'username',
+        responseUsername?.toString() ?? username,
       );
 
+      await prefs.setString('user_role', role.toString());
+
       print('================================');
-      print('JWT SAVED SUCCESSFULLY');
+      print('LOGIN DATA SAVED');
+      print('USER ID: $userId');
+      print('USERNAME: ${responseUsername ?? username}');
+      print('ROLE: $role');
       print('JWT LENGTH: ${jwtToken.length}');
       print('================================');
 
@@ -88,21 +102,16 @@ class AuthService {
       print('LOGIN ERROR: ${e.response?.data}');
       print('LOGIN STATUS: ${e.response?.statusCode}');
 
-      throw Exception(
-        e.response?.data?['message'] ?? 'Login failed',
-      );
+      throw Exception(e.response?.data?['message'] ?? 'Login failed');
     }
   }
-
   // =========================
   // LOGOUT
   // =========================
 
   Future<void> logout() async {
     try {
-      final response = await apiClient.dio.post(
-        '/auth/logout',
-      );
+      final response = await apiClient.dio.post('/auth/logout');
 
       print('LOGOUT STATUS: ${response.statusCode}');
       print('LOGOUT RESPONSE: ${response.data}');
@@ -116,10 +125,7 @@ class AuthService {
       print('LOGOUT ERROR: ${e.response?.data}');
       print('LOGOUT STATUS: ${e.response?.statusCode}');
 
-      throw Exception(
-        e.response?.data?['message'] ?? 'Logout failed',
-      );
+      throw Exception(e.response?.data?['message'] ?? 'Logout failed');
     }
   }
 }
-

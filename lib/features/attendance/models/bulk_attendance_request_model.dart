@@ -1,12 +1,12 @@
 class BulkAttendanceRequestModel {
   final int classId;
-  final int teacherId;
+  final int? teacherId;
   final String attendanceDate;
   final List<StudentAttendanceModel> attendanceRecords;
 
   BulkAttendanceRequestModel({
     required this.classId,
-    required this.teacherId,
+    this.teacherId,
     required this.attendanceDate,
     required this.attendanceRecords,
   });
@@ -35,10 +35,6 @@ class StudentAttendanceModel {
   });
 
   Map<String, dynamic> toJson() {
-    return {
-      'studentId': studentId,
-      'status': status,
-      'remarks': remarks,
-    };
+    return {'studentId': studentId, 'status': status, 'remarks': remarks};
   }
 }

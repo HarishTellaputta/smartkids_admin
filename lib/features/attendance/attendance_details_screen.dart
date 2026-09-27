@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,6 +9,12 @@ import '../teachers/models/class_model.dart';
 import 'package:smartkids_admin/models/student_model.dart';
 import 'package:smartkids_admin/services/student_service.dart';
 import '../teachers/services/class_service.dart';
+
+import '../attendance/models/bulk_attendance_update_request_model.dart';
+import '../attendance/models/bulk_attendance_request_model.dart';
+
+import '../teachers/models/teacher_model.dart';
+import '../teachers/services/teacher_service.dart';
 
 class AttendanceDetailsScreen extends StatefulWidget {
   final SchoolClass schoolClass;
@@ -26,8 +31,7 @@ class AttendanceDetailsScreen extends StatefulWidget {
       _AttendanceDetailsScreenState();
 }
 
-class _AttendanceDetailsScreenState
-    extends State<AttendanceDetailsScreen> {
+class _AttendanceDetailsScreenState extends State<AttendanceDetailsScreen> {
   AttendanceService? _attendanceService;
   StudentService? _studentService;
   ClassService? _classService;
@@ -41,8 +45,7 @@ class _AttendanceDetailsScreenState
   final Map<int, String> attendanceStatus = {};
   final Map<int, String> originalStatus = {};
 
-  final TextEditingController searchController =
-      TextEditingController();
+  final TextEditingController searchController = TextEditingController();
 
   String searchQuery = '';
 
@@ -72,9 +75,7 @@ class _AttendanceDetailsScreenState
       final token = prefs.getString('jwt_token');
 
       if (token == null || token.isEmpty) {
-        throw Exception(
-          'Session expired. Please login again.',
-        );
+        throw Exception('Session expired. Please login again.');
       }
 
       _attendanceService = AttendanceService(token);
@@ -87,8 +88,7 @@ class _AttendanceDetailsScreenState
 
       setState(() {
         isLoading = false;
-        errorMessage =
-            e.toString().replaceFirst('Exception: ', '');
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
@@ -118,8 +118,7 @@ class _AttendanceDetailsScreenState
       ]);
 
       final loadedStudents = results[0] as List<Student>;
-      final attendance =
-          results[1] as List<AttendanceResponseModel>;
+      final attendance = results[1] as List<AttendanceResponseModel>;
 
       final attendanceMap = <int, AttendanceResponseModel>{};
 
@@ -175,8 +174,7 @@ class _AttendanceDetailsScreenState
 
       setState(() {
         isLoading = false;
-        errorMessage =
-            e.toString().replaceFirst('Exception: ', '');
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
@@ -207,11 +205,14 @@ class _AttendanceDetailsScreenState
     }
   }
 
-  void _changeAttendance(
-    Student student,
-    String status,
-  ) {
+  void _changeAttendance(Student student, String status) {
     if (student.id == null) return;
+
+    debugPrint(
+      'CHANGE: student=${student.id} '
+      'old=${attendanceStatus[student.id!]} '
+      'new=$status',
+    );
 
     setState(() {
       attendanceStatus[student.id!] = status;
@@ -245,14 +246,11 @@ class _AttendanceDetailsScreenState
       }
 
       students = allStudents.where((student) {
-        final name =
-            student.name?.toLowerCase() ?? '';
+        final name = student.name?.toLowerCase() ?? '';
 
-        final admission =
-            student.admissionNo?.toLowerCase() ?? '';
+        final admission = student.admissionNo?.toLowerCase() ?? '';
 
-        final roll =
-            student.id?.toString().toLowerCase() ?? '';
+        final roll = student.id?.toString().toLowerCase() ?? '';
 
         return name.contains(searchQuery) ||
             admission.contains(searchQuery) ||
@@ -262,74 +260,143 @@ class _AttendanceDetailsScreenState
   }
 
   Future<void> _saveChanges() async {
-    if (_attendanceService == null) return;
+    if (_attendanceService == null || widget.schoolClass.id == null) {
+      return;
+    }
 
-    final changedRecords = <AttendanceResponseModel>[];
+    final prefs = await SharedPreferences.getInstance();
+    final role = prefs.getString('user_role');
+
+    final isSchoolAdmin = role == 'SCHOOL_ADMIN';
+
+    debugPrint('================================');
+    debugPrint('ATTENDANCE SAVE');
+    debugPrint('USER ROLE: $role');
+    debugPrint('IS SCHOOL ADMIN: $isSchoolAdmin');
+    debugPrint('================================');
+
+    final newRecords = <StudentAttendanceModel>[];
+    final updateRecords = <AttendanceUpdateRecordModel>[];
+
+    int? teacherId;
+
+    // -----------------------------------------
+    // Find changed attendance records
+    // -----------------------------------------
 
     for (final entry in attendanceStatus.entries) {
       final studentId = entry.key;
       final newStatus = entry.value;
 
       final oldStatus = originalStatus[studentId];
+      final attendance = existingAttendance[studentId];
+
+      debugPrint(
+        'SAVE: student=$studentId '
+        'old=$oldStatus '
+        'new=$newStatus '
+        'attendanceId=${attendance?.id}',
+      );
 
       if (oldStatus == newStatus) {
         continue;
       }
 
-      final attendance = existingAttendance[studentId];
+      // Existing attendance → UPDATE
+      if (attendance != null && attendance.id != null) {
+        teacherId ??= attendance.markedByTeacherId;
 
-      if (attendance != null) {
-        changedRecords.add(attendance);
+        updateRecords.add(
+          AttendanceUpdateRecordModel(
+            attendanceId: attendance.id!,
+            status: _apiStatus(newStatus),
+            remarks: attendance.remarks,
+          ),
+        );
+      }
+      // No existing attendance → CREATE
+      else {
+        newRecords.add(
+          StudentAttendanceModel(
+            studentId: studentId,
+            status: _apiStatus(newStatus),
+          ),
+        );
       }
     }
 
-    if (changedRecords.isEmpty) {
-      _showMessage(
-        'No attendance changes to save.',
-        isError: false,
-      );
+    // -----------------------------------------
+    // Teacher only
+    // -----------------------------------------
+
+    if (!isSchoolAdmin) {
+      // If existing attendance didn't give teacherId,
+      // get teacherId for new attendance records.
+      if (teacherId == null && newRecords.isNotEmpty) {
+        teacherId = await _getTeacherId();
+      }
+
+      // Teacher must have teacherId when saving new records
+      if (teacherId == null && newRecords.isNotEmpty) {
+        _showMessage('Teacher information not found.', isError: true);
+        return;
+      }
+    }
+
+    // -----------------------------------------
+    // Nothing changed
+    // -----------------------------------------
+
+    if (newRecords.isEmpty && updateRecords.isEmpty) {
+      _showMessage('No attendance changes to save.', isError: false);
       return;
     }
 
     setState(() {
       isSaving = true;
       errorMessage = null;
+      infoMessage = null;
     });
 
     try {
-      for (final attendance in changedRecords) {
-        final studentId = attendance.studentId;
+      // -----------------------------------------
+      // CREATE new attendance
+      // -----------------------------------------
 
-        if (studentId == null) continue;
+      if (newRecords.isNotEmpty) {
+        await _attendanceService!.markBulkAttendance(
+          BulkAttendanceRequestModel(
+            classId: widget.schoolClass.id!,
+            teacherId: isSchoolAdmin ? null : teacherId,
+            attendanceDate: selectedDate.toIso8601String().split('T').first,
+            attendanceRecords: newRecords,
+          ),
+        );
+      }
 
-        final newStatus = attendanceStatus[studentId];
+      // -----------------------------------------
+      // UPDATE existing attendance
+      // -----------------------------------------
 
-        if (newStatus == null) continue;
-
-        await _attendanceService!.updateAttendance(
-          attendance.id,
-          AttendanceUpdateModel(
-            teacherId: attendance.markedByTeacherId!,
-            status: _apiStatus(newStatus),
-            remarks: attendance.remarks,
+      if (updateRecords.isNotEmpty) {
+        await _attendanceService!.updateBulkAttendance(
+          BulkAttendanceUpdateRequestModel(
+            teacherId: isSchoolAdmin ? null : teacherId,
+            attendanceRecords: updateRecords,
           ),
         );
       }
 
       if (!mounted) return;
 
-      _showMessage(
-        'Attendance updated successfully.',
-        isError: false,
-      );
+      _showMessage('Attendance saved successfully.', isError: false);
 
       await _loadAttendance();
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        errorMessage =
-            e.toString().replaceFirst('Exception: ', '');
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (!mounted) return;
@@ -340,15 +407,52 @@ class _AttendanceDetailsScreenState
     }
   }
 
-  void _showMessage(
-    String message, {
-    required bool isError,
-  }) {
+  Future<int?> _getTeacherId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final userId = prefs.getInt('user_id');
+
+      if (userId == null) {
+        debugPrint('GET TEACHER ID: user_id not found');
+        return null;
+      }
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        debugPrint('GET TEACHER ID: JWT not found');
+        return null;
+      }
+
+      final teacherService = TeacherService(token);
+
+      final teachers = await teacherService.getTeachers();
+
+      for (final teacher in teachers) {
+        if (teacher.userId == userId) {
+          debugPrint(
+            'GET TEACHER ID: userId=$userId → teacherId=${teacher.id}',
+          );
+
+          return teacher.id;
+        }
+      }
+
+      debugPrint('GET TEACHER ID: No teacher found for userId=$userId');
+
+      return null;
+    } catch (e) {
+      debugPrint('GET TEACHER ID ERROR: $e');
+      return null;
+    }
+  }
+
+  void _showMessage(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? Colors.red : Colors.green,
+        backgroundColor: isError ? Colors.red : Colors.green,
       ),
     );
   }
@@ -360,15 +464,11 @@ class _AttendanceDetailsScreenState
   }
 
   int get absentCount {
-    return attendanceStatus.values
-        .where((status) => status == 'Absent')
-        .length;
+    return attendanceStatus.values.where((status) => status == 'Absent').length;
   }
 
   int get leaveCount {
-    return attendanceStatus.values
-        .where((status) => status == 'Leave')
-        .length;
+    return attendanceStatus.values.where((status) => status == 'Leave').length;
   }
 
   int get markedCount {
@@ -402,9 +502,7 @@ class _AttendanceDetailsScreenState
             fontWeight: FontWeight.w700,
           ),
         ),
-        iconTheme: const IconThemeData(
-          color: Color(0xFF111827),
-        ),
+        iconTheme: const IconThemeData(color: Color(0xFF111827)),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -415,9 +513,7 @@ class _AttendanceDetailsScreenState
         ],
       ),
       body: isLoading && allStudents.isEmpty
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : _buildBody(),
     );
   }
@@ -445,9 +541,7 @@ class _AttendanceDetailsScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -467,12 +561,10 @@ class _AttendanceDetailsScreenState
           const SizedBox(width: 15),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.schoolClass.name ??
-                      'Unnamed Class',
+                  widget.schoolClass.name ?? 'Unnamed Class',
                   style: const TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w800,
@@ -491,9 +583,7 @@ class _AttendanceDetailsScreenState
               ],
             ),
           ),
-          _CircularPercentage(
-            percentage: attendancePercentage,
-          ),
+          _CircularPercentage(percentage: attendancePercentage),
         ],
       ),
     );
@@ -508,13 +598,7 @@ class _AttendanceDetailsScreenState
         final search = _buildSearch();
 
         if (compact) {
-          return Column(
-            children: [
-              date,
-              const SizedBox(height: 12),
-              search,
-            ],
-          );
+          return Column(children: [date, const SizedBox(height: 12), search]);
         }
 
         return Row(
@@ -534,15 +618,11 @@ class _AttendanceDetailsScreenState
       borderRadius: BorderRadius.circular(14),
       child: Container(
         height: 54,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 15,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 15),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: const Color(0xFFE2E8F0),
-          ),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Row(
           children: [
@@ -575,30 +655,22 @@ class _AttendanceDetailsScreenState
   Widget _buildSearch() {
     return Container(
       height: 54,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 15,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.search_rounded,
-            color: Color(0xFF64748B),
-          ),
+          const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: searchController,
               onChanged: _filterStudents,
               decoration: const InputDecoration(
-                hintText:
-                    'Search student by name, roll number...',
+                hintText: 'Search student by name, roll number...',
                 border: InputBorder.none,
               ),
             ),
@@ -644,20 +716,17 @@ class _AttendanceDetailsScreenState
           ),
         ];
 
-        final columns =
-            constraints.maxWidth >= 1100
-                ? 5
-                : constraints.maxWidth >= 700
-                    ? 3
-                    : 2;
+        final columns = constraints.maxWidth >= 1100
+            ? 5
+            : constraints.maxWidth >= 700
+            ? 3
+            : 2;
 
         return GridView.builder(
           shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           itemCount: cards.length,
-          gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
@@ -676,9 +745,7 @@ class _AttendanceDetailsScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         children: [
@@ -697,40 +764,27 @@ class _AttendanceDetailsScreenState
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed:
-                      isSaving ? null : _saveChanges,
+                  onPressed: isSaving ? null : _saveChanges,
                   icon: isSaving
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child:
-                              CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(
-                          Icons.save_outlined,
-                          size: 18,
-                        ),
-                  label: Text(
-                    isSaving
-                        ? 'Saving...'
-                        : 'Save Changes',
-                  ),
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: Text(isSaving ? 'Saving...' : 'Save Changes'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
                     ),
                   ),
                 ),
@@ -751,9 +805,7 @@ class _AttendanceDetailsScreenState
                   const SizedBox(height: 10),
                   const Text(
                     'No students found',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -768,20 +820,12 @@ class _AttendanceDetailsScreenState
   Widget _buildStudentRow(Student student) {
     final id = student.id;
 
-    final status =
-        id == null ? null : attendanceStatus[id];
+    final status = id == null ? null : attendanceStatus[id];
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 20,
-        vertical: 15,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFF1F5F9),
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -791,16 +835,13 @@ class _AttendanceDetailsScreenState
             children: [
               CircleAvatar(
                 radius: 21,
-                backgroundColor:
-                    const Color(0xFFEFF6FF),
+                backgroundColor: const Color(0xFFEFF6FF),
                 child: Text(
-                  (student.name ?? 'S')
-                      .trim()
-                      .isNotEmpty
+                  (student.name ?? 'S').trim().isNotEmpty
                       ? (student.name ?? 'S')
-                          .trim()
-                          .substring(0, 1)
-                          .toUpperCase()
+                            .trim()
+                            .substring(0, 1)
+                            .toUpperCase()
                       : 'S',
                   style: const TextStyle(
                     color: Color(0xFF2563EB),
@@ -811,8 +852,7 @@ class _AttendanceDetailsScreenState
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       student.name ?? 'Unnamed Student',
@@ -825,10 +865,8 @@ class _AttendanceDetailsScreenState
                     const SizedBox(height: 3),
                     Text(
                       [
-                        if (student.id != null)
-                          'Roll ${student.id}',
-                        if (student.admissionNo != null)
-                          student.admissionNo!,
+                        if (student.id != null) 'Roll ${student.id}',
+                        if (student.admissionNo != null) student.admissionNo!,
                       ].join(' • '),
                       style: const TextStyle(
                         fontSize: 11,
@@ -851,10 +889,7 @@ class _AttendanceDetailsScreenState
                 color: const Color(0xFF059669),
                 onTap: id == null
                     ? null
-                    : () => _changeAttendance(
-                          student,
-                          'Present',
-                        ),
+                    : () => _changeAttendance(student, 'Present'),
               ),
               const SizedBox(width: 6),
               _StatusButton(
@@ -864,10 +899,7 @@ class _AttendanceDetailsScreenState
                 color: const Color(0xFFDC2626),
                 onTap: id == null
                     ? null
-                    : () => _changeAttendance(
-                          student,
-                          'Absent',
-                        ),
+                    : () => _changeAttendance(student, 'Absent'),
               ),
               const SizedBox(width: 6),
               _StatusButton(
@@ -877,23 +909,15 @@ class _AttendanceDetailsScreenState
                 color: const Color(0xFFD97706),
                 onTap: id == null
                     ? null
-                    : () => _changeAttendance(
-                          student,
-                          'Leave',
-                        ),
+                    : () => _changeAttendance(student, 'Leave'),
               ),
             ],
           );
 
           if (compact) {
             return Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                studentInfo,
-                const SizedBox(height: 12),
-                buttons,
-              ],
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [studentInfo, const SizedBox(height: 12), buttons],
             );
           }
 
@@ -918,17 +942,12 @@ class _AttendanceDetailsScreenState
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: Color(0xFFDC2626),
-          ),
+          const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               errorMessage!,
-              style: const TextStyle(
-                color: Color(0xFF991B1B),
-              ),
+              style: const TextStyle(color: Color(0xFF991B1B)),
             ),
           ),
         ],
@@ -946,17 +965,12 @@ class _AttendanceDetailsScreenState
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.info_outline,
-            color: Color(0xFF2563EB),
-          ),
+          const Icon(Icons.info_outline, color: Color(0xFF2563EB)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               infoMessage!,
-              style: const TextStyle(
-                color: Color(0xFF1E40AF),
-              ),
+              style: const TextStyle(color: Color(0xFF1E40AF)),
             ),
           ),
         ],
@@ -972,9 +986,7 @@ class _AttendanceDetailsScreenState
 class _CircularPercentage extends StatelessWidget {
   final double percentage;
 
-  const _CircularPercentage({
-    required this.percentage,
-  });
+  const _CircularPercentage({required this.percentage});
 
   @override
   Widget build(BuildContext context) {
@@ -987,27 +999,17 @@ class _CircularPercentage extends StatelessWidget {
           CircularProgressIndicator(
             value: 1,
             strokeWidth: 7,
-            valueColor:
-                const AlwaysStoppedAnimation(
-              Color(0xFFE2E8F0),
-            ),
+            valueColor: const AlwaysStoppedAnimation(Color(0xFFE2E8F0)),
           ),
           CircularProgressIndicator(
-            value: (percentage / 100)
-                .clamp(0.0, 1.0),
+            value: (percentage / 100).clamp(0.0, 1.0),
             strokeWidth: 7,
             strokeCap: StrokeCap.round,
-            valueColor:
-                const AlwaysStoppedAnimation(
-              Color(0xFF2563EB),
-            ),
+            valueColor: const AlwaysStoppedAnimation(Color(0xFF2563EB)),
           ),
           Text(
             '${percentage.toStringAsFixed(1)}%',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -1032,9 +1034,7 @@ class _SummaryItem {
 class _SummaryCard extends StatelessWidget {
   final _SummaryItem item;
 
-  const _SummaryCard({
-    required this.item,
-  });
+  const _SummaryCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -1043,9 +1043,7 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -1053,22 +1051,15 @@ class _SummaryCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: item.color.withValues(
-                alpha: 0.08,
-              ),
+              color: item.color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(
-              item.icon,
-              size: 20,
-              color: item.color,
-            ),
+            child: Icon(item.icon, size: 20, color: item.color),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   item.title,
@@ -1118,29 +1109,21 @@ class _StatusButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
-          duration:
-              const Duration(milliseconds: 150),
+          duration: const Duration(milliseconds: 150),
           width: 38,
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected
-                ? color
-                : color.withValues(alpha: 0.07),
-            borderRadius:
-                BorderRadius.circular(9),
+            color: selected ? color : color.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(9),
             border: Border.all(
-              color: color.withValues(
-                alpha: selected ? 1 : 0.2,
-              ),
+              color: color.withValues(alpha: selected ? 1 : 0.2),
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected
-                  ? Colors.white
-                  : color,
+              color: selected ? Colors.white : color,
               fontSize: 13,
               fontWeight: FontWeight.w800,
             ),
@@ -1150,4 +1133,3 @@ class _StatusButton extends StatelessWidget {
     );
   }
 }
-

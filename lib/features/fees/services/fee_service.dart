@@ -107,6 +107,23 @@ class FeeService {
     }
   }
 
+
+
+
+Future<List<FeePaymentModel>> getPaidPayments() async {
+  try {
+    final response = await _dio.get(
+      '/api/v1/fees/payments/paid',
+      options: Options(
+        headers: await _headers(),
+      ),
+    );
+
+    return _parsePayments(response.data);
+  } on DioException catch (e) {
+    throw Exception(_getErrorMessage(e));
+  }
+}
   // ============================================================
   // RECORD PAYMENT
   // ============================================================

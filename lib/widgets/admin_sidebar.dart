@@ -136,7 +136,6 @@ class AdminSidebar extends StatelessWidget {
                 //   icon: Icons.celebration_rounded,
                 //   title: 'Events',
                 // ),
-
                 const SizedBox(height: 12),
 
                 _buildSectionTitle('REPORTS'),
@@ -151,6 +150,18 @@ class AdminSidebar extends StatelessWidget {
                   index: 18,
                   icon: Icons.description_rounded,
                   title: 'Report Cards',
+                ),
+
+                _buildMenuItem(
+                  icon: Icons.cake_rounded,
+                  title: 'Birthdays',
+                  index: 19,
+                ),
+
+                _buildMenuItem(
+                  icon: Icons.table_view_rounded,
+                  title: 'Excel Reports',
+                  index: 20,
                 ),
               ],
             ),

@@ -29,18 +29,10 @@ class ReportService {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/reports/attendance',
-        queryParameters: {
-          'from': from,
-          'to': to,
-          'page': page,
-          'size': size,
-        },
+        queryParameters: {'from': from, 'to': to, 'page': page, 'size': size},
       );
 
-      return _parseList(
-        response.data,
-        AttendanceReportModel.fromJson,
-      );
+      return _parseList(response.data, AttendanceReportModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -62,18 +54,10 @@ class ReportService {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/reports/examinations',
-        queryParameters: {
-          'from': from,
-          'to': to,
-          'page': page,
-          'size': size,
-        },
+        queryParameters: {'from': from, 'to': to, 'page': page, 'size': size},
       );
 
-      return _parseList(
-        response.data,
-        ExaminationReportModel.fromJson,
-      );
+      return _parseList(response.data, ExaminationReportModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -95,18 +79,10 @@ class ReportService {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/reports/fees',
-        queryParameters: {
-          'from': from,
-          'to': to,
-          'page': page,
-          'size': size,
-        },
+        queryParameters: {'from': from, 'to': to, 'page': page, 'size': size},
       );
 
-      return _parseList(
-        response.data,
-        FeeReportModel.fromJson,
-      );
+      return _parseList(response.data, FeeReportModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -126,16 +102,10 @@ class ReportService {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/reports/academic-performance',
-        queryParameters: {
-          'page': page,
-          'size': size,
-        },
+        queryParameters: {'page': page, 'size': size},
       );
 
-      return _parseList(
-        response.data,
-        AcademicPerformanceModel.fromJson,
-      );
+      return _parseList(response.data, AcademicPerformanceModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -156,16 +126,10 @@ class ReportService {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/reports/student-performance/$studentId',
-        queryParameters: {
-          'page': page,
-          'size': size,
-        },
+        queryParameters: {'page': page, 'size': size},
       );
 
-      return _parseList(
-        response.data,
-        AcademicPerformanceModel.fromJson,
-      );
+      return _parseList(response.data, AcademicPerformanceModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -186,16 +150,10 @@ class ReportService {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/reports/teacher-class-performance/$classId',
-        queryParameters: {
-          'page': page,
-          'size': size,
-        },
+        queryParameters: {'page': page, 'size': size},
       );
 
-      return _parseList(
-        response.data,
-        ExaminationReportModel.fromJson,
-      );
+      return _parseList(response.data, ExaminationReportModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -207,23 +165,37 @@ class ReportService {
   // MCQ PERFORMANCE
   // GET /api/v1/reports/mcq-performance
   // ============================================================
+  // ============================================================
+  // MCQ PERFORMANCE
+  // GET /api/v1/reports/mcq-performance
+  // ============================================================
 
   Future<List<McqPerformanceModel>> getMcqPerformance({
-    String? from,
-    String? to,
+    String? date,
+    int? classId,
+    int? sectionId,
+    String? subject,
     int page = 0,
     int size = 50,
   }) async {
     try {
-      final Map<String, dynamic> queryParameters = {
-        'page': page,
-        'size': size,
-      };
+      final Map<String, dynamic> queryParameters = {'page': page, 'size': size};
 
-      // Backend requires BOTH dates or neither.
-      if (from != null && to != null) {
-        queryParameters['from'] = from;
-        queryParameters['to'] = to;
+      // Optional filters
+      if (date != null && date.trim().isNotEmpty) {
+        queryParameters['date'] = date;
+      }
+
+      if (classId != null) {
+        queryParameters['classId'] = classId;
+      }
+
+      if (sectionId != null) {
+        queryParameters['sectionId'] = sectionId;
+      }
+
+      if (subject != null && subject.trim().isNotEmpty) {
+        queryParameters['subject'] = subject.trim();
       }
 
       final response = await apiClient.dio.get(
@@ -231,17 +203,13 @@ class ReportService {
         queryParameters: queryParameters,
       );
 
-      return _parseList(
-        response.data,
-        McqPerformanceModel.fromJson,
-      );
+      return _parseList(response.data, McqPerformanceModel.fromJson);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
       throw Exception('Failed to load MCQ performance: $e');
     }
   }
-
   // ============================================================
   // GENERIC PAGINATED LIST PARSER
   // ============================================================
@@ -264,7 +232,6 @@ class ReportService {
         items = content;
       }
     }
-
     // Direct List response
     else if (data is List) {
       items = data;
@@ -272,11 +239,7 @@ class ReportService {
 
     return items
         .whereType<Map>()
-        .map(
-          (item) => fromJson(
-            Map<String, dynamic>.from(item),
-          ),
-        )
+        .map((item) => fromJson(Map<String, dynamic>.from(item)))
         .toList();
   }
 
@@ -289,10 +252,7 @@ class ReportService {
     final data = e.response?.data;
 
     if (data is Map) {
-      final message =
-          data['message'] ??
-          data['error'] ??
-          data['detail'];
+      final message = data['message'] ?? data['error'] ?? data['detail'];
 
       if (message != null) {
         return message.toString();

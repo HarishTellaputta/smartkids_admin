@@ -14,6 +14,9 @@ import 'package:smartkids_admin/features/teachers/services/class_service.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 
 
+import 'package:smartkids_admin/core/network/api_client.dart';
+
+
 class AddStudentDialog extends StatefulWidget {
   final StudentService studentService;
   final Future<void> Function() onSaved;
@@ -29,6 +32,7 @@ class AddStudentDialog extends StatefulWidget {
 }
 
 class _AddStudentDialogState extends State<AddStudentDialog> {
+  ApiClient apiClient= ApiClient();
   final _formKey = GlobalKey<FormState>();
 
   final admissionNoController = TextEditingController();
@@ -107,8 +111,8 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       }
 
       _academicYearService = AcademicYearService(token);
-      _classService = ClassService(token);
-      _sectionService = SectionService(token);
+      _classService = ClassService(apiClient);
+      _sectionService = SectionService(apiClient);
       _parentService = ParentService(token);
 
       await _loadDropdownData();

@@ -1,25 +1,12 @@
-
 import 'package:dio/dio.dart';
 
+import 'package:smartkids_admin/core/network/api_client.dart';
 import '../models/class_subject_model.dart';
 
 class ClassSubjectService {
-  final Dio _dio;
+  final ApiClient apiClient;
 
-  ClassSubjectService(String token)
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
-            sendTimeout: const Duration(seconds: 15),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          ),
-        );
+  ClassSubjectService(this.apiClient);
 
   // ============================================================
   // GET SUBJECTS ASSIGNED TO CLASS
@@ -31,7 +18,7 @@ class ClassSubjectService {
     int classId,
   ) async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/classes/$classId/subjects',
       );
 
@@ -68,9 +55,6 @@ class ClassSubjectService {
   // ASSIGN SUBJECT TO CLASS
   //
   // POST /classes/{classId}/subjects/{subjectId}
-  //
-  // Example:
-  // POST /classes/1/subjects/5
   // ============================================================
 
   Future<ClassSubjectModel> assignSubjectToClass(
@@ -78,11 +62,10 @@ class ClassSubjectService {
     int subjectId,
   ) async {
     try {
-      final response = await _dio.post(
+      final response = await apiClient.dio.post(
         '/classes/$classId/subjects/$subjectId',
       );
 
-      // Backend returns ClassSubjectResponse
       if (response.data is Map) {
         return ClassSubjectModel.fromJson(
           Map<String, dynamic>.from(response.data),
@@ -117,7 +100,7 @@ class ClassSubjectService {
     int subjectId,
   ) async {
     try {
-      await _dio.delete(
+      await apiClient.dio.delete(
         '/classes/$classId/subjects/$subjectId',
       );
     } on DioException catch (e) {
@@ -147,14 +130,6 @@ class ClassSubjectService {
     if (response != null) {
       final data = response.data;
 
-      // Spring Boot error response:
-      //
-      // {
-      //   "timestamp": "...",
-      //   "status": 400,
-      //   "error": "...",
-      //   "message": "..."
-      // }
       if (data is Map) {
         final message = data['message'];
 
@@ -220,4 +195,3 @@ class ClassSubjectService {
     }
   }
 }
-

@@ -22,6 +22,8 @@ import 'package:smartkids_admin/features/teachers/services/class_service.dart';
 import 'package:smartkids_admin/models/student_model.dart';
 import 'package:smartkids_admin/services/student_service.dart';
 
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class AttendanceDashboardScreen extends StatefulWidget {
   const AttendanceDashboardScreen({super.key});
 
@@ -32,7 +34,7 @@ class AttendanceDashboardScreen extends StatefulWidget {
 
 class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   static const int _schoolId = 1;
-
+  final apiClient = ApiClient();
   AttendanceService? _attendanceService;
   StudentService? _studentService;
   ClassService? _classService;
@@ -73,7 +75,8 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
 
       _attendanceService = AttendanceService(token);
       _studentService = StudentService(token);
-      _classService = ClassService(token);
+
+      _classService = ClassService(apiClient);
 
       await _loadClasses();
     } catch (e) {

@@ -16,6 +16,9 @@ import '../../services/section_service.dart';
 import '../../services/student_service.dart';
 import '../../features/fees/paid_payments_screen.dart';
 
+
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class FeesScreen extends StatefulWidget {
   const FeesScreen({super.key});
 
@@ -25,6 +28,7 @@ class FeesScreen extends StatefulWidget {
 
 class _FeesScreenState extends State<FeesScreen> {
   final FeeService _feeService = FeeService();
+  ApiClient apiClient=ApiClient();
 
   final TextEditingController searchController = TextEditingController();
 
@@ -81,7 +85,7 @@ class _FeesScreenState extends State<FeesScreen> {
         throw Exception('Session expired. Please login again.');
       }
 
-      final classService = ClassService(token);
+      final classService = ClassService(apiClient);
       final studentService = StudentService(token);
 
       final results = await Future.wait([
@@ -135,7 +139,7 @@ class _FeesScreenState extends State<FeesScreen> {
         throw Exception('Session expired. Please login again.');
       }
 
-      final service = SectionService(token);
+      final service = SectionService(apiClient);
       final result = await service.getSectionsByClassId(classId);
 
       if (!mounted) return;

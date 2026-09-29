@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:smartkids_admin/features/exams/models/examination_model.dart';
+import 'package:smartkids_admin/features/exams/models/exam_schedule_model.dart';
 import 'package:smartkids_admin/features/exams/services/examination_service.dart';
 
 class ExamDetailsScreen extends StatefulWidget {
@@ -628,7 +629,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
             cells: [
               DataCell(
                 Text(
-                  schedule.subject?.toString() ?? '-',
+                  schedule.subjectName?.toString() ?? '-',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,

@@ -1,25 +1,13 @@
-
 import 'package:dio/dio.dart';
 
+import 'package:smartkids_admin/core/network/api_client.dart';
 import '../models/class_model.dart';
 import '../models/class_subject_model.dart';
 
 class ClassService {
-  final Dio _dio;
+  final ApiClient apiClient;
 
-  ClassService(String token)
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          ),
-        );
+  ClassService(this.apiClient);
 
   // ============================================================
   // GET ALL CLASSES
@@ -28,7 +16,9 @@ class ClassService {
 
   Future<List<SchoolClass>> getClasses() async {
     try {
-      final response = await _dio.get('/api/v1/classes');
+      final response = await apiClient.dio.get(
+        '/api/v1/classes',
+      );
 
       return _parseClassList(response.data);
     } on DioException catch (e) {
@@ -45,7 +35,7 @@ class ClassService {
 
   Future<SchoolClass> getClassById(int id) async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/api/v1/classes/$id',
       );
 
@@ -68,7 +58,7 @@ class ClassService {
     int schoolId,
   ) async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/api/v1/classes/school/$schoolId',
       );
 
@@ -105,7 +95,7 @@ class ClassService {
         'description': description,
       };
 
-      final response = await _dio.post(
+      final response = await apiClient.dio.post(
         '/api/v1/classes',
         data: body,
       );
@@ -146,7 +136,7 @@ class ClassService {
         'description': description,
       };
 
-      final response = await _dio.put(
+      final response = await apiClient.dio.put(
         '/api/v1/classes/$id',
         data: body,
       );
@@ -170,7 +160,7 @@ class ClassService {
 
   Future<void> deleteClass(int id) async {
     try {
-      await _dio.delete(
+      await apiClient.dio.delete(
         '/api/v1/classes/$id',
       );
     } on DioException catch (e) {
@@ -183,18 +173,13 @@ class ClassService {
   }
 
   // ============================================================
-  // ============================================================
   // CLASS → SUBJECT
-  // ============================================================
   // ============================================================
 
   // ============================================================
   // ASSIGN SUBJECT TO CLASS
   //
   // POST /classes/{classId}/subjects/{subjectId}
-  //
-  // Example:
-  // POST /classes/5/subjects/3
   // ============================================================
 
   Future<ClassSubjectModel> assignSubjectToClass({
@@ -202,7 +187,7 @@ class ClassService {
     required int subjectId,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await apiClient.dio.post(
         '/classes/$classId/subjects/$subjectId',
       );
 
@@ -224,16 +209,13 @@ class ClassService {
   // GET SUBJECTS ASSIGNED TO CLASS
   //
   // GET /classes/{classId}/subjects
-  //
-  // Example:
-  // GET /classes/5/subjects
   // ============================================================
 
   Future<List<ClassSubjectModel>> getSubjectsByClass(
     int classId,
   ) async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/classes/$classId/subjects',
       );
 
@@ -263,9 +245,6 @@ class ClassService {
   // REMOVE SUBJECT FROM CLASS
   //
   // DELETE /classes/{classId}/subjects/{subjectId}
-  //
-  // Example:
-  // DELETE /classes/5/subjects/3
   // ============================================================
 
   Future<void> removeSubjectFromClass({
@@ -273,7 +252,7 @@ class ClassService {
     required int subjectId,
   }) async {
     try {
-      await _dio.delete(
+      await apiClient.dio.delete(
         '/classes/$classId/subjects/$subjectId',
       );
     } on DioException catch (e) {
@@ -301,12 +280,6 @@ class ClassService {
           )
           .toList();
     }
-
-    // Supports Spring Page response:
-    //
-    // {
-    //   "content": [...]
-    // }
 
     if (data is Map<String, dynamic> &&
         data['content'] is List) {
@@ -392,13 +365,6 @@ class ClassService {
 
     if (response != null) {
       final statusCode = response.statusCode;
-
-      // First try backend message because your Spring service
-      // returns useful messages such as:
-      //
-      // "Subject already assigned to this class"
-      // "Class and Subject belong to different schools"
-      // "Subject is not assigned to this class"
 
       if (response.data is Map &&
           response.data['message'] != null) {

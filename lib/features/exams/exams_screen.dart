@@ -8,6 +8,8 @@ import 'package:smartkids_admin/features/exams/services/examination_excel_picker
 import 'package:smartkids_admin/features/exams/models/excel_import_response_model.dart';
 import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
 import 'package:smartkids_admin/features/exams/services/examination_bulk_import_service.dart';
+
+import 'package:smartkids_admin/features/exams/models/exam_schedule_model.dart';
 import '../../features/exams/exam_details_screen.dart';
 
 class ExamsScreen extends StatefulWidget {
@@ -1037,7 +1039,7 @@ class _ExamsScreenState extends State<ExamsScreen> {
               cells: [
                 DataCell(
                   Text(
-                    schedule.subject,
+                    schedule.subjectName,
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,

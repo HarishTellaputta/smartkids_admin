@@ -36,6 +36,8 @@ import '../subjects/subjects_screen.dart';
 import 'package:smartkids_admin/models/student_gender_summary.dart';
 import '../../report_cards/screens/report_cards_screen.dart';
 import '../reports/screens/reports_screen.dart';
+import 'package:smartkids_admin/excel_reports/excel_reports_screen.dart';
+import '../birthdays/birthdays_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -270,7 +272,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'Reports',
       'Settings',
       'Logout',
-      'Report Cards'
+      'Report Cards',
+      'Birthdays', // 19
+      'Excel Reports', // 20
     ];
 
     if (index >= 0 && index < names.length) {
@@ -2693,6 +2697,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       case 18:
         return const ReportCardsScreen();
+
+      case 19:
+        return const BirthdaysScreen();
+
+      case 20:
+        return const ExcelReportsScreen();
 
       default:
         return SingleChildScrollView(

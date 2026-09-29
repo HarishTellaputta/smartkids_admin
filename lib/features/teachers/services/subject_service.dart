@@ -179,4 +179,27 @@ class SubjectService {
       );
     }
   }
+
+  // ============================================================
+  // GET SUBJECTS BY CLASS
+  // GET /subjects/class/{classId}
+  // ============================================================
+
+  Future<List<SubjectModel>> getSubjectsByClass(int classId) async {
+    try {
+      final response = await _dio.get('/api/v1/subjects/class/$classId');
+
+      final List<dynamic> data = response.data;
+
+      return data
+          .map((json) => SubjectModel.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?.toString() ??
+            e.message ??
+            'Failed to load class subjects',
+      );
+    }
+  }
 }

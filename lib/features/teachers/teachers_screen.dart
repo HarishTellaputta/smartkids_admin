@@ -19,6 +19,8 @@ import '../teachers/teacher_details_screen.dart';
 
 import 'package:smartkids_admin/features/teachers/models/teacher_assignment_model.dart';
 
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class TeachersScreen extends StatefulWidget {
   const TeachersScreen({super.key});
 
@@ -28,7 +30,7 @@ class TeachersScreen extends StatefulWidget {
 
 class _TeachersScreenState extends State<TeachersScreen> {
   static const int _schoolId = 1;
-
+  final apiClient = ApiClient();
   TeacherService? _teacherService;
   ClassService? _classService;
   TeacherAssignmentService? _assignmentService;
@@ -80,7 +82,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     }
 
     _teacherService = TeacherService(token);
-    _classService = ClassService(token);
+    _classService = ClassService(apiClient);
     _assignmentService = TeacherAssignmentService(token);
 
     await _loadTeachers();

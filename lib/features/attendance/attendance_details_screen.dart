@@ -16,6 +16,8 @@ import '../attendance/models/bulk_attendance_request_model.dart';
 import '../teachers/models/teacher_model.dart';
 import '../teachers/services/teacher_service.dart';
 
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class AttendanceDetailsScreen extends StatefulWidget {
   final SchoolClass schoolClass;
   final DateTime initialDate;
@@ -32,6 +34,7 @@ class AttendanceDetailsScreen extends StatefulWidget {
 }
 
 class _AttendanceDetailsScreenState extends State<AttendanceDetailsScreen> {
+  final apiClient = ApiClient();
   AttendanceService? _attendanceService;
   StudentService? _studentService;
   ClassService? _classService;
@@ -80,7 +83,7 @@ class _AttendanceDetailsScreenState extends State<AttendanceDetailsScreen> {
 
       _attendanceService = AttendanceService(token);
       _studentService = StudentService(token);
-      _classService = ClassService(token);
+      _classService = ClassService(apiClient);
 
       await _loadAttendance();
     } catch (e) {

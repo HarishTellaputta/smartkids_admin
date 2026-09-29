@@ -16,6 +16,7 @@ import 'package:smartkids_admin/features/teachers/services/subject_service.dart'
 import 'package:smartkids_admin/models/section_model.dart';
 import 'package:smartkids_admin/features/mcq/services/mcq_question_service.dart';
 import 'package:smartkids_admin/services/section_service.dart';
+import 'package:smartkids_admin/core/network/api_client.dart';
 
 class McqQuestionManagerScreen extends StatefulWidget {
   final int? initialClassId;
@@ -37,6 +38,7 @@ class McqQuestionManagerScreen extends StatefulWidget {
 }
 
 class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
+  ApiClient apiClient= ApiClient();
   ClassService? _classService;
   SectionService? _sectionService;
   SubjectService? _subjectService;
@@ -92,8 +94,8 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
         throw Exception('Login token not found. Please login again.');
       }
 
-      _classService = ClassService(token);
-      _sectionService = SectionService(token);
+      _classService = ClassService(apiClient);
+      _sectionService = SectionService(apiClient);
       _subjectService = SubjectService(token);
       _questionService = McqQuestionService(token);
 

@@ -1,6 +1,7 @@
 class Student {
   final int? id;
   final String? admissionNo;
+  final String? rollNumber;
   final String? name;
   final String? email;
   final String? phone;
@@ -8,7 +9,7 @@ class Student {
   final String? gender;
   final String? bloodGroup;
   final String? admissionDate;
-  final int?    classId;
+  final int? classId;
   final String? className;
   final int? sectionId;
   final String? sectionName;
@@ -23,6 +24,7 @@ class Student {
   Student({
     this.id,
     this.admissionNo,
+    this.rollNumber,
     this.name,
     this.email,
     this.phone,
@@ -47,6 +49,7 @@ class Student {
     return Student(
       id: json['id'],
       admissionNo: json['admissionNo'],
+      rollNumber: json['rollNumber'],
       name: json['name'],
       email: json['email'],
       phone: json['phone'],

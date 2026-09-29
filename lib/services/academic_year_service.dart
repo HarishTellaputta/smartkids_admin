@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:typed_data';
 
 import '../models/academic_year_model.dart';
 
@@ -146,4 +147,44 @@ class AcademicYearService {
         return error.message ?? 'Something went wrong.';
     }
   }
+
+  // ============================================================
+  // IMPORT ACADEMIC YEARS FROM EXCEL
+  // POST /api/v1/academic-years/import
+  // ============================================================
+
+  Future<Map<String, dynamic>> importAcademicYears(
+    Uint8List fileBytes,
+    String fileName,
+  ) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+        ),
+      });
+
+      final response = await _dio.post(
+        '/api/v1/academic-years/import',
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      }
+
+      return {};
+    } on DioException catch (e) {
+      throw Exception(_handleError(e));
+    } catch (e) {
+      throw Exception('Failed to import academic years: $e');
+    }
+  }
+  
 }

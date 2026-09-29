@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../models/exam_schedule_model.dart';
 import '../models/examination_model.dart';
 import '../models/exam_result_model.dart';
 import 'package:smartkids_admin/features/teachers/models/teacher_performance_model.dart';
@@ -150,13 +151,46 @@ class ExaminationService {
   }
 
   // ============================================================
-  // GET ALL SCHEDULES
+  // GET SCHEDULES
   // GET /api/v1/examinations/schedules
+  // Supports examinationId, classId, sectionId, subjectId
   // ============================================================
 
-  Future<List<ExamScheduleModel>> getSchedules() async {
+  Future<List<ExamScheduleModel>> getSchedules({
+    int? examinationId,
+    int? classId,
+    int? sectionId,
+    int? subjectId,
+  }) async {
     try {
-      final response = await _dio.get('/api/v1/examinations/schedules');
+      final queryParameters = <String, dynamic>{};
+
+      if (examinationId != null) {
+        queryParameters['examinationId'] = examinationId;
+      }
+
+      if (classId != null) {
+        queryParameters['classId'] = classId;
+      }
+
+      if (sectionId != null) {
+        queryParameters['sectionId'] = sectionId;
+      }
+
+      if (subjectId != null) {
+        queryParameters['subjectId'] = subjectId;
+      }
+
+      final response = await _dio.get(
+        '/api/v1/examinations/schedules',
+        queryParameters: queryParameters,
+      );
+
+      print('========================================');
+      print('GET EXAM SCHEDULES');
+      print('QUERY: $queryParameters');
+      print('RESPONSE: ${response.data}');
+      print('========================================');
 
       return _parseScheduleList(response.data);
     } on DioException catch (e) {
@@ -168,26 +202,20 @@ class ExaminationService {
 
   // ============================================================
   // GET SCHEDULES BY EXAMINATION
-  // GET /api/v1/examinations/schedules?examinationId=1
   // ============================================================
 
   Future<List<ExamScheduleModel>> getSchedulesByExamination(
-    int examinationId,
-  ) async {
-    try {
-      final response = await _dio.get(
-        '/api/v1/examinations/schedules',
-        queryParameters: {'examinationId': examinationId},
-      );
-
-      print('SCHEDULES FOR EXAM $examinationId: ${response.data}');
-
-      return _parseScheduleList(response.data);
-    } on DioException catch (e) {
-      throw Exception(_handleError(e));
-    } catch (e) {
-      throw Exception('Failed to load examination schedules: $e');
-    }
+    int examinationId, {
+    int? classId,
+    int? sectionId,
+    int? subjectId,
+  }) async {
+    return getSchedules(
+      examinationId: examinationId,
+      classId: classId,
+      sectionId: sectionId,
+      subjectId: subjectId,
+    );
   }
 
   // ============================================================
@@ -200,7 +228,7 @@ class ExaminationService {
     required int classId,
     int? sectionId,
     int? subjectTeacherId,
-    required String subject,
+    required int subjectId,
     required String examDate,
     required String startTime,
     required int duration,
@@ -215,7 +243,7 @@ class ExaminationService {
         'classId': classId,
         'sectionId': sectionId,
         'subjectTeacherId': subjectTeacherId,
-        'subject': subject.trim(),
+        'subjectId': subjectId,
         'examDate': examDate,
         'startTime': startTime,
         'duration': duration,
@@ -225,10 +253,18 @@ class ExaminationService {
         'status': status,
       };
 
+      print('========================================');
+      print('CREATE EXAM SCHEDULE');
+      print('REQUEST: $body');
+      print('========================================');
+
       final response = await _dio.post(
         '/api/v1/examinations/schedules',
         data: body,
       );
+
+      print('STATUS: ${response.statusCode}');
+      print('RESPONSE: ${response.data}');
 
       return ExamScheduleModel.fromJson(
         Map<String, dynamic>.from(response.data),
@@ -251,7 +287,7 @@ class ExaminationService {
     required int classId,
     int? sectionId,
     int? subjectTeacherId,
-    required String subject,
+    required int subjectId,
     required String examDate,
     required String startTime,
     required int duration,
@@ -266,7 +302,7 @@ class ExaminationService {
         'classId': classId,
         'sectionId': sectionId,
         'subjectTeacherId': subjectTeacherId,
-        'subject': subject.trim(),
+        'subjectId': subjectId,
         'examDate': examDate,
         'startTime': startTime,
         'duration': duration,
@@ -276,10 +312,18 @@ class ExaminationService {
         'status': status,
       };
 
+      print('========================================');
+      print('UPDATE EXAM SCHEDULE ID: $id');
+      print('REQUEST: $body');
+      print('========================================');
+
       final response = await _dio.put(
         '/api/v1/examinations/schedules/$id',
         data: body,
       );
+
+      print('STATUS: ${response.statusCode}');
+      print('RESPONSE: ${response.data}');
 
       return ExamScheduleModel.fromJson(
         Map<String, dynamic>.from(response.data),
@@ -290,7 +334,6 @@ class ExaminationService {
       throw Exception('Failed to update exam schedule: $e');
     }
   }
-
   // ============================================================
   // PARSERS
   // ============================================================

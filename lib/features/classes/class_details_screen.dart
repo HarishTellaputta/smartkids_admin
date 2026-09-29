@@ -25,6 +25,9 @@ import 'package:smartkids_admin/features/timetable/services/timetable_service.da
 
 import 'package:smartkids_admin/features/teachers/services/teacher_service.dart';
 
+
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class ClassDetailsScreen extends StatefulWidget {
   final SchoolClass schoolClass;
 
@@ -38,6 +41,7 @@ class ClassDetailsScreen extends StatefulWidget {
 }
 
 class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
+  final apiClient = ApiClient();
   StudentService? _studentService;
   SectionService? _sectionService;
   AttendanceService? _attendanceService;
@@ -81,10 +85,10 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     }
 
     _studentService = StudentService(token);
-    _sectionService = SectionService(token);
+    _sectionService = SectionService(apiClient);
     _attendanceService = AttendanceService(token);
     _timetableService = TimetableService(token);
-    _classSubjectService = ClassSubjectService(token);
+    _classSubjectService = ClassSubjectService(apiClient);
     _subjectService = SubjectService(token);
     _teacherAssignmentService = TeacherAssignmentService(token);
     _teacherService = TeacherService(token);

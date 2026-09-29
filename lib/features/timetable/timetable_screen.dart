@@ -18,6 +18,8 @@ import 'package:smartkids_admin/services/section_service.dart';
 import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
 import '../timetable/timetable_details_screen.dart';
 
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
 
@@ -26,6 +28,7 @@ class TimetableScreen extends StatefulWidget {
 }
 
 class _TimetableScreenState extends State<TimetableScreen> {
+  final apiClient = ApiClient();
   ClassService? _classService;
   TeacherService? _teacherService;
   SectionService? _sectionService;
@@ -74,10 +77,10 @@ class _TimetableScreenState extends State<TimetableScreen> {
         return;
       }
 
-      _classService = ClassService(token);
+      _classService = ClassService(apiClient);
       _teacherService = TeacherService(token);
-      _sectionService = SectionService(token);
-      _classSubjectService = ClassSubjectService(token);
+      _sectionService = SectionService(apiClient);
+      _classSubjectService = ClassSubjectService(apiClient);
       _timetableService = TimetableService(token);
 
       final results = await Future.wait([

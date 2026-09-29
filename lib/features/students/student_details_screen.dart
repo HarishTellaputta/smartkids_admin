@@ -8,12 +8,15 @@ import 'package:smartkids_admin/services/parent_service.dart';
 import 'package:smartkids_admin/features/attendance/services/attendance_service.dart';
 import 'package:smartkids_admin/features/attendance/models/attendance_response_model.dart';
 
+import 'package:smartkids_admin/features/exams/models/exam_schedule_model.dart';
+
 import 'package:smartkids_admin/features/exams/models/examination_model.dart';
 import 'package:smartkids_admin/features/exams/models/exam_result_model.dart';
 import 'package:smartkids_admin/features/exams/services/examination_service.dart';
 
 import 'package:smartkids_admin/features/fees/models/fee_model.dart';
 import 'package:smartkids_admin/features/fees/services/fee_service.dart';
+
 
 class StudentDetailsScreen extends StatefulWidget {
   final Student student;
@@ -347,11 +350,11 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   String _subjectName(ExamResultResponseModel result) {
     final schedule = _findSchedule(result.examScheduleId);
 
-    if (schedule == null || schedule.subject.isEmpty) {
+    if (schedule == null || schedule.subjectName.isEmpty) {
       return 'Subject';
     }
 
-    return schedule.subject;
+    return schedule.subjectName;
   }
 
   List<ExamResultResponseModel> get _latestExamResults {

@@ -18,6 +18,7 @@ import 'dialogs/student_filter_dialog.dart';
 import 'widgets/student_overview_panel.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 import 'package:smartkids_admin/features/teachers/services/class_service.dart';
+import 'package:smartkids_admin/core/network/api_client.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({super.key});
@@ -27,6 +28,9 @@ class StudentsScreen extends StatefulWidget {
 }
 
 class _StudentsScreenState extends State<StudentsScreen> {
+
+  ApiClient apiClient =ApiClient();
+
   final TextEditingController _searchController = TextEditingController();
 
   late StudentService studentService;
@@ -100,7 +104,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
       }
 
       studentService = StudentService(token);
-      classService = ClassService(token);
+      classService = ClassService(apiClient);
 
       _serviceInitialized = true;
 

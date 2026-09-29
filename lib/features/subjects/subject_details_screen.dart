@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smartkids_admin/core/network/api_client.dart';
 
 import 'package:smartkids_admin/features/teachers/models/subject_model.dart';
 import 'package:smartkids_admin/features/teachers/models/teacher_assignment_model.dart';
@@ -13,6 +14,8 @@ import '../teachers/services/class_service.dart';
 import '../teachers/models/class_model.dart';
 import '../../features/teachers/subject_performance_model.dart';
 import '../../features/teachers/teacher_details_screen.dart';
+
+import 'package:smartkids_admin/core/network/api_client.dart';
 
 class SubjectDetailsScreen extends StatefulWidget {
   final SubjectModel subject;
@@ -30,6 +33,7 @@ class SubjectDetailsScreen extends StatefulWidget {
 class _SubjectDetailsScreenState
     extends State<SubjectDetailsScreen> {
 
+ApiClient apiClient =ApiClient();
   SubjectService? _subjectService;
   TeacherAssignmentService? _assignmentService;
   TeacherService? _teacherService;
@@ -76,7 +80,7 @@ class _SubjectDetailsScreenState
       _assignmentService =
           TeacherAssignmentService(token);
       _teacherService = TeacherService(token);
-      _classService = ClassService(token);
+      _classService = ClassService(apiClient);
 
       await _loadData();
     } catch (e) {

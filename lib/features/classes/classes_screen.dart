@@ -10,6 +10,9 @@ import 'package:smartkids_admin/features/teachers/services/class_subject_service
 import 'package:smartkids_admin/features/teachers/services/subject_service.dart';
 import 'class_details_screen.dart';
 
+
+import 'package:smartkids_admin/core/network/api_client.dart';
+
 class ClassesScreen extends StatefulWidget {
   const ClassesScreen({super.key});
 
@@ -21,7 +24,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
   final int _schoolId = 1;
 
   final Map<int, List<ClassSubjectModel>> _classSubjectsMap = {};
-
+final apiClient = ApiClient();
   ClassService? _classService;
   ClassSubjectService? _classSubjectService;
   SubjectService? _subjectService;
@@ -67,8 +70,8 @@ class _ClassesScreenState extends State<ClassesScreen> {
       return;
     }
 
-    _classService = ClassService(token);
-    _classSubjectService = ClassSubjectService(token);
+    _classService = ClassService(apiClient);
+    _classSubjectService = ClassSubjectService(apiClient);
     _subjectService = SubjectService(token);
 
     await _loadClasses();

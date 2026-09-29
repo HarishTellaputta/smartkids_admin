@@ -12,6 +12,7 @@ import 'package:smartkids_admin/features/teachers/services/subject_service.dart'
 
 import 'package:smartkids_admin/models/section_model.dart';
 import 'package:smartkids_admin/services/section_service.dart';
+import 'package:smartkids_admin/core/network/api_client.dart';
 
 class McqScreen extends StatefulWidget {
   const McqScreen({super.key});
@@ -24,7 +25,7 @@ class _McqScreenState extends State<McqScreen> {
   // ============================================================
   // SERVICES
   // ============================================================
-
+ApiClient apiClient =ApiClient();
   ClassService? _classService;
   SectionService? _sectionService;
   SubjectService? _subjectService;
@@ -83,8 +84,8 @@ class _McqScreenState extends State<McqScreen> {
         throw Exception('Authentication token not found. Please login again.');
       }
 
-      _classService = ClassService(token);
-      _sectionService = SectionService(token);
+      _classService = ClassService(apiClient);
+      _sectionService = SectionService(apiClient);
       _subjectService = SubjectService(token);
       _testService = McqTestService(token);
 

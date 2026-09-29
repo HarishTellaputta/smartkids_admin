@@ -326,4 +326,18 @@ class StudentService {
       rethrow;
     }
   }
+
+  Future<List<Student>> getStudentsBySectionId(int sectionId) async {
+    final response = await dio.get('/api/v1/students/section/$sectionId');
+
+    final data = response.data;
+
+    if (data is List) {
+      return data
+          .map((json) => Student.fromJson(Map<String, dynamic>.from(json)))
+          .toList();
+    }
+
+    return [];
+  }
 }

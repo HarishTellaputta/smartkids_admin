@@ -1,22 +1,12 @@
 import 'package:dio/dio.dart';
+
+import '../../core/network/api_client.dart';
 import '../models/section_model.dart';
 
 class SectionService {
-  final Dio _dio;
+  final ApiClient apiClient;
 
-  SectionService(String token)
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: 'http://localhost:8080',
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          ),
-        );
+  SectionService(this.apiClient);
 
   // ============================================================
   // GET ALL SECTIONS
@@ -24,7 +14,7 @@ class SectionService {
 
   Future<List<Section>> getSections() async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/api/v1/sections',
       );
 
@@ -42,7 +32,7 @@ class SectionService {
 
   Future<Section> getSectionById(int id) async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/api/v1/sections/$id',
       );
 
@@ -62,7 +52,7 @@ class SectionService {
 
   Future<List<Section>> getSectionsByClassId(int classId) async {
     try {
-      final response = await _dio.get(
+      final response = await apiClient.dio.get(
         '/api/v1/sections/class/$classId',
       );
 
@@ -94,7 +84,7 @@ class SectionService {
         'description': description,
       };
 
-      final response = await _dio.post(
+      final response = await apiClient.dio.post(
         '/api/v1/sections',
         data: body,
       );
@@ -128,7 +118,7 @@ class SectionService {
         'description': description,
       };
 
-      final response = await _dio.put(
+      final response = await apiClient.dio.put(
         '/api/v1/sections/$id',
         data: body,
       );
@@ -149,7 +139,7 @@ class SectionService {
 
   Future<void> deleteSection(int id) async {
     try {
-      await _dio.delete(
+      await apiClient.dio.delete(
         '/api/v1/sections/$id',
       );
     } on DioException catch (e) {

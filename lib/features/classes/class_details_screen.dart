@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,16 +24,14 @@ import 'package:smartkids_admin/features/timetable/services/timetable_service.da
 
 import 'package:smartkids_admin/features/teachers/services/teacher_service.dart';
 
-
 import 'package:smartkids_admin/core/network/api_client.dart';
+import 'package:smartkids_admin/models/academic_year_model.dart';
+import 'package:smartkids_admin/services/academic_year_service.dart';
 
 class ClassDetailsScreen extends StatefulWidget {
   final SchoolClass schoolClass;
 
-  const ClassDetailsScreen({
-    super.key,
-    required this.schoolClass,
-  });
+  const ClassDetailsScreen({super.key, required this.schoolClass});
 
   @override
   State<ClassDetailsScreen> createState() => _ClassDetailsScreenState();
@@ -51,8 +48,12 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   TeacherAssignmentService? _teacherAssignmentService;
   TeacherService? _teacherService;
 
+  AcademicYearService? _academicYearService;
+  AcademicYear? _currentAcademicYear;
+
   bool _loading = true;
   String? _error;
+  bool _showAllStudents = false;
 
   List<Student> _students = [];
   List<Section> _sections = [];
@@ -92,6 +93,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     _subjectService = SubjectService(token);
     _teacherAssignmentService = TeacherAssignmentService(token);
     _teacherService = TeacherService(token);
+    _academicYearService = AcademicYearService(token);
 
     await _loadData();
   }
@@ -123,6 +125,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
         _timetableService!.getByClass(classId),
         _classSubjectService!.getClassSubjects(classId),
         _teacherAssignmentService!.getAssignmentsByClass(classId),
+        _academicYearService!.getCurrentAcademicYear(),
       ]);
 
       _students = results[0] as List<Student>;
@@ -131,6 +134,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       _timetable = results[3] as List<TimetableEntry>;
       _classSubjects = results[4] as List<ClassSubjectModel>;
       _assignments = results[5] as List<TeacherAssignment>;
+      _currentAcademicYear = results[6] as AcademicYear?;
 
       await _loadPerformance();
 
@@ -159,13 +163,12 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
 
     for (final subjectId in uniqueSubjectIds) {
       try {
-        final performance =
-            await _subjectService!.getSubjectPerformance(subjectId);
+        final performance = await _subjectService!.getSubjectPerformance(
+          subjectId,
+        );
 
         final classPerformance = performance
-            .where(
-              (item) => item.classId == widget.schoolClass.id,
-            )
+            .where((item) => item.classId == widget.schoolClass.id)
             .toList();
 
         _performanceBySubject[subjectId] = classPerformance;
@@ -184,21 +187,15 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   // ============================================================
 
   int get _presentCount {
-    return _attendance
-        .where((a) => _status(a.status) == 'PRESENT')
-        .length;
+    return _attendance.where((a) => _status(a.status) == 'PRESENT').length;
   }
 
   int get _absentCount {
-    return _attendance
-        .where((a) => _status(a.status) == 'ABSENT')
-        .length;
+    return _attendance.where((a) => _status(a.status) == 'ABSENT').length;
   }
 
   int get _leaveCount {
-    return _attendance
-        .where((a) => _status(a.status) == 'LEAVE')
-        .length;
+    return _attendance.where((a) => _status(a.status) == 'LEAVE').length;
   }
 
   int get _markedCount {
@@ -233,10 +230,9 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       return day == today ||
           day == today.substring(0, 3) ||
           day.contains(today);
-    }).toList()
-      ..sort((a, b) {
-        return (a.startTime ?? '').compareTo(b.startTime ?? '');
-      });
+    }).toList()..sort((a, b) {
+      return (a.startTime ?? '').compareTo(b.startTime ?? '');
+    });
   }
 
   String _weekdayName(int weekday) {
@@ -312,9 +308,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -408,7 +402,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   const SizedBox(height: 5),
                   Text(
                     '${widget.schoolClass.grade ?? 'Grade'} • '
-                    'Academic Year ${widget.schoolClass.year ?? '-'}',
+                    'Academic Year ${_currentAcademicYear?.name ?? '-'}',
                     style: const TextStyle(
                       color: Color(0xff667085),
                       fontSize: 14,
@@ -420,10 +414,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
             ],
           ),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 15,
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xffecfdf3),
               borderRadius: BorderRadius.circular(30),
@@ -431,11 +422,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.circle,
-                  size: 9,
-                  color: Color(0xff12b76a),
-                ),
+                Icon(Icons.circle, size: 9, color: Color(0xff12b76a)),
                 SizedBox(width: 8),
                 Text(
                   'Active Class',
@@ -458,8 +445,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
         final width = constraints.maxWidth >= 900
             ? (constraints.maxWidth - 48) / 4
             : constraints.maxWidth >= 600
-                ? (constraints.maxWidth - 16) / 2
-                : constraints.maxWidth;
+            ? (constraints.maxWidth - 16) / 2
+            : constraints.maxWidth;
 
         return Wrap(
           spacing: 16,
@@ -496,8 +483,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
               width: width,
               child: _statCard(
                 title: 'Attendance',
-                value:
-                    '${_attendancePercentage.toStringAsFixed(1)}%',
+                value: '${_attendancePercentage.toStringAsFixed(1)}%',
                 subtitle: 'Today',
                 icon: Icons.fact_check_rounded,
               ),
@@ -530,10 +516,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
               color: const Color(0xfff1f3ff),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(
-              icon,
-              color: const Color(0xff4f46e5),
-            ),
+            child: Icon(icon, color: const Color(0xff4f46e5)),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -585,8 +568,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
               final width = constraints.maxWidth >= 700
                   ? (constraints.maxWidth - 36) / 4
                   : constraints.maxWidth >= 400
-                      ? (constraints.maxWidth - 12) / 2
-                      : constraints.maxWidth;
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
 
               return Wrap(
                 spacing: 12,
@@ -657,11 +640,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     );
   }
 
-  Widget _attendanceBox(
-    String title,
-    int value,
-    IconData icon,
-  ) {
+  Widget _attendanceBox(String title, int value, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -671,21 +650,14 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 22,
-            color: const Color(0xff475467),
-          ),
+          Icon(icon, size: 22, color: const Color(0xff475467)),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xff667085),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xff667085)),
               ),
               const SizedBox(height: 3),
               Text(
@@ -748,9 +720,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xfffafbfc),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xffeaecf0),
-                    ),
+                    border: Border.all(color: const Color(0xffeaecf0)),
                   ),
                   child: Row(
                     children: [
@@ -811,26 +781,11 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       icon: Icons.info_outline_rounded,
       child: Column(
         children: [
-          _infoRow(
-            'Class Name',
-            widget.schoolClass.name ?? '-',
-          ),
-          _infoRow(
-            'Class Code',
-            widget.schoolClass.code ?? '-',
-          ),
-          _infoRow(
-            'Grade',
-            widget.schoolClass.grade ?? '-',
-          ),
-          _infoRow(
-            'Academic Year',
-            '${widget.schoolClass.year ?? '-'}',
-          ),
-          _infoRow(
-            'School',
-            widget.schoolClass.schoolName ?? '-',
-          ),
+          _infoRow('Class Name', widget.schoolClass.name ?? '-'),
+          _infoRow('Class Code', widget.schoolClass.code ?? '-'),
+          _infoRow('Grade', widget.schoolClass.grade ?? '-'),
+          _infoRow('Academic Year', _currentAcademicYear?.name ?? '-'),
+          _infoRow('School', widget.schoolClass.schoolName ?? '-'),
           _infoRow(
             'Description',
             widget.schoolClass.description ?? '-',
@@ -841,21 +796,13 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     );
   }
 
-  Widget _infoRow(
-    String label,
-    String value, {
-    bool last = false,
-  }) {
+  Widget _infoRow(String label, String value, {bool last = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(
-                bottom: BorderSide(
-                  color: Color(0xffeaecf0),
-                ),
-              ),
+            : const Border(bottom: BorderSide(color: Color(0xffeaecf0))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -891,7 +838,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
 
     return _sectionCard(
       title: "Today's Timetable",
-      subtitle: '${_weekdayName(DateTime.now().weekday)} • ${timetable.length} periods',
+      subtitle:
+          '${_weekdayName(DateTime.now().weekday)} • ${timetable.length} periods',
       icon: Icons.schedule_rounded,
       child: timetable.isEmpty
           ? _emptyText("No timetable entries for today's class.")
@@ -903,9 +851,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xfffafbfc),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xffeaecf0),
-                    ),
+                    border: Border.all(color: const Color(0xffeaecf0)),
                   ),
                   child: Row(
                     children: [
@@ -951,10 +897,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                       ),
                       if (entry.sectionName != null &&
                           entry.sectionName!.isNotEmpty)
-                        _smallChip(
-                          entry.sectionName!,
-                          Icons.grid_view_rounded,
-                        ),
+                        _smallChip(entry.sectionName!, Icons.grid_view_rounded),
                       if (entry.roomNumber != null &&
                           entry.roomNumber!.isNotEmpty) ...[
                         const SizedBox(width: 8),
@@ -994,9 +937,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xfffafbfc),
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: const Color(0xffeaecf0),
-                    ),
+                    border: Border.all(color: const Color(0xffeaecf0)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1060,8 +1001,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                                 const SizedBox(width: 7),
                                 Expanded(
                                   child: Text(
-                                    teacher.teacherName ??
-                                        'Teacher',
+                                    teacher.teacherName ?? 'Teacher',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -1099,15 +1039,11 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       performanceItems.add(
         _performanceCard(
           subjectName: subject.subjectName ?? 'Subject',
-          percentage:
-              latest.performancePercentage.toDouble(),
+          percentage: latest.performancePercentage.toDouble(),
           examName: latest.examName,
-          averageMarks:
-              latest.averageMarks.toDouble(),
+          averageMarks: latest.averageMarks.toDouble(),
           maxMarks: latest.maxMarks,
-          previousCount: records.length > 1
-              ? records.length - 1
-              : 0,
+          previousCount: records.length > 1 ? records.length - 1 : 0,
         ),
       );
     }
@@ -1117,27 +1053,20 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       subtitle: 'Latest examination performance',
       icon: Icons.analytics_rounded,
       child: performanceItems.isEmpty
-          ? _emptyText(
-              'No examination performance available for this class.',
-            )
+          ? _emptyText('No examination performance available for this class.')
           : LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth >= 900
                     ? (constraints.maxWidth - 24) / 3
                     : constraints.maxWidth >= 600
-                        ? (constraints.maxWidth - 12) / 2
-                        : constraints.maxWidth;
+                    ? (constraints.maxWidth - 12) / 2
+                    : constraints.maxWidth;
 
                 return Wrap(
                   spacing: 12,
                   runSpacing: 12,
                   children: performanceItems
-                      .map(
-                        (item) => SizedBox(
-                          width: width,
-                          child: item,
-                        ),
-                      )
+                      .map((item) => SizedBox(width: width, child: item))
                       .toList(),
                 );
               },
@@ -1160,9 +1089,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       decoration: BoxDecoration(
         color: const Color(0xfffafbfc),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xffeaecf0),
-        ),
+        border: Border.all(color: const Color(0xffeaecf0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1209,10 +1136,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
           const SizedBox(height: 4),
           Text(
             'Average: ${averageMarks.toStringAsFixed(1)} / $maxMarks',
-            style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xff667085),
-            ),
+            style: const TextStyle(fontSize: 11, color: Color(0xff667085)),
           ),
           if (previousCount > 0) ...[
             const SizedBox(height: 7),
@@ -1232,6 +1156,12 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   }
 
   Widget _buildStudentsSection() {
+    final visibleStudents = _showAllStudents
+        ? _students
+        : _students.take(10).toList();
+
+    final remainingCount = _students.length - 10;
+
     return _sectionCard(
       title: 'Students',
       subtitle: '${_students.length} students in this class',
@@ -1240,84 +1170,112 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
           ? _emptyText('No students found in this class.')
           : Column(
               children: [
-                ..._students.take(10).map(
-                  (student) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xfffafbfc),
-                        borderRadius: BorderRadius.circular(13),
-                        border: Border.all(
-                          color: const Color(0xffeaecf0),
+                ...visibleStudents.map((student) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xfffafbfc),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(color: const Color(0xffeaecf0)),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: const Color(0xffeef2ff),
+                          child: Text(
+                            (student.name ?? 'S').trim().isNotEmpty
+                                ? (student.name ?? 'S').trim()[0].toUpperCase()
+                                : 'S',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xff4f46e5),
+                            ),
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: const Color(0xffeef2ff),
-                            child: Text(
-                              (student.name ?? 'S')
-                                  .trim()
-                                  .isNotEmpty
-                                  ? (student.name ?? 'S')
-                                      .trim()[0]
-                                      .toUpperCase()
-                                  : 'S',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xff4f46e5),
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                student.name ?? 'Student',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  student.name ?? 'Student',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+
+                              const SizedBox(height: 3),
+
+                              Text(
+                                'Admission No: '
+                                '${student.admissionNo ?? '-'}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xff667085),
                                 ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  'Admission No: '
-                                  '${student.admissionNo ?? '-'}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xff667085),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          if (student.sectionName != null)
-                            _smallChip(
-                              student.sectionName!,
-                              Icons.grid_view_rounded,
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                        ),
+
+                        if (student.sectionName != null)
+                          _smallChip(
+                            student.sectionName!,
+                            Icons.grid_view_rounded,
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+
                 if (_students.length > 10)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      '+ ${_students.length - 10} more students',
-                      style: const TextStyle(
-                        color: Color(0xff4f46e5),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _showAllStudents = !_showAllStudents;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfff5f7ff),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _showAllStudents
+                                  ? 'Show less'
+                                  : '+ $remainingCount more students',
+                              style: const TextStyle(
+                                color: Color(0xff4f46e5),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              _showAllStudents
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              size: 20,
+                              color: const Color(0xff4f46e5),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1338,9 +1296,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xffe8ebf2),
-        ),
+        border: Border.all(color: const Color(0xffe8ebf2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.025),
@@ -1361,11 +1317,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   color: const Color(0xfff1f3ff),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: const Color(0xff4f46e5),
-                  size: 20,
-                ),
+                child: Icon(icon, color: const Color(0xff4f46e5), size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1400,15 +1352,9 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     );
   }
 
-  Widget _smallChip(
-    String text,
-    IconData icon,
-  ) {
+  Widget _smallChip(String text, IconData icon) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xfff2f4f7),
         borderRadius: BorderRadius.circular(20),
@@ -1416,11 +1362,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 12,
-            color: const Color(0xff667085),
-          ),
+          Icon(icon, size: 12, color: const Color(0xff667085)),
           const SizedBox(width: 4),
           Text(
             text,
@@ -1438,18 +1380,12 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   Widget _emptyText(String text) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        vertical: 25,
-        horizontal: 15,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 15),
       alignment: Alignment.center,
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: Color(0xff98a2b3),
-          fontSize: 13,
-        ),
+        style: const TextStyle(color: Color(0xff98a2b3), fontSize: 13),
       ),
     );
   }
@@ -1464,9 +1400,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xffe8ebf2),
-            ),
+            border: Border.all(color: const Color(0xffe8ebf2)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1479,19 +1413,13 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
               const SizedBox(height: 15),
               const Text(
                 'Unable to load class details',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               Text(
                 _error ?? 'Something went wrong.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xff667085),
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: Color(0xff667085), fontSize: 13),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(

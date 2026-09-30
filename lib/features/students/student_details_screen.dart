@@ -17,6 +17,11 @@ import 'package:smartkids_admin/features/exams/services/examination_service.dart
 import 'package:smartkids_admin/features/fees/models/fee_model.dart';
 import 'package:smartkids_admin/features/fees/services/fee_service.dart';
 import 'package:smartkids_admin/features/fees/fee_details_screen.dart';
+import 'package:smartkids_admin/features/reports/screens/reports_screen.dart';
+import 'package:smartkids_admin/features/reports/services/report_service.dart';
+import 'package:smartkids_admin/report_cards/screens/report_card_view_screen.dart';
+import 'package:smartkids_admin/core/network/api_client.dart';
+import 'package:smartkids_admin/report_cards/services/report_card_service.dart';
 
 class StudentDetailsScreen extends StatefulWidget {
   final Student student;
@@ -31,7 +36,8 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   // ============================================================
   // PARENT
   // ============================================================
-
+  ApiClient apiClient=ApiClient();
+  late final ReportCardService _reportCardService;
   Parent? parent;
   bool isParentLoading = false;
   String? parentError;
@@ -64,19 +70,25 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   bool isExamLoading = false;
   String? examError;
 
+  ExaminationModel? selectedExamination;
+
+  bool isReportCardLoading = false;
+
   // ============================================================
   // INIT
   // ============================================================
 
-  @override
-  void initState() {
-    super.initState();
+ @override
+void initState() {
+  super.initState();
 
-    _loadParentDetails();
-    _loadPendingFees();
-    _loadAttendance();
-    _loadExamResults();
-  }
+  _reportCardService = ReportCardService(ApiClient());
+
+  _loadParentDetails();
+  _loadPendingFees();
+  _loadAttendance();
+  _loadExamResults();
+}
 
   // ============================================================
   // PARENT
@@ -601,6 +613,47 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showReportCard() async {
+    if (widget.student.id == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a student.')));
+      return;
+    }
+
+    if (selectedExamination?.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an examination.')),
+      );
+      return;
+    }
+
+    try {
+      final reportCard = await _reportCardService.getReportCard(
+        studentId: widget.student.id!,
+        examinationId: selectedExamination!.id!,
+      );
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReportCardViewScreen(
+            reportCard: reportCard,
+            service: _reportCardService,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   Widget _headerChip(IconData icon, String text) {
@@ -1560,41 +1613,122 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   }
 
   Future<void> _showExamDetails() async {
+    if (examinations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No examinations available.')),
+      );
+      return;
+    }
+
+    ExaminationModel? selectedExam = selectedExamination;
+
     await showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Exam Performance',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-          content: SizedBox(
-            width: 650,
-            child: examResults.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('No exam results available.'),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      children: examResults
-                          .map((result) => _examDetailTile(result))
-                          .toList(),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text(
+                'View Report Card',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              content: SizedBox(
+                width: 450,
+                child: DropdownButtonFormField<ExaminationModel>(
+                  value: selectedExam,
+                  decoration: InputDecoration(
+                    labelText: 'Select Examination',
+                    prefixIcon: const Icon(Icons.assignment_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
+                  items: examinations.map((exam) {
+                    return DropdownMenuItem<ExaminationModel>(
+                      value: exam,
+                      child: Text(exam.name, overflow: TextOverflow.ellipsis),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedExam = value;
+                    });
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: selectedExam?.id == null
+                      ? null
+                      : () async {
+                          Navigator.pop(dialogContext);
+
+                          await _openReportCard(selectedExam!.id!);
+                        },
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  label: const Text('View Report Card'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _openReportCard(int examinationId) async {
+    final studentId = widget.student.id;
+
+    if (studentId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Student ID is not available.')),
+      );
+      return;
+    }
+
+    setState(() {
+      isReportCardLoading = true;
+    });
+
+    try {
+      final reportCard = await _reportCardService.getReportCard(
+        studentId: studentId,
+        examinationId: examinationId,
+      );
+
+      if (!mounted) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReportCardViewScreen(
+            reportCard: reportCard,
+            service: _reportCardService,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isReportCardLoading = false;
+        });
+      }
+    }
   }
 
   Widget _examDetailTile(ExamResultResponseModel result) {

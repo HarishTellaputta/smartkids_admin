@@ -101,7 +101,6 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
     }
   }
 
-  
   Future<void> _deleteAssignment(dynamic assignment) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -342,7 +341,7 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
                     const SizedBox(width: 10),
 
                     Text(
-                      'Teacher ID: ${widget.teacher.id ?? '-'}',
+                      'EMPLOYEE ID: ${widget.teacher.employeeId ?? '-'}',
                       style: const TextStyle(
                         color: Color(0xff7a8495),
                         fontSize: 13,
@@ -604,13 +603,28 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.className,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xff172033),
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          item.className,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xff172033),
+                          ),
+                        ),
+
+                        const SizedBox(width: 10),
+
+                        Text(
+                          '• ${item.sectionName ?? '-'}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xff246bfd),
+                          ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: 4),
@@ -816,15 +830,32 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                assignment.className ?? '-',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: Color(0xff172033),
-                ),
+              Row(
+                children: [
+                  Text(
+                    assignment.className ?? '-',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: Color(0xff172033),
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  Text(
+                    '• ${assignment.sectionName ?? '-'}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xff246bfd),
+                    ),
+                  ),
+                ],
               ),
+
               const SizedBox(height: 4),
+
               Text(
                 assignment.subjectName ?? '-',
                 style: const TextStyle(fontSize: 13, color: Color(0xff737d8f)),

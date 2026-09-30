@@ -10,8 +10,9 @@ import 'package:smartkids_admin/features/teachers/services/class_subject_service
 import 'package:smartkids_admin/features/teachers/services/subject_service.dart';
 import 'class_details_screen.dart';
 
-
 import 'package:smartkids_admin/core/network/api_client.dart';
+import '/models/academic_year_model.dart';
+import '/services/academic_year_service.dart';
 
 class ClassesScreen extends StatefulWidget {
   const ClassesScreen({super.key});
@@ -24,7 +25,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
   final int _schoolId = 1;
 
   final Map<int, List<ClassSubjectModel>> _classSubjectsMap = {};
-final apiClient = ApiClient();
+  final apiClient = ApiClient();
   ClassService? _classService;
   ClassSubjectService? _classSubjectService;
   SubjectService? _subjectService;
@@ -37,6 +38,8 @@ final apiClient = ApiClient();
   bool _subjectsLoading = false;
 
   String _searchQuery = '';
+  AcademicYear? _currentAcademicYear;
+  bool _isAcademicYearLoading = true;
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -50,6 +53,36 @@ final apiClient = ApiClient();
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCurrentAcademicYear() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Authentication token not found.');
+      }
+
+      final service = AcademicYearService(token);
+
+      final academicYear = await service.getCurrentAcademicYear();
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentAcademicYear = academicYear;
+        _isAcademicYearLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isAcademicYearLoading = false;
+      });
+
+      debugPrint('Failed to load current academic year: $e');
+    }
   }
 
   Future<void> _initialize() async {
@@ -75,6 +108,7 @@ final apiClient = ApiClient();
     _subjectService = SubjectService(token);
 
     await _loadClasses();
+    _loadCurrentAcademicYear();
   }
 
   Future<void> _loadClasses() async {
@@ -810,7 +844,8 @@ final apiClient = ApiClient();
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
                         child: _buildSummaryCards(
-                          currentYear: currentYear,
+                          currentAcademicYear:
+                              _currentAcademicYear?.name ?? '-',
                           gradeCount: gradeCount,
                           assignedSubjectCount: assignedSubjectCount,
                         ),
@@ -924,7 +959,7 @@ final apiClient = ApiClient();
   }
 
   Widget _buildSummaryCards({
-    required int currentYear,
+    required String currentAcademicYear,
     required int gradeCount,
     required int assignedSubjectCount,
   }) {
@@ -955,15 +990,17 @@ final apiClient = ApiClient();
                 icon: Icons.school_rounded,
               ),
             ),
+
             SizedBox(
               width: cardWidth,
               child: _summaryCard(
-                title: 'Current Year',
-                value: '$currentYear',
-                subtitle: 'Academic year',
+                title: 'Current Academic Year',
+                value: currentAcademicYear,
+                subtitle: 'Active academic year',
                 icon: Icons.calendar_month_rounded,
               ),
             ),
+
             SizedBox(
               width: cardWidth,
               child: _summaryCard(
@@ -973,6 +1010,7 @@ final apiClient = ApiClient();
                 icon: Icons.layers_rounded,
               ),
             ),
+
             SizedBox(
               width: cardWidth,
               child: _summaryCard(
@@ -1212,7 +1250,7 @@ final apiClient = ApiClient();
                 ),
                 columns: const [
                   DataColumn(label: Text('CLASS')),
-                  DataColumn(label: Text('GRADE')),
+                  //DataColumn(label: Text('GRADE')),
                   DataColumn(label: Text('YEAR')),
                   DataColumn(label: Text('SUBJECTS')),
                   DataColumn(label: Text('DESCRIPTION')),
@@ -1277,10 +1315,10 @@ final apiClient = ApiClient();
                           ],
                         ),
                       ),
-                      DataCell(_infoChip(schoolClass.grade ?? '-')),
+                     // DataCell(_infoChip(schoolClass.grade ?? '-')),
                       DataCell(
                         Text(
-                          '${schoolClass.year ?? '-'}',
+                          _currentAcademicYear?.name ?? '-',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),

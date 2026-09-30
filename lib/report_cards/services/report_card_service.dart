@@ -1,6 +1,9 @@
+import 'dart:html' as html;
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
-import '../../core/network/api_client.dart';
+import '../../../core/network/api_client.dart';
 import '../models/report_card_model.dart';
 
 class ReportCardService {
@@ -9,7 +12,7 @@ class ReportCardService {
   ReportCardService(this.apiClient);
 
   // ============================================================
-  // VIEW REPORT CARD
+  // GET REPORT CARD
   // GET /api/v1/report-cards/{studentId}/{examinationId}
   // ============================================================
 
@@ -22,69 +25,70 @@ class ReportCardService {
         '/api/v1/report-cards/$studentId/$examinationId',
       );
 
-      print('========================================');
-      print('REPORT CARD');
-      print('STUDENT ID: $studentId');
-      print('EXAMINATION ID: $examinationId');
-      print('STATUS: ${response.statusCode}');
-      print('RESPONSE: ${response.data}');
-      print('========================================');
-
-      if (response.data is! Map) {
-        throw Exception('Invalid report card response');
+      if (response.data is Map) {
+        return ReportCardModel.fromJson(
+          Map<String, dynamic>.from(response.data),
+        );
       }
 
-      return ReportCardModel.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      throw Exception('Invalid report card response.');
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
-      throw Exception('Failed to load report card: $e');
+      throw Exception(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
   // ============================================================
   // DOWNLOAD REPORT CARD
-  //
   // GET /api/v1/report-cards/{studentId}/{examinationId}/download
-  //
-  // Backend currently returns TEXT_PLAIN / .txt
   // ============================================================
 
-  Future<List<int>> downloadReportCard({
+  Future<void> downloadReportCard({
     required int studentId,
     required int examinationId,
   }) async {
     try {
-      final response = await apiClient.dio.get(
+      final response = await apiClient.dio.get<List<int>>(
         '/api/v1/report-cards/$studentId/$examinationId/download',
         options: Options(
           responseType: ResponseType.bytes,
         ),
       );
 
-      print('========================================');
-      print('REPORT CARD DOWNLOAD');
-      print('STUDENT ID: $studentId');
-      print('EXAMINATION ID: $examinationId');
-      print('STATUS: ${response.statusCode}');
-      print('BYTES: ${response.data?.length}');
-      print('========================================');
+      final bytes = response.data;
 
-      if (response.data is List<int>) {
-        return response.data as List<int>;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Report card file is empty.');
       }
 
-      if (response.data is List) {
-        return List<int>.from(response.data);
-      }
+      final fileName =
+          'report-card-$studentId-$examinationId.txt';
 
-      throw Exception('Invalid report card download response');
+      final blob = html.Blob(
+        <dynamic>[Uint8List.fromList(bytes)],
+        'text/plain;charset=utf-8',
+      );
+
+      final url = html.Url.createObjectUrlFromBlob(blob);
+
+      final anchor = html.AnchorElement(href: url)
+        ..download = fileName
+        ..style.display = 'none';
+
+      html.document.body?.children.add(anchor);
+      anchor.click();
+      anchor.remove();
+
+      html.Url.revokeObjectUrl(url);
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
-      throw Exception('Failed to download report card: $e');
+      throw Exception(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
@@ -98,9 +102,7 @@ class ReportCardService {
 
     if (data is Map) {
       final message =
-          data['message'] ??
-          data['error'] ??
-          data['detail'];
+          data['message'] ?? data['error'] ?? data['detail'];
 
       if (message != null) {
         return message.toString();
@@ -110,19 +112,14 @@ class ReportCardService {
     switch (status) {
       case 400:
         return 'Invalid report card request.';
-
       case 401:
         return 'Session expired. Please login again.';
-
       case 403:
         return 'You do not have permission to view this report card.';
-
       case 404:
-        return 'Report card not found.';
-
+        return 'Report card data not found.';
       case 500:
         return 'Server error. Please try again.';
-
       default:
         return e.message ?? 'Network error occurred.';
     }

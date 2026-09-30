@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../models/exam_schedule_model.dart';
 import '../models/examination_model.dart';
+import '../models/grade_rule_model.dart';
 import '../models/exam_result_model.dart';
 import 'package:smartkids_admin/features/teachers/models/teacher_performance_model.dart';
 
@@ -475,4 +476,104 @@ class ExaminationService {
   // IMPORT EXAMINATIONS FROM EXCEL
   // POST /api/v1/examinations/import
   // ============================================================
+
+  // ============================================================
+  // GET GRADE RULES
+  // GET /api/v1/examinations/grade-rules
+  // ============================================================
+
+  Future<List<GradeRuleModel>> getGradeRules() async {
+    try {
+      final response = await _dio.get('/api/v1/examinations/grade-rules');
+
+      print('========================================');
+      print('GET GRADE RULES');
+      print('STATUS: ${response.statusCode}');
+      print('RESPONSE: ${response.data}');
+      print('========================================');
+
+      return _parseGradeRuleList(response.data);
+    } on DioException catch (e) {
+      throw Exception(_handleError(e));
+    } catch (e) {
+      throw Exception('Failed to load grade rules: $e');
+    }
+  }
+
+  // ============================================================
+  // CREATE GRADE RULE
+  // POST /api/v1/examinations/grade-rules
+  // ============================================================
+
+  Future<GradeRuleModel> createGradeRule({
+    required String grade,
+    required double minimumPercentage,
+    required double maximumPercentage,
+  }) async {
+    try {
+      final body = {
+        'grade': grade.trim(),
+        'minimumPercentage': minimumPercentage,
+        'maximumPercentage': maximumPercentage,
+      };
+
+      print('========================================');
+      print('CREATE GRADE RULE');
+      print('REQUEST: $body');
+      print('========================================');
+
+      final response = await _dio.post(
+        '/api/v1/examinations/grade-rules',
+        data: body,
+      );
+
+      print('STATUS: ${response.statusCode}');
+      print('RESPONSE: ${response.data}');
+
+      return GradeRuleModel.fromJson(Map<String, dynamic>.from(response.data));
+    } on DioException catch (e) {
+      throw Exception(_handleError(e));
+    } catch (e) {
+      throw Exception('Failed to create grade rule: $e');
+    }
+  }
+
+  List<GradeRuleModel> _parseGradeRuleList(dynamic data) {
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map(
+            (item) => GradeRuleModel.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
+    }
+
+    if (data is Map<String, dynamic>) {
+      final content = data['content'];
+
+      if (content is List) {
+        return content
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  GradeRuleModel.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+      }
+
+      final dataList = data['data'];
+
+      if (dataList is List) {
+        return dataList
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  GradeRuleModel.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+      }
+    }
+
+    return [];
+  }
 }

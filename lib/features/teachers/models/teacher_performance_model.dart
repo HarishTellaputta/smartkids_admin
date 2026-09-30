@@ -1,14 +1,21 @@
 class TeacherPerformance {
   final int classId;
   final String className;
+
+  final int? sectionId;
+  final String? sectionName;
+
   final int subjectId;
   final String subjectName;
   final String? subjectCode;
+
   final int latestExamScheduleId;
   final String latestExamName;
   final String examDate;
+
   final int studentCount;
   final int assessedCount;
+
   final double averageMarks;
   final int maxMarks;
   final double performancePercentage;
@@ -16,6 +23,8 @@ class TeacherPerformance {
   TeacherPerformance({
     required this.classId,
     required this.className,
+    this.sectionId,
+    this.sectionName,
     required this.subjectId,
     required this.subjectName,
     this.subjectCode,
@@ -34,24 +43,39 @@ class TeacherPerformance {
   ) {
     return TeacherPerformance(
       classId: json['classId'] ?? 0,
+
       className: json['className'] ?? '-',
+
+      sectionId: json['sectionId'],
+      sectionName: json['sectionName'],
+
       subjectId: json['subjectId'] ?? 0,
+
       subjectName: json['subjectName'] ?? '-',
+
       subjectCode: json['subjectCode'],
+
       latestExamScheduleId:
           json['latestExamScheduleId'] ?? 0,
+
       latestExamName:
           json['latestExamName'] ?? '-',
+
       examDate:
           json['examDate'] ?? '-',
+
       studentCount:
           json['studentCount'] ?? 0,
+
       assessedCount:
           json['assessedCount'] ?? 0,
+
       averageMarks:
           (json['averageMarks'] ?? 0).toDouble(),
+
       maxMarks:
           json['maxMarks'] ?? 0,
+
       performancePercentage:
           (json['performancePercentage'] ?? 0).toDouble(),
     );

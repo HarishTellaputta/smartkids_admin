@@ -25,7 +25,7 @@ class _McqScreenState extends State<McqScreen> {
   // ============================================================
   // SERVICES
   // ============================================================
-ApiClient apiClient =ApiClient();
+  ApiClient apiClient = ApiClient();
   ClassService? _classService;
   SectionService? _sectionService;
   SubjectService? _subjectService;
@@ -593,7 +593,7 @@ ApiClient apiClient =ApiClient();
 
                 Navigator.of(dialogContext).pop();
 
-                _showSuccess('MCQ test created successfully.');
+                _showSuccess('MCQ test scheduled successfully.');
 
                 _showCreatedTest(created);
 
@@ -635,7 +635,7 @@ ApiClient apiClient =ApiClient();
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(child: Text('Create Daily MCQ Test')),
+                  const Expanded(child: Text('Schedule Daily MCQ Test')),
                 ],
               ),
 
@@ -963,8 +963,8 @@ ApiClient apiClient =ApiClient();
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(Icons.add),
-                  label: Text(saving ? 'Creating...' : 'Create Test'),
+                      : const Icon(Icons.event_available_rounded),
+                  label: Text(saving ? 'Scheduling...' : 'Schedule Test'),
                 ),
               ],
             );
@@ -1016,7 +1016,7 @@ ApiClient apiClient =ApiClient();
             children: [
               const Icon(Icons.check_circle, color: Colors.green),
               const SizedBox(width: 10),
-              const Expanded(child: Text('Test Created')),
+              const Expanded(child: Text('Test Scheduled')),
             ],
           ),
           content: SizedBox(
@@ -2177,13 +2177,29 @@ ApiClient apiClient =ApiClient();
         ],
       ),
 
-      floatingActionButton: FloatingActionButton.extended(
-        elevation: 5,
-        onPressed: _creatingTest ? null : _showCreateTestDialog,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'Create Test',
-          style: TextStyle(fontWeight: FontWeight.w600),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.25),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          elevation: 0,
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Colors.white,
+          onPressed: _creatingTest ? null : _showCreateTestDialog,
+          icon: const Icon(Icons.event_available_rounded, size: 21),
+          label: const Text(
+            'Schedule Test',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          ),
         ),
       ),
 

@@ -16,36 +16,31 @@ class ReportCardViewScreen extends StatefulWidget {
   });
 
   @override
-  State<ReportCardViewScreen> createState() =>
-      _ReportCardViewScreenState();
+  State<ReportCardViewScreen> createState() => _ReportCardViewScreenState();
 }
 
-class _ReportCardViewScreenState
-    extends State<ReportCardViewScreen> {
+class _ReportCardViewScreenState extends State<ReportCardViewScreen> {
   bool _downloading = false;
 
   Future<void> _download() async {
     setState(() => _downloading = true);
 
     try {
-      final bytes =
-          await widget.service.downloadReportCard(
+      await widget.service.downloadReportCard(
         studentId: widget.reportCard.studentId!,
         examinationId: widget.reportCard.examinationId!,
       );
 
       if (!mounted) return;
 
-      _showDownloadInfo(bytes);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report card downloaded successfully.')),
+      );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) {
@@ -57,9 +52,7 @@ class _ReportCardViewScreenState
   void _showDownloadInfo(List<int> bytes) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Report generated successfully (${bytes.length} bytes).',
-        ),
+        content: Text('Report generated successfully (${bytes.length} bytes).'),
       ),
     );
   }
@@ -73,9 +66,7 @@ class _ReportCardViewScreenState
       appBar: AppBar(
         title: const Text(
           'Report Card',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w700),
         ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF111827),
@@ -89,13 +80,9 @@ class _ReportCardViewScreenState
                   ? const SizedBox(
                       height: 16,
                       width: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(
-                      Icons.download_rounded,
-                    ),
+                  : const Icon(Icons.download_rounded),
               label: const Text('Download'),
             ),
           ),
@@ -105,9 +92,7 @@ class _ReportCardViewScreenState
         padding: const EdgeInsets.all(30),
         child: Center(
           child: Container(
-            constraints: const BoxConstraints(
-              maxWidth: 1000,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1000),
             padding: const EdgeInsets.all(35),
             color: Colors.white,
             child: Column(
@@ -132,20 +117,15 @@ class _ReportCardViewScreenState
                 const SizedBox(height: 45),
 
                 const Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'Class Teacher',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
                       'Principal',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -197,28 +177,14 @@ class _ReportCardViewScreenState
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
-          _info(
-            'Student',
-            report.studentName,
-          ),
-          _info(
-            'Roll Number',
-            report.rollNumber ?? '-',
-          ),
-          _info(
-            'Class',
-            report.className ?? '-',
-          ),
-          _info(
-            'Section',
-            report.sectionName ?? '-',
-          ),
+          _info('Student', report.studentName),
+          _info('Roll Number', report.rollNumber ?? '-'),
+          _info('Class', report.className ?? '-'),
+          _info('Section', report.sectionName ?? '-'),
         ],
       ),
     );
@@ -227,15 +193,11 @@ class _ReportCardViewScreenState
   Widget _info(String title, String value) {
     return Expanded(
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 5),
           Text(
@@ -252,9 +214,7 @@ class _ReportCardViewScreenState
 
   Widget _subjectTable(ReportCardModel report) {
     return Table(
-      border: TableBorder.all(
-        color: const Color(0xFFE2E8F0),
-      ),
+      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
       columnWidths: const {
         0: FlexColumnWidth(2.5),
         1: FlexColumnWidth(1.3),
@@ -265,9 +225,7 @@ class _ReportCardViewScreenState
       },
       children: [
         TableRow(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF1F5F9),
-          ),
+          decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
           children: [
             _cell('Subject', bold: true),
             _cell('Exam Date', bold: true),
@@ -277,41 +235,34 @@ class _ReportCardViewScreenState
             _cell('Grade', bold: true),
           ],
         ),
-        ...report.subjects.map(
-          (subject) {
-            return TableRow(
-              children: [
-                _cell(subject.subject),
-                _cell(subject.examDate ?? '-'),
-                _cell('${subject.marksObtained ?? '-'}'),
-                _cell('${subject.maximumMarks ?? '-'}'),
-                _cell(
-                  subject.percentage == null
-                      ? '-'
-                      : subject.percentage!
-                          .toStringAsFixed(1),
-                ),
-                _cell(subject.grade ?? '-'),
-              ],
-            );
-          },
-        ),
+        ...report.subjects.map((subject) {
+          return TableRow(
+            children: [
+              _cell(subject.subject),
+              _cell(subject.examDate ?? '-'),
+              _cell('${subject.marksObtained ?? '-'}'),
+              _cell('${subject.maximumMarks ?? '-'}'),
+              _cell(
+                subject.percentage == null
+                    ? '-'
+                    : subject.percentage!.toStringAsFixed(1),
+              ),
+              _cell(subject.grade ?? '-'),
+            ],
+          );
+        }),
       ],
     );
   }
 
-  Widget _cell(
-    String text, {
-    bool bold = false,
-  }) {
+  Widget _cell(String text, {bool bold = false}) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 13,
-          fontWeight:
-              bold ? FontWeight.w700 : FontWeight.w500,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
         ),
       ),
     );
@@ -330,22 +281,13 @@ class _ReportCardViewScreenState
               ? '-'
               : '${report.percentage!.toStringAsFixed(1)}%',
         ),
-        _summaryCard(
-          'Grade',
-          report.grade ?? '-',
-        ),
-        _summaryCard(
-          'Rank',
-          '${report.rank ?? '-'}',
-        ),
+        _summaryCard('Grade', report.grade ?? '-'),
+        _summaryCard('Rank', '${report.rank ?? '-'}'),
       ],
     );
   }
 
-  Widget _summaryCard(
-    String title,
-    String value,
-  ) {
+  Widget _summaryCard(String title, String value) {
     return Expanded(
       child: Container(
         margin: const EdgeInsets.only(right: 10),
@@ -353,26 +295,18 @@ class _ReportCardViewScreenState
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: const Color(0xFFF8FAFC),
-          border: Border.all(
-            color: const Color(0xFFE2E8F0),
-          ),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Column(
           children: [
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 7),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -387,29 +321,20 @@ class _ReportCardViewScreenState
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.event_available_rounded,
-            color: Color(0xFF059669),
-          ),
+          const Icon(Icons.event_available_rounded, color: Color(0xFF059669)),
           const SizedBox(width: 12),
           const Text(
             'Attendance',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const Spacer(),
           Text(
             '${report.attendancePresent ?? 0} / ${report.attendanceTotal ?? 0}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 20),
           Text(

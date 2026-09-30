@@ -16,7 +16,7 @@ import 'package:smartkids_admin/features/exams/services/examination_service.dart
 
 import 'package:smartkids_admin/features/fees/models/fee_model.dart';
 import 'package:smartkids_admin/features/fees/services/fee_service.dart';
-
+import 'package:smartkids_admin/features/fees/fee_details_screen.dart';
 
 class StudentDetailsScreen extends StatefulWidget {
   final Student student;
@@ -1726,80 +1726,21 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   }
 
   Future<void> _showFeeDetails() async {
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Pending Fee Details',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-          content: SizedBox(
-            width: 620,
-            child: pendingFees.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('No pending fees.'),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      children: pendingFees
-                          .map(
-                            (fee) => Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 9),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(13),
-                                border: Border.all(
-                                  color: const Color(0xFFE7EBF2),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.receipt_long_outlined,
-                                    color: Color(0xFFD97706),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Pending Fee',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    '₹${(fee.pendingAmount ?? 0).toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      color: Color(0xFFDC2626),
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+    if (pendingFees.isEmpty) {
+      return;
+    }
 
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FeeDetailsScreen(record: pendingFees.first),
+      ),
+    );
+
+    if (mounted) {
+      _loadPendingFees();
+    }
+  }
   // ============================================================
   // CONTACT
   // ============================================================

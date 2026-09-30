@@ -6,21 +6,21 @@ class TeacherAssignmentService {
   final Dio _dio;
 
   TeacherAssignmentService(String token)
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: 'http://localhost:8080',
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-        ),
-      );
+      : _dio = Dio(
+          BaseOptions(
+            baseUrl: 'http://localhost:8080',
+            connectTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 15),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          ),
+        );
 
   // ============================================================
-  // CREATE TEACHER CLASS ASSIGNMENT
+  // CREATE TEACHER CLASS + SUBJECT + SECTION ASSIGNMENT
   //
   // POST /api/v1/teacher-class-assignments
   //
@@ -28,20 +28,25 @@ class TeacherAssignmentService {
   // {
   //   "teacherId": 1,
   //   "classId": 1,
-  //   "subject": "Mathematics"
+  //   "subjectId": 2,
+  //   "sectionId": 1
   // }
+  //
+  // sectionId is optional for backward compatibility.
   // ============================================================
 
   Future<TeacherAssignment> createAssignment({
     required int teacherId,
     required int classId,
     required int subjectId,
+    int? sectionId,
   }) async {
     try {
       final body = {
         'teacherId': teacherId,
         'classId': classId,
         'subjectId': subjectId,
+        'sectionId': sectionId,
       };
 
       final response = await _dio.post(
@@ -58,6 +63,7 @@ class TeacherAssignmentService {
       throw Exception('Failed to assign teacher: $e');
     }
   }
+
   // ============================================================
   // GET ASSIGNMENT BY ID
   //
@@ -66,7 +72,9 @@ class TeacherAssignmentService {
 
   Future<TeacherAssignment> getAssignmentById(int id) async {
     try {
-      final response = await _dio.get('/api/v1/teacher-class-assignments/$id');
+      final response = await _dio.get(
+        '/api/v1/teacher-class-assignments/$id',
+      );
 
       return TeacherAssignment.fromJson(
         Map<String, dynamic>.from(response.data),
@@ -84,7 +92,9 @@ class TeacherAssignmentService {
   // GET /api/v1/teacher-class-assignments/teacher/{teacherId}
   // ============================================================
 
-  Future<List<TeacherAssignment>> getAssignmentsByTeacher(int teacherId) async {
+  Future<List<TeacherAssignment>> getAssignmentsByTeacher(
+    int teacherId,
+  ) async {
     try {
       final response = await _dio.get(
         '/api/v1/teacher-class-assignments/teacher/$teacherId',
@@ -102,9 +112,14 @@ class TeacherAssignmentService {
   // GET ASSIGNMENTS BY CLASS
   //
   // GET /api/v1/teacher-class-assignments/class/{classId}
+  //
+  // Used to know which sections are already occupied
+  // by ANY teacher.
   // ============================================================
 
-  Future<List<TeacherAssignment>> getAssignmentsByClass(int classId) async {
+  Future<List<TeacherAssignment>> getAssignmentsByClass(
+    int classId,
+  ) async {
     try {
       final response = await _dio.get(
         '/api/v1/teacher-class-assignments/class/$classId',
@@ -122,8 +137,9 @@ class TeacherAssignmentService {
   // GET ASSIGNMENTS BY TEACHER + SUBJECT
   //
   // GET
-  // /api/v1/teacher-class-assignments/teacher/{teacherId}/subject/{subject}
+  // /api/v1/teacher-class-assignments/teacher/{teacherId}/subject/{subjectId}
   // ============================================================
+
   Future<List<TeacherAssignment>> getAssignmentsByTeacherAndSubject({
     required int teacherId,
     required int subjectId,
@@ -140,13 +156,11 @@ class TeacherAssignmentService {
       throw Exception('Failed to load subject assignments: $e');
     }
   }
+
   // ============================================================
   // GET SUBJECTS ASSIGNED TO TEACHER
   //
   // GET /api/v1/teacher-class-assignments/teacher/{teacherId}/subjects
-  //
-  // Backend response may be:
-  // ["Mathematics", "Science"]
   // ============================================================
 
   Future<List<String>> getSubjectsByTeacher(int teacherId) async {
@@ -177,7 +191,9 @@ class TeacherAssignmentService {
 
   Future<void> deleteAssignment(int id) async {
     try {
-      await _dio.delete('/api/v1/teacher-class-assignments/$id');
+      await _dio.delete(
+        '/api/v1/teacher-class-assignments/$id',
+      );
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
@@ -193,23 +209,20 @@ class TeacherAssignmentService {
     if (data is List) {
       return data
           .map(
-            (json) =>
-                TeacherAssignment.fromJson(Map<String, dynamic>.from(json)),
+            (json) => TeacherAssignment.fromJson(
+              Map<String, dynamic>.from(json),
+            ),
           )
           .toList();
     }
 
-    // Supports Spring Page response:
-    //
-    // {
-    //   "content": [...]
-    // }
-
-    if (data is Map<String, dynamic> && data['content'] is List) {
+    if (data is Map<String, dynamic> &&
+        data['content'] is List) {
       return (data['content'] as List)
           .map(
-            (json) =>
-                TeacherAssignment.fromJson(Map<String, dynamic>.from(json)),
+            (json) => TeacherAssignment.fromJson(
+              Map<String, dynamic>.from(json),
+            ),
           )
           .toList();
     }
@@ -228,6 +241,11 @@ class TeacherAssignmentService {
       final statusCode = response.statusCode;
 
       if (statusCode == 400) {
+        if (response.data is Map &&
+            response.data['message'] != null) {
+          return response.data['message'].toString();
+        }
+
         return 'Bad request. Please check the assignment details.';
       }
 
@@ -244,14 +262,20 @@ class TeacherAssignmentService {
       }
 
       if (statusCode == 409) {
-        return 'This teacher is already assigned to this class and subject.';
+        if (response.data is Map &&
+            response.data['message'] != null) {
+          return response.data['message'].toString();
+        }
+
+        return 'This class, section and subject are already assigned.';
       }
 
       if (statusCode != null && statusCode >= 500) {
         return 'Server error. Please try again later.';
       }
 
-      if (response.data is Map && response.data['message'] != null) {
+      if (response.data is Map &&
+          response.data['message'] != null) {
         return response.data['message'].toString();
       }
     }

@@ -6,7 +6,14 @@ import 'package:smartkids_admin/features/fees/services/fee_service.dart';
 import 'package:smartkids_admin/features/fees/fee_details_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_saver/file_saver.dart';
+import 'package:flutter/material.dart';
+import 'dart:typed_data';
+import 'package:smartkids_admin/features/fees/apply_fee_structure_screen.dart';
+import 'dart:html' as html;
 
+import 'package:file_picker/file_picker.dart';
+import 'package:file_saver/file_saver.dart';
 import '../../models/section_model.dart';
 import '../../models/student_model.dart';
 
@@ -16,8 +23,13 @@ import '../../services/section_service.dart';
 import '../../services/student_service.dart';
 import '../../features/fees/paid_payments_screen.dart';
 
-
 import 'package:smartkids_admin/core/network/api_client.dart';
+
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+
+import 'models/fee_structure_import_result_model.dart';
 
 class FeesScreen extends StatefulWidget {
   const FeesScreen({super.key});
@@ -28,7 +40,7 @@ class FeesScreen extends StatefulWidget {
 
 class _FeesScreenState extends State<FeesScreen> {
   final FeeService _feeService = FeeService();
-  ApiClient apiClient=ApiClient();
+  ApiClient apiClient = ApiClient();
 
   final TextEditingController searchController = TextEditingController();
 
@@ -37,11 +49,17 @@ class _FeesScreenState extends State<FeesScreen> {
   List<Section> sections = [];
   List<Student> students = [];
 
+  bool _isDownloadingTemplate = false;
+  bool _isImportingExcel = false;
+
   FeeDashboardSummaryModel? dashboardSummary;
 
   bool isLoading = true;
   bool isSummaryLoading = true;
   bool isFilterLoading = false;
+
+  // List<dynamic> feeStructures = [];
+  // bool _isLoadingFeeStructures = false;
 
   String? errorMessage;
 
@@ -68,6 +86,115 @@ class _FeesScreenState extends State<FeesScreen> {
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _downloadFeeStructureTemplate() async {
+    if (_isDownloadingTemplate) return;
+
+    setState(() {
+      _isDownloadingTemplate = true;
+    });
+
+    try {
+      final Uint8List bytes = await _feeService.downloadFeeStructureTemplate();
+
+      await FileSaver.instance.saveFile(
+        name: 'fee-structure-template',
+        bytes: bytes,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fee structure template downloaded successfully.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloadingTemplate = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _importFeeStructuresExcel() async {
+    if (_isImportingExcel) return;
+
+    try {
+      final input = html.FileUploadInputElement()..accept = '.xlsx,.xls';
+
+      input.click();
+
+      await input.onChange.first;
+
+      final files = input.files;
+
+      if (files == null || files.isEmpty) {
+        return;
+      }
+
+      final file = files.first;
+
+      setState(() {
+        _isImportingExcel = true;
+      });
+
+      final reader = html.FileReader();
+
+      reader.readAsArrayBuffer(file);
+
+      await reader.onLoad.first;
+
+      final result = reader.result;
+
+      if (result == null) {
+        throw Exception('Unable to read selected Excel file.');
+      }
+
+      final bytes = Uint8List.fromList((result as List<int>));
+
+      final response = await _feeService.importFeeStructuresFromBytes(
+        bytes,
+        file.name,
+      );
+
+      if (!mounted) return;
+
+      final resultModel = FeeStructureImportResultModel.fromJson(response);
+
+      await _showImportResultDialog(resultModel);
+
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImportingExcel = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadData() async {
@@ -98,6 +225,7 @@ class _FeesScreenState extends State<FeesScreen> {
           sortBy: 'id',
           sortDirection: 'asc',
         ),
+      //  _feeService.getFeeStructures(),
       ]);
 
       if (!mounted) return;
@@ -109,6 +237,7 @@ class _FeesScreenState extends State<FeesScreen> {
         dashboardSummary = results[1] as FeeDashboardSummaryModel;
         classes = results[2] as List<SchoolClass>;
         students = studentPage.content;
+        //feeStructures = results[4] as List<dynamic>;
 
         isLoading = false;
         isSummaryLoading = false;
@@ -300,6 +429,39 @@ class _FeesScreenState extends State<FeesScreen> {
     return null;
   }
 
+  // Future<void> _applyFeeStructure(Map<String, dynamic> structure) async {
+  //   final structureId = structure['id'];
+
+  //   if (structureId == null) {
+  //     _showMessage('Fee structure ID not found.', isError: true);
+  //     return;
+  //   }
+
+  //   try {
+  //     setState(() {
+  //       _isLoadingFeeStructures = true;
+  //     });
+
+  //     await _feeService.applyFeeStructure(int.parse(structureId.toString()));
+
+  //     if (!mounted) return;
+
+  //     _showMessage('Fee structure applied successfully.');
+
+  //     await _loadData();
+  //   } catch (e) {
+  //     if (!mounted) return;
+
+  //     _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() {
+  //         _isLoadingFeeStructures = false;
+  //       });
+  //     }
+  //   }
+  // }
+
   Future<void> _openFeeDetails(StudentFeeModel record) async {
     final result = await Navigator.push<bool>(
       context,
@@ -309,6 +471,88 @@ class _FeesScreenState extends State<FeesScreen> {
     if (result == true && mounted) {
       await _loadData();
     }
+  }
+
+  Future<void> _showImportResultDialog(
+    FeeStructureImportResultModel result,
+  ) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.file_upload_outlined, color: Colors.green),
+              SizedBox(width: 10),
+              Text('Import Completed'),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _importResultRow('Total Rows', result.totalRows.toString()),
+                  _importResultRow(
+                    'Created',
+                    result.created.toString(),
+                    valueColor: Colors.green,
+                  ),
+                  _importResultRow(
+                    'Skipped',
+                    result.skipped.toString(),
+                    valueColor: Colors.orange,
+                  ),
+                  _importResultRow(
+                    'Errors',
+                    result.errors.toString(),
+                    valueColor: Colors.red,
+                  ),
+
+                  if (result.errorDetails.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Details',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    ...result.errorDetails.map(
+                      (error) => Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.2),
+                          ),
+                        ),
+                        child: Text(
+                          'Row ${error.row}: ${error.message}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _showAddPaymentDialog(StudentFeeModel record) async {
@@ -568,6 +812,8 @@ class _FeesScreenState extends State<FeesScreen> {
                   _buildPremiumSummary(),
                   const SizedBox(height: 22),
                   _buildFilters(),
+                  // const SizedBox(height: 18),
+                  // _buildFeeStructures(),
                   const SizedBox(height: 18),
                   _buildFeeTable(records),
                 ],
@@ -603,6 +849,88 @@ class _FeesScreenState extends State<FeesScreen> {
           ),
         ),
 
+        // ============================================================
+        // DOWNLOAD TEMPLATE
+        // ============================================================
+        OutlinedButton.icon(
+          onPressed: _isDownloadingTemplate
+              ? null
+              : _downloadFeeStructureTemplate,
+          icon: _isDownloadingTemplate
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_outlined, size: 18),
+          label: Text(_isDownloadingTemplate ? 'Downloading...' : 'Template'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF2563EB),
+            side: const BorderSide(color: Color(0xFF2563EB)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 10),
+
+        // ============================================================
+        // IMPORT EXCEL
+        // ============================================================
+        ElevatedButton.icon(
+          onPressed: _isImportingExcel ? null : _importFeeStructuresExcel,
+          icon: _isImportingExcel
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.upload_file_outlined, size: 18),
+          label: Text(_isImportingExcel ? 'Importing...' : 'Import Excel'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 10),
+
+        ElevatedButton.icon(
+          onPressed: () async {
+            final result = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ApplyFeeStructureScreen(),
+              ),
+            );
+
+            if (result == true && mounted) {
+              await _loadData();
+            }
+          },
+          icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+          label: const Text('Apply Fees'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        // ============================================================
+        // PAID PAYMENTS
+        // ============================================================
         OutlinedButton.icon(
           onPressed: () {
             Navigator.push(
@@ -620,7 +948,12 @@ class _FeesScreenState extends State<FeesScreen> {
             ),
           ),
         ),
+
         const SizedBox(width: 10),
+
+        // ============================================================
+        // REFRESH
+        // ============================================================
         IconButton(
           tooltip: 'Refresh',
           onPressed: isLoading ? null : _loadData,
@@ -960,7 +1293,7 @@ class _FeesScreenState extends State<FeesScreen> {
             items: const [
               DropdownMenuItem(value: 'All', child: Text('All Status')),
               DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
-              DropdownMenuItem(value: 'PARTIAL', child: Text('Partial'))
+              DropdownMenuItem(value: 'PARTIAL', child: Text('Partial')),
             ],
             onChanged: (value) {
               if (value == null) return;
@@ -1000,6 +1333,366 @@ class _FeesScreenState extends State<FeesScreen> {
       ),
     );
   }
+
+  // Widget _buildFeeStructures() {
+  //   return Container(
+  //     width: double.infinity,
+  //     decoration: BoxDecoration(
+  //       color: Colors.white,
+  //       borderRadius: BorderRadius.circular(18),
+  //       border: Border.all(color: const Color(0xFFE5E7EB)),
+  //     ),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         Padding(
+  //           padding: const EdgeInsets.fromLTRB(20, 19, 20, 14),
+  //           child: Row(
+  //             children: [
+  //               const Expanded(
+  //                 child: Column(
+  //                   crossAxisAlignment: CrossAxisAlignment.start,
+  //                   children: [
+  //                     Text(
+  //                       'Fee Structures',
+  //                       style: TextStyle(
+  //                         fontSize: 18,
+  //                         fontWeight: FontWeight.w800,
+  //                         color: Color(0xFF0F172A),
+  //                       ),
+  //                     ),
+  //                     SizedBox(height: 4),
+  //                     Text(
+  //                       'Apply configured fees to students',
+  //                       style: TextStyle(
+  //                         fontSize: 11,
+  //                         color: Color(0xFF64748B),
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ),
+  //               Container(
+  //                 padding: const EdgeInsets.symmetric(
+  //                   horizontal: 11,
+  //                   vertical: 7,
+  //                 ),
+  //                 decoration: BoxDecoration(
+  //                   color: const Color(0xFFF1F5F9),
+  //                   borderRadius: BorderRadius.circular(20),
+  //                 ),
+  //                 child: Text(
+  //                   '${feeStructures.length} structures',
+  //                   style: const TextStyle(
+  //                     fontSize: 11,
+  //                     fontWeight: FontWeight.w700,
+  //                     color: Color(0xFF475569),
+  //                   ),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+
+  //         const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+  //         if (feeStructures.isEmpty)
+  //           const Padding(
+  //             padding: EdgeInsets.symmetric(vertical: 35),
+  //             child: Center(
+  //               child: Text(
+  //                 'No fee structures found.',
+  //                 style: TextStyle(color: Color(0xFF64748B)),
+  //               ),
+  //             ),
+  //           )
+  //         else
+  //           LayoutBuilder(
+  //             builder: (context, constraints) {
+  //               return SingleChildScrollView(
+  //                 scrollDirection: Axis.horizontal,
+  //                 child: ConstrainedBox(
+  //                   constraints: BoxConstraints(minWidth: constraints.maxWidth),
+  //                   child: DataTable(
+  //                     headingRowHeight: 48,
+  //                     dataRowMinHeight: 62,
+  //                     dataRowMaxHeight: 70,
+  //                     columnSpacing: 30,
+  //                     horizontalMargin: 20,
+  //                     columns: const [
+  //                       DataColumn(label: Text('FEE')),
+  //                       DataColumn(label: Text('CLASS')),
+  //                       DataColumn(label: Text('AMOUNT')),
+  //                       DataColumn(label: Text('DUE DATE')),
+  //                       DataColumn(label: Text('STATUS')),
+  //                       DataColumn(label: Text('ACTION')),
+  //                     ],
+  //                     rows: feeStructures.map((item) {
+  //                       final structure = Map<String, dynamic>.from(item);
+
+  //                       final id = structure['id'];
+
+  //                       final name = structure['name']?.toString() ?? '-';
+
+  //                       final amount =
+  //                           double.tryParse(
+  //                             structure['amount']?.toString() ?? '',
+  //                           ) ??
+  //                           0;
+
+  //                       final dueDate = structure['dueDate']?.toString() ?? '-';
+
+  //                       final status =
+  //                           structure['status']?.toString() ?? 'ACTIVE';
+
+  //                       final classId = structure['classId'];
+
+  //                       String className = '-';
+
+  //                       if (classId != null) {
+  //                         final parsedClassId = int.tryParse(
+  //                           classId.toString(),
+  //                         );
+
+  //                         for (final c in classes) {
+  //                           if (c.id == parsedClassId) {
+  //                             className = c.name ?? c.grade ?? '-';
+  //                             break;
+  //                           }
+  //                         }
+  //                       }
+
+  //                       return DataRow(
+  //                         cells: [
+  //                           DataCell(
+  //                             Text(
+  //                               name,
+  //                               style: const TextStyle(
+  //                                 fontWeight: FontWeight.w700,
+  //                               ),
+  //                             ),
+  //                           ),
+  //                           DataCell(Text(className)),
+  //                           DataCell(Text(_formatCurrency(amount))),
+  //                           DataCell(Text(_formatDate(dueDate))),
+  //                           DataCell(_statusChip(status)),
+  //                           DataCell(
+  //                             ElevatedButton.icon(
+  //                               onPressed: _isLoadingFeeStructures
+  //                                   ? null
+  //                                   : () {
+  //                                       _applyFeeStructure(structure);
+  //                                     },
+  //                               icon: const Icon(
+  //                                 Icons.play_arrow_rounded,
+  //                                 size: 17,
+  //                               ),
+  //                               label: const Text('Apply'),
+  //                               style: ElevatedButton.styleFrom(
+  //                                 backgroundColor: const Color(0xFF2563EB),
+  //                                 foregroundColor: Colors.white,
+  //                                 elevation: 0,
+  //                                 shape: RoundedRectangleBorder(
+  //                                   borderRadius: BorderRadius.circular(10),
+  //                                 ),
+  //                               ),
+  //                             ),
+  //                           ),
+  //                         ],
+  //                       );
+  //                     }).toList(),
+  //                   ),
+  //                 ),
+  //               );
+  //             },
+  //           ),
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  // Future<void> _showFeeStructuresDialog() async {
+  //   try {
+  //     final structures = await _feeService.getFeeStructures();
+
+  //     if (!mounted) return;
+
+  //     showDialog(
+  //       context: context,
+  //       builder: (context) {
+  //         int? applyingId;
+
+  //         return StatefulBuilder(
+  //           builder: (context, setDialogState) {
+  //             return AlertDialog(
+  //               title: const Row(
+  //                 children: [
+  //                   Icon(Icons.account_balance_wallet_outlined),
+  //                   SizedBox(width: 10),
+  //                   Text('Fee Structures'),
+  //                 ],
+  //               ),
+  //               content: SizedBox(
+  //                 width: 750,
+  //                 child: structures.isEmpty
+  //                     ? const Center(
+  //                         child: Padding(
+  //                           padding: EdgeInsets.all(30),
+  //                           child: Text(
+  //                             'No fee structures found.',
+  //                             style: TextStyle(fontSize: 16),
+  //                           ),
+  //                         ),
+  //                       )
+  //                     : SingleChildScrollView(
+  //                         child: Column(
+  //                           mainAxisSize: MainAxisSize.min,
+  //                           children: structures.map<Widget>((item) {
+  //                             final structure = Map<String, dynamic>.from(item);
+
+  //                             final int? structureId = structure['id'] is int
+  //                                 ? structure['id']
+  //                                 : int.tryParse('${structure['id'] ?? ''}');
+
+  //                             final String name =
+  //                                 '${structure['name'] ?? 'Fee Structure'}';
+
+  //                             final String amount =
+  //                                 '${structure['amount'] ?? 0}';
+
+  //                             final String className =
+  //                                 '${structure['className'] ?? structure['class_name'] ?? structure['classId'] ?? '-'}';
+
+  //                             final String dueDate =
+  //                                 '${structure['dueDate'] ?? structure['due_date'] ?? '-'}';
+
+  //                             final bool isApplying = applyingId == structureId;
+
+  //                             return Card(
+  //                               margin: const EdgeInsets.only(bottom: 10),
+  //                               child: Padding(
+  //                                 padding: const EdgeInsets.all(12),
+  //                                 child: Row(
+  //                                   children: [
+  //                                     Expanded(
+  //                                       flex: 3,
+  //                                       child: Column(
+  //                                         crossAxisAlignment:
+  //                                             CrossAxisAlignment.start,
+  //                                         children: [
+  //                                           Text(
+  //                                             name,
+  //                                             style: const TextStyle(
+  //                                               fontWeight: FontWeight.bold,
+  //                                               fontSize: 15,
+  //                                             ),
+  //                                           ),
+  //                                           const SizedBox(height: 5),
+  //                                           Text('Class: $className'),
+  //                                           Text('Amount: ₹$amount'),
+  //                                           Text('Due Date: $dueDate'),
+  //                                         ],
+  //                                       ),
+  //                                     ),
+
+  //                                     ElevatedButton.icon(
+  //                                       onPressed:
+  //                                           structureId == null || isApplying
+  //                                           ? null
+  //                                           : () async {
+  //                                               setDialogState(() {
+  //                                                 applyingId = structureId;
+  //                                               });
+
+  //                                               try {
+  //                                                 await _feeService
+  //                                                     .applyFeeStructure(
+  //                                                       structureId,
+  //                                                     );
+
+  //                                                 if (!mounted) return;
+
+  //                                                 Navigator.pop(context);
+
+  //                                                 ScaffoldMessenger.of(
+  //                                                   context,
+  //                                                 ).showSnackBar(
+  //                                                   const SnackBar(
+  //                                                     content: Text(
+  //                                                       'Fee structure applied successfully.',
+  //                                                     ),
+  //                                                     backgroundColor:
+  //                                                         Colors.green,
+  //                                                   ),
+  //                                                 );
+
+  //                                                 await _loadData();
+  //                                               } catch (e) {
+  //                                                 setDialogState(() {
+  //                                                   applyingId = null;
+  //                                                 });
+
+  //                                                 if (!mounted) return;
+
+  //                                                 ScaffoldMessenger.of(
+  //                                                   context,
+  //                                                 ).showSnackBar(
+  //                                                   SnackBar(
+  //                                                     content: Text(
+  //                                                       'Failed to apply fee structure: $e',
+  //                                                     ),
+  //                                                     backgroundColor:
+  //                                                         Colors.red,
+  //                                                   ),
+  //                                                 );
+  //                                               }
+  //                                             },
+  //                                       icon: isApplying
+  //                                           ? const SizedBox(
+  //                                               width: 16,
+  //                                               height: 16,
+  //                                               child:
+  //                                                   CircularProgressIndicator(
+  //                                                     strokeWidth: 2,
+  //                                                   ),
+  //                                             )
+  //                                           : const Icon(
+  //                                               Icons.play_arrow_rounded,
+  //                                             ),
+  //                                       label: Text(
+  //                                         isApplying ? 'Applying...' : 'Apply',
+  //                                       ),
+  //                                     ),
+  //                                   ],
+  //                                 ),
+  //                               ),
+  //                             );
+  //                           }).toList(),
+  //                         ),
+  //                       ),
+  //               ),
+  //               actions: [
+  //                 TextButton(
+  //                   onPressed: () => Navigator.pop(context),
+  //                   child: const Text('Close'),
+  //                 ),
+  //               ],
+  //             );
+  //           },
+  //         );
+  //       },
+  //     );
+  //   } catch (e) {
+  //     if (!mounted) return;
+
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         content: Text('Failed to load fee structures: $e'),
+  //         backgroundColor: Colors.red,
+  //       ),
+  //     );
+  //   }
+  // }
 
   Widget _buildFeeTable(List<StudentFeeModel> records) {
     return Container(
@@ -1110,7 +1803,7 @@ class _FeesScreenState extends State<FeesScreen> {
                               _studentCell(record),
                               onTap: () => _openFeeDetails(record),
                             ),
-                           // DataCell(Text(_classNameForFee(record))),
+                            // DataCell(Text(_classNameForFee(record))),
                             DataCell(
                               SizedBox(
                                 width: 130,
@@ -1331,6 +2024,22 @@ class _FeesScreenState extends State<FeesScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _importResultRow(String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(
+            value,
+            style: TextStyle(fontWeight: FontWeight.bold, color: valueColor),
+          ),
+        ],
       ),
     );
   }

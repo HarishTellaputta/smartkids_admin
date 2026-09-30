@@ -202,12 +202,12 @@ class TeacherWidgets {
               value: inactive.toString(),
               icon: Icons.pause_circle_outline,
             ),
-            summaryCard(
-              width: cardWidth,
-              title: 'Designations',
-              value: designations.toString(),
-              icon: Icons.work_outline,
-            ),
+            // summaryCard(
+            //   width: cardWidth,
+            //   title: 'Designations',
+            //   value: designations.toString(),
+            //   icon: Icons.work_outline,
+            // ),
           ],
         );
       },

@@ -4,22 +4,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fee_model.dart';
 import '../models/fee_dashboard_summary_model.dart';
 
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class FeeService {
   final Dio _dio;
 
   FeeService({String baseUrl = 'http://localhost:8080'})
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: baseUrl,
-            connectTimeout: const Duration(seconds: 20),
-            receiveTimeout: const Duration(seconds: 20),
-            sendTimeout: const Duration(seconds: 20),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          ),
-        );
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: baseUrl,
+          connectTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
+          sendTimeout: const Duration(seconds: 20),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        ),
+      );
 
   Future<Map<String, String>> _headers() async {
     final prefs = await SharedPreferences.getInstance();
@@ -45,9 +50,7 @@ class FeeService {
     try {
       final response = await _dio.get(
         '/api/v1/fees/pending',
-        options: Options(
-          headers: await _headers(),
-        ),
+        options: Options(headers: await _headers()),
       );
 
       return _parseStudentFees(response.data);
@@ -67,12 +70,8 @@ class FeeService {
     try {
       final response = await _dio.get(
         '/api/v1/fees/students/$studentId',
-        queryParameters: {
-          'pending': pending,
-        },
-        options: Options(
-          headers: await _headers(),
-        ),
+        queryParameters: {'pending': pending},
+        options: Options(headers: await _headers()),
       );
 
       return _parseStudentFees(response.data);
@@ -85,20 +84,12 @@ class FeeService {
   // PAYMENTS
   // ============================================================
 
-  Future<List<FeePaymentModel>> getPayments({
-    int? studentId,
-  }) async {
+  Future<List<FeePaymentModel>> getPayments({int? studentId}) async {
     try {
       final response = await _dio.get(
         '/api/v1/fees/payments',
-        queryParameters: studentId == null
-            ? null
-            : {
-                'studentId': studentId,
-              },
-        options: Options(
-          headers: await _headers(),
-        ),
+        queryParameters: studentId == null ? null : {'studentId': studentId},
+        options: Options(headers: await _headers()),
       );
 
       return _parsePayments(response.data);
@@ -107,23 +98,18 @@ class FeeService {
     }
   }
 
+  Future<List<FeePaymentModel>> getPaidPayments() async {
+    try {
+      final response = await _dio.get(
+        '/api/v1/fees/payments/paid',
+        options: Options(headers: await _headers()),
+      );
 
-
-
-Future<List<FeePaymentModel>> getPaidPayments() async {
-  try {
-    final response = await _dio.get(
-      '/api/v1/fees/payments/paid',
-      options: Options(
-        headers: await _headers(),
-      ),
-    );
-
-    return _parsePayments(response.data);
-  } on DioException catch (e) {
-    throw Exception(_getErrorMessage(e));
+      return _parsePayments(response.data);
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
   }
-}
   // ============================================================
   // RECORD PAYMENT
   // ============================================================
@@ -143,14 +129,10 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
           'paymentMethod': paymentMethod,
           'remarks': remarks ?? '',
         },
-        options: Options(
-          headers: await _headers(),
-        ),
+        options: Options(headers: await _headers()),
       );
 
-      return FeePaymentModel.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return FeePaymentModel.fromJson(Map<String, dynamic>.from(response.data));
     } on DioException catch (e) {
       throw Exception(_getErrorMessage(e));
     }
@@ -160,20 +142,12 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
   // FEE STRUCTURES
   // ============================================================
 
-  Future<List<dynamic>> getFeeStructures({
-    int? classId,
-  }) async {
+  Future<List<dynamic>> getFeeStructures({int? classId}) async {
     try {
       final response = await _dio.get(
         '/api/v1/fees/structures',
-        queryParameters: classId == null
-            ? null
-            : {
-                'classId': classId,
-              },
-        options: Options(
-          headers: await _headers(),
-        ),
+        queryParameters: classId == null ? null : {'classId': classId},
+        options: Options(headers: await _headers()),
       );
 
       if (response.data is List) {
@@ -195,9 +169,7 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
     try {
       final response = await _dio.get(
         '/api/v1/fees/dashboard-summary',
-        options: Options(
-          headers: await _headers(),
-        ),
+        options: Options(headers: await _headers()),
       );
 
       return FeeDashboardSummaryModel.fromJson(
@@ -216,9 +188,7 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
     if (data is List) {
       return data
           .map(
-            (item) => StudentFeeModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) => StudentFeeModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     }
@@ -226,9 +196,7 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
     if (data is Map && data['content'] is List) {
       return (data['content'] as List)
           .map(
-            (item) => StudentFeeModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) => StudentFeeModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     }
@@ -244,9 +212,7 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
     if (data is List) {
       return data
           .map(
-            (item) => FeePaymentModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) => FeePaymentModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     }
@@ -254,9 +220,7 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
     if (data is Map && data['content'] is List) {
       return (data['content'] as List)
           .map(
-            (item) => FeePaymentModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) => FeePaymentModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     }
@@ -329,4 +293,178 @@ Future<List<FeePaymentModel>> getPaidPayments() async {
 
     return null;
   }
+
+  Future<dynamic> createFeeStructure({
+    required String name,
+    required int classId,
+    int? academicYearId,
+    required double amount,
+    required String dueDate,
+    String status = 'ACTIVE',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/api/v1/fees/structures',
+        data: {
+          'name': name,
+          'classId': classId,
+          'academicYearId': academicYearId,
+          'amount': amount,
+          'dueDate': dueDate,
+          'status': status,
+        },
+        options: Options(headers: await _headers()),
+      );
+
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
+  }
+
+  Future<void> applyFeeStructure(int structureId) async {
+    try {
+      await _dio.post(
+        '/api/v1/fees/structures/$structureId/apply',
+        options: Options(headers: await _headers()),
+      );
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
+  }
+
+  // ============================================================
+  // DOWNLOAD FEE STRUCTURE EXCEL TEMPLATE
+  // GET /api/v1/fees/structures/template
+  // ============================================================
+
+  Future<Uint8List> downloadFeeStructureTemplate() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final response = await _dio.get<List<int>>(
+        '/api/v1/fees/structures/template',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer ${token.trim()}',
+            'Accept':
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          },
+          responseType: ResponseType.bytes,
+        ),
+      );
+
+      if (response.data == null || response.data!.isEmpty) {
+        throw Exception('Downloaded Excel template is empty.');
+      }
+
+      return Uint8List.fromList(response.data!);
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
+  }
+
+  // ============================================================
+  // IMPORT FEE STRUCTURES FROM EXCEL
+  // POST /api/v1/fees/structures/import
+  // ============================================================
+
+  Future<Map<String, dynamic>> importFeeStructures(String filePath) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final formData = FormData.fromMap({
+        'file': await MultipartFile.fromFile(
+          filePath,
+          filename: filePath.split(RegExp(r'[\\/]')).last,
+        ),
+      });
+
+      final response = await _dio.post(
+        '/api/v1/fees/structures/import',
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer ${token.trim()}',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      }
+
+      throw Exception('Invalid import response from server.');
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
+  }
+
+  Future<Map<String, dynamic>> importFeeStructuresFromBytes(
+    Uint8List bytes,
+    String fileName,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.trim().isEmpty) {
+        throw Exception('JWT token not found. Please login again.');
+      }
+
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: fileName),
+      });
+
+      final response = await _dio.post(
+        '/api/v1/fees/structures/import',
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer ${token.trim()}',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      }
+
+      throw Exception('Invalid import response from server.');
+    } on DioException catch (e) {
+      throw Exception(_getErrorMessage(e));
+    }
+  }
+
+
+// ============================================================
+// APPLY / ENABLE FEE STRUCTURE
+// ============================================================
+
+Future<void> enableFeeStructure(int structureId) async {
+  try {
+    await _dio.put(
+      '/api/v1/fees/structures/$structureId/enable',
+      options: Options(headers: await _headers()),
+    );
+  } on DioException catch (e) {
+    throw Exception(_getErrorMessage(e));
+  }
+}
+
 }

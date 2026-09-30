@@ -14,6 +14,11 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart' as ex;
 import 'package:file_saver/file_saver.dart';
 
+import '../models/section_model.dart';
+import '../services/section_service.dart';
+import '../features/teachers/models/teacher_assignment_model.dart';
+import '../features/teachers/services/teacher_assignment_service.dart';
+
 class ExamScheduleExcelScreen extends StatefulWidget {
   const ExamScheduleExcelScreen({super.key});
 
@@ -39,6 +44,15 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
 
   bool _loadingSchedules = false;
   String? _scheduleError;
+
+  List<Section> _sections = [];
+  List<TeacherAssignment> _teacherAssignments = [];
+
+  bool _loadingSections = false;
+  String? _sectionError;
+
+  bool _loadingTeacherAssignments = false;
+  String? _teacherAssignmentError;
 
   bool _loadingSubjects = false;
   String? _subjectError;
@@ -162,6 +176,79 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
     }
   }
 
+  Future<void> _loadSectionsAndTeachers() async {
+    if (_selectedClass?.id == null || _selectedSubject?.subjectId == null) {
+      return;
+    }
+
+    setState(() {
+      _loadingSections = true;
+      _loadingTeacherAssignments = true;
+
+      _sectionError = null;
+      _teacherAssignmentError = null;
+
+      _sections = [];
+      _teacherAssignments = [];
+
+      _schedules = [];
+      _scheduleError = null;
+    });
+
+    try {
+      final classId = _selectedClass!.id!;
+      final subjectId = _selectedSubject!.subjectId!;
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Login session not found. Please login again.');
+      }
+
+      final sectionService = SectionService(apiClient);
+
+      final assignmentService = TeacherAssignmentService(token);
+
+      // Load sections
+      final sections = await sectionService.getSectionsByClassId(classId);
+
+      // Load all teacher assignments for this class
+      final assignments = await assignmentService.getAssignmentsByClass(
+        classId,
+      );
+
+      // Keep only selected subject assignments
+      final subjectAssignments = assignments
+          .where(
+            (assignment) =>
+                assignment.subjectId == subjectId &&
+                assignment.sectionId != null,
+          )
+          .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _sections = sections;
+        _teacherAssignments = subjectAssignments;
+
+        _loadingSections = false;
+        _loadingTeacherAssignments = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingSections = false;
+        _loadingTeacherAssignments = false;
+
+        _sectionError = e.toString();
+        _teacherAssignmentError = e.toString();
+      });
+    }
+  }
+
   Future<void> _loadSchedules() async {
     if (_selectedExamination?.id == null ||
         _selectedClass?.id == null ||
@@ -208,7 +295,20 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
   }
 
   Future<void> _generateExcel() async {
-    if (_schedules.isEmpty) return;
+    if (_selectedExamination?.id == null ||
+        _selectedClass?.id == null ||
+        _selectedSubject?.subjectId == null) {
+      return;
+    }
+
+    if (_sections.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No sections found for the selected class.'),
+        ),
+      );
+      return;
+    }
 
     try {
       final excel = ex.Excel.createExcel();
@@ -233,7 +333,10 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
         'Status',
       ];
 
-      // Header
+      // ============================================================
+      // HEADER
+      // ============================================================
+
       for (int i = 0; i < headers.length; i++) {
         sheet
             .cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
@@ -242,22 +345,41 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
         );
       }
 
-      // Data
-      for (int row = 0; row < _schedules.length; row++) {
-        final schedule = _schedules[row];
+      // ============================================================
+      // ONE ROW PER SECTION
+      // ============================================================
+
+      for (int row = 0; row < _sections.length; row++) {
+        final section = _sections[row];
+
+        TeacherAssignment? assignment;
+
+        for (final item in _teacherAssignments) {
+          if (item.sectionId == section.id &&
+              item.subjectId == _selectedSubject!.subjectId) {
+            assignment = item;
+            break;
+          }
+        }
+
+        final teacherName = assignment?.teacherName?.trim().isNotEmpty == true
+            ? assignment!.teacherName!
+            : 'Not Assigned';
 
         final values = [
-          schedule.examinationName,
-          schedule.className,
-          schedule.sectionName,
-          schedule.subjectName,
-          schedule.subjectTeacherName,
-          _formatDate(schedule.examDate),
-          _formatTime(schedule.startTime),
-          schedule.duration.toString(),
-          schedule.maxMarks.toString(),
-          schedule.roomNumber,
-          schedule.status,
+          _selectedExamination!.name,
+          _selectedClass!.name ?? '',
+          section.name,
+          _selectedSubject!.subjectName,
+          teacherName,
+
+          // Editable fields
+          '',
+          '',
+          '',
+          '',
+          '',
+          'SCHEDULED',
         ];
 
         for (int column = 0; column < values.length; column++) {
@@ -274,23 +396,31 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
         }
       }
 
+      // ============================================================
+      // COLUMN WIDTHS
+      // ============================================================
+
       final widths = [
-        28.0,
-        18.0,
-        12.0,
-        20.0,
-        22.0,
-        15.0,
-        14.0,
-        12.0,
-        12.0,
-        15.0,
-        14.0,
+        28.0, // Examination
+        18.0, // Class
+        12.0, // Section
+        20.0, // Subject
+        22.0, // Teacher
+        15.0, // Exam Date
+        14.0, // Start Time
+        12.0, // Duration
+        12.0, // Max Marks
+        15.0, // Room Number
+        14.0, // Status
       ];
 
       for (int i = 0; i < widths.length; i++) {
         sheet.setColumnWidth(i, widths[i]);
       }
+
+      // ============================================================
+      // SAVE
+      // ============================================================
 
       final bytes = excel.encode();
 
@@ -300,9 +430,9 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
 
       final fileName =
           'Exam_Schedule_'
-          '${_selectedExamination?.name.replaceAll(' ', '_')}_'
-          '${_selectedClass?.name?.replaceAll(' ', '_')}_'
-          '${_selectedSubject?.subjectName.replaceAll(' ', '_')}';
+          '${_selectedExamination!.name.replaceAll(' ', '_')}_'
+          '${_selectedClass!.name?.replaceAll(' ', '_')}_'
+          '${_selectedSubject!.subjectName.replaceAll(' ', '_')}';
 
       await FileSaver.instance.saveFile(
         name: fileName,
@@ -580,7 +710,7 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Existing schedules will appear here',
+                      'Section-wise teacher assignments will be added to the Excel template',
                       style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                     ),
                   ],
@@ -602,7 +732,12 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
               const SizedBox(width: 10),
 
               ElevatedButton.icon(
-                onPressed: _schedules.isEmpty ? null : _generateExcel,
+                onPressed:
+                    _sections.isEmpty ||
+                        _loadingSections ||
+                        _loadingTeacherAssignments
+                    ? null
+                    : _generateExcel,
                 icon: const Icon(Icons.download_rounded, size: 17),
                 label: const Text(
                   'Generate Excel',
@@ -628,23 +763,111 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
 
           const SizedBox(height: 22),
 
-          if (_loadingSchedules)
+          if (_loadingSections || _loadingTeacherAssignments)
             _buildScheduleLoading()
-          else if (_scheduleError != null)
+          else if (_sectionError != null)
             _buildScheduleError()
           else if (_selectedSubject == null)
             _buildScheduleEmpty(
               'Select examination, class and subject',
-              'Schedules will be loaded here',
+              'Section-wise schedule template will be generated here',
             )
-          else if (_schedules.isEmpty)
+          else if (_sections.isEmpty)
             _buildScheduleEmpty(
-              'No schedules found',
-              'No schedule has been created for this selection',
+              'No sections found',
+              'No sections are configured for this class',
             )
           else
-            _buildScheduleTable(),
+            _buildSectionPreview(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSectionPreview() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowHeight: 46,
+          dataRowMinHeight: 54,
+          dataRowMaxHeight: 60,
+          columnSpacing: 28,
+          headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+          columns: const [
+            DataColumn(
+              label: Text(
+                'Section',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Subject',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Teacher',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+          rows: _sections.map((section) {
+            TeacherAssignment? assignment;
+
+            for (final item in _teacherAssignments) {
+              if (item.sectionId == section.id &&
+                  item.subjectId == _selectedSubject!.subjectId) {
+                assignment = item;
+                break;
+              }
+            }
+
+            final teacherName =
+                assignment?.teacherName?.trim().isNotEmpty == true
+                ? assignment!.teacherName!
+                : 'Not Assigned';
+
+            return DataRow(
+              cells: [
+                DataCell(
+                  Text(
+                    section.name,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    _selectedSubject!.subjectName,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    teacherName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: teacherName == 'Not Assigned'
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF111827),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -967,11 +1190,25 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
                         : (value) {
                             setState(() {
                               _selectedClass = value;
+
+                              // Reset subject
                               _selectedSubject = null;
                               _subjects = [];
+
+                              // Reset old schedules
                               _schedules = [];
                               _scheduleError = null;
+
+                              // Reset section-wise data
+                              _sections = [];
+                              _teacherAssignments = [];
+
+                              _sectionError = null;
+                              _teacherAssignmentError = null;
+
+                              // Reset subject loading/error
                               _subjectError = null;
+                              _loadingSubjects = false;
                             });
 
                             if (value != null) {
@@ -1158,7 +1395,7 @@ class _ExamScheduleExcelScreenState extends State<ExamScheduleExcelScreen> {
                             });
 
                             if (value != null) {
-                              _loadSchedules();
+                              _loadSectionsAndTeachers();
                             }
                           },
                   ),

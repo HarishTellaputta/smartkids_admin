@@ -1,12 +1,19 @@
 class TeacherAssignment {
   final int? id;
+
   final int? teacherId;
   final String? teacherName;
+
   final int? classId;
   final String? className;
+
+  final int? sectionId;
+  final String? sectionName;
+
   final int? subjectId;
   final String? subjectName;
   final String? subjectCode;
+
   final DateTime? assignedAt;
 
   const TeacherAssignment({
@@ -15,6 +22,8 @@ class TeacherAssignment {
     this.teacherName,
     this.classId,
     this.className,
+    this.sectionId,
+    this.sectionName,
     this.subjectId,
     this.subjectName,
     this.subjectCode,
@@ -28,6 +37,8 @@ class TeacherAssignment {
       teacherName: _parseString(json['teacherName']),
       classId: _parseInt(json['classId']),
       className: _parseString(json['className']),
+      sectionId: _parseInt(json['sectionId']),
+      sectionName: _parseString(json['sectionName']),
       subjectId: _parseInt(json['subjectId']),
       subjectName: _parseString(json['subjectName']),
       subjectCode: _parseString(json['subjectCode']),
@@ -42,6 +53,8 @@ class TeacherAssignment {
       'teacherName': teacherName,
       'classId': classId,
       'className': className,
+      'sectionId': sectionId,
+      'sectionName': sectionName,
       'subjectId': subjectId,
       'subjectName': subjectName,
       'subjectCode': subjectCode,
@@ -55,6 +68,8 @@ class TeacherAssignment {
     String? teacherName,
     int? classId,
     String? className,
+    int? sectionId,
+    String? sectionName,
     int? subjectId,
     String? subjectName,
     String? subjectCode,
@@ -66,6 +81,8 @@ class TeacherAssignment {
       teacherName: teacherName ?? this.teacherName,
       classId: classId ?? this.classId,
       className: className ?? this.className,
+      sectionId: sectionId ?? this.sectionId,
+      sectionName: sectionName ?? this.sectionName,
       subjectId: subjectId ?? this.subjectId,
       subjectName: subjectName ?? this.subjectName,
       subjectCode: subjectCode ?? this.subjectCode,
@@ -81,6 +98,8 @@ class TeacherAssignment {
         'teacherName: $teacherName, '
         'classId: $classId, '
         'className: $className, '
+        'sectionId: $sectionId, '
+        'sectionName: $sectionName, '
         'subjectId: $subjectId, '
         'subjectName: $subjectName, '
         'subjectCode: $subjectCode, '
@@ -91,7 +110,13 @@ class TeacherAssignment {
 
 int? _parseInt(dynamic value) {
   if (value == null) return null;
+
   if (value is int) return value;
+
+  if (value is num) {
+    return value.toInt();
+  }
+
   return int.tryParse(value.toString());
 }
 

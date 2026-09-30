@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../models/class_model.dart';
 import '../models/class_subject_model.dart';
+import '/models/section_model.dart';
 import '../models/teacher_model.dart';
+
 import '../services/class_service.dart';
+import '/services/section_service.dart';
 import '../services/teacher_assignment_service.dart';
 
 import 'package:smartkids_admin/features/teachers/models/teacher_assignment_model.dart';
+import 'package:smartkids_admin/core/network/api_client.dart';
 
 class AssignClassDialog extends StatefulWidget {
   final Teacher teacher;
@@ -27,16 +31,27 @@ class AssignClassDialog extends StatefulWidget {
   });
 
   @override
-  State<AssignClassDialog> createState() => _AssignClassDialogState();
+  State<AssignClassDialog> createState() =>
+      _AssignClassDialogState();
 }
 
-class _AssignClassDialogState extends State<AssignClassDialog> {
+class _AssignClassDialogState
+    extends State<AssignClassDialog> {
   SchoolClass? selectedClass;
   ClassSubjectModel? selectedSubject;
+  Section? selectedSection;
 
   List<ClassSubjectModel> _subjects = [];
+  List<Section> _sections = [];
+
+  // All assignments for selected class.
+  // This is important because we need to hide sections
+  // assigned to OTHER teachers also.
+  List<TeacherAssignment> _classAssignments = [];
 
   bool _isLoadingSubjects = false;
+  bool _isLoadingSections = false;
+  bool _isLoadingAssignments = false;
   bool _isSaving = false;
 
   @override
@@ -45,77 +60,186 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
     if (widget.classes.isNotEmpty) {
       selectedClass = widget.classes.first;
-      _loadSubjectsForClass(selectedClass!);
+      _loadClassData(selectedClass!);
     }
   }
 
-  Future<void> _loadSubjectsForClass(SchoolClass schoolClass) async {
+  // ============================================================
+  // LOAD CLASS DATA
+  // ============================================================
+
+  Future<void> _loadClassData(
+    SchoolClass schoolClass,
+  ) async {
     if (schoolClass.id == null) {
       return;
     }
 
     setState(() {
       _isLoadingSubjects = true;
+      _isLoadingSections = true;
+      _isLoadingAssignments = true;
+
       _subjects = [];
+      _sections = [];
+      _classAssignments = [];
+
       selectedSubject = null;
+      selectedSection = null;
     });
 
     try {
-      final subjects = await widget.classService.getSubjectsByClass(
-        schoolClass.id!,
-      );
+      final classId = schoolClass.id!;
+
+      final results = await Future.wait([
+        widget.classService.getSubjectsByClass(classId),
+        _loadSections(classId),
+        widget.assignmentService.getAssignmentsByClass(classId),
+      ]);
+
+      final subjects =
+          results[0] as List<ClassSubjectModel>;
+
+      final assignments =
+          results[2] as List<TeacherAssignment>;
 
       if (!mounted) return;
 
       setState(() {
         _subjects = subjects;
+        _classAssignments = assignments;
+
         _isLoadingSubjects = false;
+        _isLoadingSections = false;
+        _isLoadingAssignments = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _subjects = [];
+        _sections = [];
+        _classAssignments = [];
+
         selectedSubject = null;
+        selectedSection = null;
+
         _isLoadingSubjects = false;
+        _isLoadingSections = false;
+        _isLoadingAssignments = false;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text(_cleanError(e))),
-      );
+      _showMessage(_cleanError(e));
     }
   }
 
-  // ------------------------------------------------------------
-  // RETURNS ONLY SUBJECTS WHICH ARE NOT ALREADY ASSIGNED
-  // TO THIS TEACHER FOR THE SELECTED CLASS
-  // ------------------------------------------------------------
+  // ============================================================
+  // LOAD SECTIONS
+  // ============================================================
+
+  Future<List<Section>> _loadSections(
+    int classId,
+  ) async {
+    final sectionService = SectionService(
+      ApiClient(),
+    );
+
+    final sections =
+        await sectionService.getSectionsByClassId(classId);
+
+    if (mounted) {
+      setState(() {
+        _sections = sections;
+      });
+    }
+
+    return sections;
+  }
+
+  // ============================================================
+  // AVAILABLE SUBJECTS
+  //
+  // IMPORTANT:
+  //
+  // Do NOT remove a subject just because this teacher
+  // already teaches it.
+  //
+  // Example:
+  //
+  // Telugu:
+  // A -> Suresh
+  // B -> Suresh
+  // C -> FREE
+  //
+  // Telugu must still appear because C is available.
+  // ============================================================
+
   List<ClassSubjectModel> _availableSubjects() {
     if (selectedClass?.id == null) {
       return [];
     }
 
-    final selectedClassId = selectedClass!.id!;
+    if (_subjects.isEmpty) {
+      return [];
+    }
 
-    final assignedSubjectIds = widget.existingAssignments
+    // If at least one section is available for a subject,
+    // that subject should remain selectable.
+    return _subjects.where((subject) {
+      return _availableSectionsForSubject(
+        subject.subjectId,
+      ).isNotEmpty;
+    }).toList();
+  }
+
+  // ============================================================
+  // AVAILABLE SECTIONS FOR SELECTED SUBJECT
+  //
+  // A section is available only when:
+  //
+  // Class + Subject + Section
+  //
+  // is NOT already assigned to ANY teacher.
+  //
+  // Example:
+  //
+  // A -> Suresh
+  // B -> Ravi
+  // C -> FREE
+  //
+  // Result:
+  // C only
+  // ============================================================
+
+  List<Section> _availableSectionsForSubject(
+    int subjectId,
+  ) {
+    if (selectedClass?.id == null) {
+      return [];
+    }
+
+    final classId = selectedClass!.id!;
+
+    final assignedSectionIds = _classAssignments
         .where(
           (assignment) =>
-              assignment.classId == selectedClassId,
+              assignment.classId == classId &&
+              assignment.subjectId == subjectId &&
+              assignment.sectionId != null,
         )
         .map(
-          (assignment) => assignment.subjectId,
+          (assignment) => assignment.sectionId!,
         )
         .toSet();
 
-    return _subjects
-        .where(
-          (subject) =>
-              !assignedSubjectIds.contains(subject.subjectId),
-        )
-        .toList();
+    return _sections.where((section) {
+      return !assignedSectionIds.contains(section.id);
+    }).toList();
   }
+
+  // ============================================================
+  // ASSIGN
+  // ============================================================
 
   Future<void> _assignClass() async {
     if (selectedClass == null) {
@@ -125,6 +249,11 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
     if (selectedSubject == null) {
       _showMessage('Please select a subject.');
+      return;
+    }
+
+    if (selectedSection == null) {
+      _showMessage('Please select a section.');
       return;
     }
 
@@ -143,6 +272,11 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       return;
     }
 
+    if (selectedSection!.id <= 0) {
+      _showMessage('Selected section ID is invalid.');
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -152,6 +286,7 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
         teacherId: widget.teacher.id!,
         classId: selectedClass!.id!,
         subjectId: selectedSubject!.subjectId,
+        sectionId: selectedSection!.id,
       );
 
       if (!mounted) return;
@@ -168,10 +303,12 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
     }
   }
 
+  // ============================================================
+  // MESSAGE
+  // ============================================================
+
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
@@ -186,6 +323,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
     return message;
   }
 
+  // ============================================================
+  // CLASS NAME
+  // ============================================================
+
   String _className(SchoolClass schoolClass) {
     final name = schoolClass.name?.trim();
 
@@ -195,6 +336,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
     return 'Class ${schoolClass.id ?? ''}';
   }
+
+  // ============================================================
+  // SUBJECT NAME
+  // ============================================================
 
   String _subjectName(ClassSubjectModel subject) {
     final name = subject.subjectName.trim();
@@ -206,7 +351,9 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
     return 'Subject ${subject.subjectId}';
   }
 
-  String _subjectDisplayName(ClassSubjectModel subject) {
+  String _subjectDisplayName(
+    ClassSubjectModel subject,
+  ) {
     final name = _subjectName(subject);
     final code = subject.subjectCode.trim();
 
@@ -217,11 +364,25 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
     return name;
   }
 
+  // ============================================================
+  // SECTION NAME
+  // ============================================================
+
+  String _sectionName(Section section) {
+    final name = section.name.trim();
+
+    if (name.isNotEmpty) {
+      return name;
+    }
+
+    return 'Section ${section.id}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text(
-        'Assign Class & Subject',
+        'Assign Class, Subject & Section',
         style: TextStyle(
           fontWeight: FontWeight.bold,
         ),
@@ -231,7 +392,8 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               _teacherInfo(),
 
@@ -242,6 +404,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
               const SizedBox(height: 16),
 
               _subjectDropdown(),
+
+              const SizedBox(height: 16),
+
+              _sectionDropdown(),
 
               const SizedBox(height: 16),
 
@@ -261,12 +427,18 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
         ),
         ElevatedButton(
           onPressed:
-              _isSaving || _isLoadingSubjects ? null : _assignClass,
+              _isSaving ||
+                      _isLoadingSubjects ||
+                      _isLoadingSections ||
+                      _isLoadingAssignments
+                  ? null
+                  : _assignClass,
           child: _isSaving
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
+                  child:
+                      CircularProgressIndicator(
                     strokeWidth: 2,
                   ),
                 )
@@ -275,6 +447,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       ],
     );
   }
+
+  // ============================================================
+  // TEACHER INFO
+  // ============================================================
 
   Widget _teacherInfo() {
     final teacherName =
@@ -302,12 +478,11 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
                   : 'T',
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Teacher',
@@ -316,9 +491,7 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
                     color: Colors.grey,
                   ),
                 ),
-
                 const SizedBox(height: 2),
-
                 Text(
                   teacherName,
                   style: const TextStyle(
@@ -334,6 +507,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
     );
   }
 
+  // ============================================================
+  // CLASS DROPDOWN
+  // ============================================================
+
   Widget _classDropdown() {
     return DropdownButtonFormField<int>(
       value: selectedClass?.id,
@@ -341,12 +518,15 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       decoration: const InputDecoration(
         labelText: 'Class',
         hintText: 'Select Class',
-        prefixIcon: Icon(Icons.class_rounded),
+        prefixIcon: Icon(
+          Icons.class_rounded,
+        ),
         border: OutlineInputBorder(),
       ),
       items: widget.classes
           .where(
-            (schoolClass) => schoolClass.id != null,
+            (schoolClass) =>
+                schoolClass.id != null,
           )
           .map(
             (schoolClass) {
@@ -354,49 +534,64 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
                 value: schoolClass.id!,
                 child: Text(
                   _className(schoolClass),
-                  overflow: TextOverflow.ellipsis,
+                  overflow:
+                      TextOverflow.ellipsis,
                 ),
               );
             },
           )
           .toList(),
-      onChanged: widget.isLoadingClasses || _isSaving
-          ? null
-          : (classId) {
-              if (classId == null) return;
+      onChanged:
+          widget.isLoadingClasses || _isSaving
+              ? null
+              : (classId) {
+                  if (classId == null) return;
 
-              SchoolClass? selected;
+                  SchoolClass? selected;
 
-              for (final schoolClass in widget.classes) {
-                if (schoolClass.id == classId) {
-                  selected = schoolClass;
-                  break;
-                }
-              }
+                  for (final schoolClass
+                      in widget.classes) {
+                    if (schoolClass.id == classId) {
+                      selected = schoolClass;
+                      break;
+                    }
+                  }
 
-              if (selected == null) return;
+                  if (selected == null) return;
 
-              setState(() {
-                selectedClass = selected;
-                selectedSubject = null;
-                _subjects = [];
-              });
+                  setState(() {
+                    selectedClass = selected;
+                    selectedSubject = null;
+                    selectedSection = null;
 
-              _loadSubjectsForClass(selected);
-            },
+                    _subjects = [];
+                    _sections = [];
+                    _classAssignments = [];
+                  });
+
+                  _loadClassData(selected);
+                },
     );
   }
 
+  // ============================================================
+  // SUBJECT DROPDOWN
+  // ============================================================
+
   Widget _subjectDropdown() {
-    if (_isLoadingSubjects) {
+    if (_isLoadingSubjects ||
+        _isLoadingAssignments ||
+        _isLoadingSections) {
       return InputDecorator(
         decoration: const InputDecoration(
           labelText: 'Subject',
-          prefixIcon: Icon(Icons.menu_book_rounded),
+          prefixIcon: Icon(
+            Icons.menu_book_rounded,
+          ),
           border: OutlineInputBorder(),
         ),
-        child: Row(
-          children: const [
+        child: const Row(
+          children: [
             SizedBox(
               width: 18,
               height: 18,
@@ -406,7 +601,9 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
             ),
             SizedBox(width: 12),
             Expanded(
-              child: Text('Loading subjects...'),
+              child: Text(
+                'Loading subjects...',
+              ),
             ),
           ],
         ),
@@ -417,25 +614,27 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       return InputDecorator(
         decoration: const InputDecoration(
           labelText: 'Subject',
-          prefixIcon: Icon(Icons.menu_book_rounded),
+          prefixIcon: Icon(
+            Icons.menu_book_rounded,
+          ),
           border: OutlineInputBorder(),
         ),
         child: const Text(
           'Select a class first',
-          style: TextStyle(color: Colors.grey),
+          style: TextStyle(
+            color: Colors.grey,
+          ),
         ),
       );
     }
-
-    // IMPORTANT:
-    // Filter already assigned subjects.
-    final availableSubjects = _availableSubjects();
 
     if (_subjects.isEmpty) {
       return InputDecorator(
         decoration: const InputDecoration(
           labelText: 'Subject',
-          prefixIcon: Icon(Icons.menu_book_rounded),
+          prefixIcon: Icon(
+            Icons.menu_book_rounded,
+          ),
           border: OutlineInputBorder(),
         ),
         child: const Text(
@@ -447,15 +646,20 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       );
     }
 
+    final availableSubjects =
+        _availableSubjects();
+
     if (availableSubjects.isEmpty) {
       return InputDecorator(
         decoration: const InputDecoration(
           labelText: 'Subject',
-          prefixIcon: Icon(Icons.menu_book_rounded),
+          prefixIcon: Icon(
+            Icons.menu_book_rounded,
+          ),
           border: OutlineInputBorder(),
         ),
         child: const Text(
-          'All subjects are already assigned to this teacher for this class',
+          'No subjects have available sections.',
           style: TextStyle(
             color: Colors.orange,
             fontWeight: FontWeight.w500,
@@ -470,7 +674,9 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
       decoration: const InputDecoration(
         labelText: 'Subject',
         hintText: 'Select Subject',
-        prefixIcon: Icon(Icons.menu_book_rounded),
+        prefixIcon: Icon(
+          Icons.menu_book_rounded,
+        ),
         border: OutlineInputBorder(),
       ),
       items: availableSubjects.map(
@@ -479,7 +685,8 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
             value: subject.subjectId,
             child: Text(
               _subjectDisplayName(subject),
-              overflow: TextOverflow.ellipsis,
+              overflow:
+                  TextOverflow.ellipsis,
             ),
           );
         },
@@ -491,8 +698,10 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
               ClassSubjectModel? selected;
 
-              for (final subject in availableSubjects) {
-                if (subject.subjectId == subjectId) {
+              for (final subject
+                  in availableSubjects) {
+                if (subject.subjectId ==
+                    subjectId) {
                   selected = subject;
                   break;
                 }
@@ -502,35 +711,135 @@ class _AssignClassDialogState extends State<AssignClassDialog> {
 
               setState(() {
                 selectedSubject = selected;
+                selectedSection = null;
               });
             },
     );
   }
+
+  // ============================================================
+  // SECTION DROPDOWN
+  // ============================================================
+
+  Widget _sectionDropdown() {
+    if (selectedSubject == null) {
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Section',
+          prefixIcon: Icon(
+            Icons.groups_rounded,
+          ),
+          border: OutlineInputBorder(),
+        ),
+        child: const Text(
+          'Select a subject first',
+          style: TextStyle(
+            color: Colors.grey,
+          ),
+        ),
+      );
+    }
+
+    final availableSections =
+        _availableSectionsForSubject(
+      selectedSubject!.subjectId,
+    );
+
+    if (availableSections.isEmpty) {
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Section',
+          prefixIcon: Icon(
+            Icons.groups_rounded,
+          ),
+          border: OutlineInputBorder(),
+        ),
+        child: const Text(
+          'No sections available for this subject.',
+          style: TextStyle(
+            color: Colors.orange,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<int>(
+      value: selectedSection?.id,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Section',
+        hintText: 'Select Section',
+        prefixIcon: Icon(
+          Icons.groups_rounded,
+        ),
+        border: OutlineInputBorder(),
+      ),
+      items: availableSections.map(
+        (section) {
+          return DropdownMenuItem<int>(
+            value: section.id,
+            child: Text(
+              _sectionName(section),
+              overflow:
+                  TextOverflow.ellipsis,
+            ),
+          );
+        },
+      ).toList(),
+      onChanged: _isSaving
+          ? null
+          : (sectionId) {
+              if (sectionId == null) return;
+
+              Section? selected;
+
+              for (final section
+                  in availableSections) {
+                if (section.id == sectionId) {
+                  selected = section;
+                  break;
+                }
+              }
+
+              if (selected == null) return;
+
+              setState(() {
+                selectedSection = selected;
+              });
+            },
+    );
+  }
+
+  // ============================================================
+  // NOTE
+  // ============================================================
 
   Widget _backendNote() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.08),
+        color: Colors.grey.withValues(
+          alpha: 0.08,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Icon(
             Icons.info_outline,
             size: 20,
             color: Colors.grey,
           ),
-
           SizedBox(width: 8),
-
           Expanded(
             child: Text(
-              'Only subjects assigned to the selected class '
-              'and not already assigned to this teacher will '
-              'appear here.',
+              'Select a class, subject and an available section. '
+              'Sections already assigned to another teacher '
+              'for this subject will not be shown.',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey,

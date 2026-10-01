@@ -8,6 +8,8 @@ import '../teachers/models/teacher_assignment_model.dart';
 
 import 'package:smartkids_admin/features/teachers/models/teacher_performance_model.dart';
 import '../exams/services/examination_service.dart';
+import '../teachers/timetable_template_generator.dart';
+import 'package:smartkids_admin/features/teachers/services/excel_download_service.dart';
 
 class TeacherDetailsScreen extends StatefulWidget {
   final Teacher teacher;
@@ -287,7 +289,11 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // ---------------------------------------------------
+          // TEACHER INITIALS
+          // ---------------------------------------------------
           Container(
             width: 76,
             height: 76,
@@ -309,6 +315,9 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
 
           const SizedBox(width: 18),
 
+          // ---------------------------------------------------
+          // TEACHER DETAILS
+          // ---------------------------------------------------
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,6 +359,28 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
                   ],
                 ),
               ],
+            ),
+          ),
+
+          const SizedBox(width: 24),
+
+          // ---------------------------------------------------
+          // RIGHT SIDE - GENERATE TIMETABLE BUTTON
+          // ---------------------------------------------------
+          OutlinedButton.icon(
+            onPressed: _generateTimetableTemplate,
+            icon: const Icon(Icons.table_view_outlined, size: 20),
+            label: const Text(
+              'Generate Timetable',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xff246bfd),
+              side: const BorderSide(color: Color(0xff246bfd)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -1041,6 +1072,59 @@ class _TeacherDetailsScreenState extends State<TeacherDetailsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _generateTimetableTemplate() async {
+    try {
+      // Make sure assignments are loaded.
+      if (_assignments.isEmpty) {
+        await _loadAssignments();
+      }
+
+      if (_assignments.isEmpty) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No teacher assignments found. Please assign classes and subjects first.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      final teacherName = widget.teacher.name ?? 'Teacher';
+
+      final bytes = TimetableTemplateGenerator.generate(
+        teacherName: teacherName,
+        assignments: _assignments,
+      );
+
+      final safeTeacherName = teacherName
+          .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+
+      final fileName = '${safeTeacherName}_Timetable_Template.xlsx';
+
+      ExcelDownloadService.download(bytes: bytes, fileName: fileName);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Timetable template generated for $teacherName'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate timetable template: $e')),
+      );
+    }
   }
 
   BoxDecoration _cardDecoration() {

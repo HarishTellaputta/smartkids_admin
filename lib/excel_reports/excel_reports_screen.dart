@@ -98,10 +98,10 @@ class _ExcelReportsScreenState extends State<ExcelReportsScreen> {
                   onGenerate: () {},
                 ),
                 _buildExcelCard(
-                  icon: Icons.person_rounded,
-                  title: 'Teachers',
-                  subtitle: 'Teacher data',
-                  onGenerate: () {},
+                  icon: Icons.schedule_rounded,
+                  title: 'Timetable',
+                  subtitle: 'Generate section-wise timetable template',
+                  onGenerate: _generateTimetableExcel,
                 ),
               ],
             ),
@@ -326,6 +326,138 @@ class _ExcelReportsScreenState extends State<ExcelReportsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to generate Grade Rules Excel: $e')),
+      );
+    }
+  }
+
+  Future<void> _generateTimetableExcel() async {
+    try {
+      final excel = ex.Excel.createExcel();
+
+      final sheet = excel['Timetable'];
+
+      // -----------------------------------------------------
+      // HEADER
+      // -----------------------------------------------------
+
+      sheet.appendRow([
+        ex.TextCellValue('Teacher'),
+        ex.TextCellValue('Class'),
+        ex.TextCellValue('Section'),
+        ex.TextCellValue('Subject'),
+        ex.TextCellValue('Day'),
+        ex.TextCellValue('Start Time'),
+        ex.TextCellValue('End Time'),
+        ex.TextCellValue('Room Number'),
+      ]);
+
+      // -----------------------------------------------------
+      // SAMPLE DATA
+      // -----------------------------------------------------
+
+      sheet.appendRow([
+        ex.TextCellValue('Ravi Kumar'),
+        ex.TextCellValue('10th Class'),
+        ex.TextCellValue('A'),
+        ex.TextCellValue('Mathematics'),
+        ex.TextCellValue('MONDAY'),
+        ex.TextCellValue('09:00'),
+        ex.TextCellValue('10:00'),
+        ex.TextCellValue('101'),
+      ]);
+
+      sheet.appendRow([
+        ex.TextCellValue('Suresh Kumar'),
+        ex.TextCellValue('10th'),
+        ex.TextCellValue('A'),
+        ex.TextCellValue('Science'),
+        ex.TextCellValue('MONDAY'),
+        ex.TextCellValue('10:00'),
+        ex.TextCellValue('11:00'),
+        ex.TextCellValue('101'),
+      ]);
+
+      sheet.appendRow([
+        ex.TextCellValue('Ravi Kumar'),
+        ex.TextCellValue('10th'),
+        ex.TextCellValue('B'),
+        ex.TextCellValue('Mathematics'),
+        ex.TextCellValue('MONDAY'),
+        ex.TextCellValue('09:00'),
+        ex.TextCellValue('10:00'),
+        ex.TextCellValue('102'),
+      ]);
+
+      sheet.appendRow([
+        ex.TextCellValue('Anil Kumar'),
+        ex.TextCellValue('10th'),
+        ex.TextCellValue('B'),
+        ex.TextCellValue('Science'),
+        ex.TextCellValue('MONDAY'),
+        ex.TextCellValue('10:00'),
+        ex.TextCellValue('11:00'),
+        ex.TextCellValue('102'),
+      ]);
+
+      sheet.appendRow([
+        ex.TextCellValue('Ravi Kumar'),
+        ex.TextCellValue('10th'),
+        ex.TextCellValue('A'),
+        ex.TextCellValue('English'),
+        ex.TextCellValue('TUESDAY'),
+        ex.TextCellValue('09:00'),
+        ex.TextCellValue('10:00'),
+        ex.TextCellValue('101'),
+      ]);
+
+      sheet.appendRow([
+        ex.TextCellValue('Anil Kumar'),
+        ex.TextCellValue('10th'),
+        ex.TextCellValue('B'),
+        ex.TextCellValue('English'),
+        ex.TextCellValue('TUESDAY'),
+        ex.TextCellValue('09:00'),
+        ex.TextCellValue('10:00'),
+        ex.TextCellValue('102'),
+      ]);
+
+      // -----------------------------------------------------
+      // REMOVE DEFAULT SHEET
+      // -----------------------------------------------------
+
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      final bytes = excel.encode();
+
+      if (bytes == null) {
+        throw Exception('Failed to generate Timetable Excel.');
+      }
+
+      // -----------------------------------------------------
+      // SAVE FILE
+      // -----------------------------------------------------
+
+      await FileSaver.instance.saveFile(
+        name: 'timetable_template',
+        bytes: Uint8List.fromList(bytes),
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Timetable Excel template generated successfully'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate Timetable Excel: $e')),
       );
     }
   }

@@ -47,6 +47,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _isImportingExcel = false;
 
   final List<String> _days = const [
     'MONDAY',
@@ -305,8 +306,253 @@ class _TimetableScreenState extends State<TimetableScreen> {
     );
   }
 
-  void _showComingSoon(String text) {
-    _showSnackBar(text);
+  Future<void> _importTimetableExcel() async {
+    if (_timetableService == null) {
+      _showSnackBar('Timetable service is not ready.', isError: true);
+      return;
+    }
+
+    if (_isImportingExcel) return;
+
+    try {
+      setState(() {
+        _isImportingExcel = true;
+      });
+
+      // Open existing Excel picker
+      final file = await ExcelFilePickerService.pickExcelFile();
+
+      if (file == null) {
+        return;
+      }
+
+      if (file.bytes.isEmpty) {
+        _showSnackBar('Selected Excel file is empty.', isError: true);
+        return;
+      }
+
+      _showSnackBar('Uploading ${file.fileName}...');
+
+      // Upload to Spring Boot
+      final result = await _timetableService!.importTimetableExcel(
+        bytes: file.bytes,
+        fileName: file.fileName,
+      );
+
+      if (!mounted) return;
+
+      // Refresh timetable after import
+      await _refresh();
+
+      if (!mounted) return;
+
+      await _showImportResultDialog(result);
+    } catch (e) {
+      if (!mounted) return;
+
+      _showSnackBar(
+        e.toString().replaceFirst('Exception: ', ''),
+        isError: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImportingExcel = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showImportResultDialog(
+    TimetableImportResponseModel result,
+  ) async {
+    final success = result.failedCount == 0;
+    final hasErrors = result.errors.isNotEmpty;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: success
+                      ? const Color(0xFFE8F5E9)
+                      : const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  success ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: success ? Colors.green : Colors.orange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  success ? 'Import Successful' : 'Import Completed',
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+
+                  _buildImportStat(
+                    'Total Rows',
+                    result.totalRows.toString(),
+                    Icons.table_rows_rounded,
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  _buildImportStat(
+                    'Imported Successfully',
+                    result.successCount.toString(),
+                    Icons.check_circle_outline_rounded,
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  _buildImportStat(
+                    'Failed Rows',
+                    result.failedCount.toString(),
+                    Icons.error_outline_rounded,
+                  ),
+
+                  if (hasErrors) ...[
+                    const SizedBox(height: 22),
+
+                    const Text(
+                      'Import Errors',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8F8),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFFE0E0)),
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: result.errors.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final error = result.errors[index];
+
+                          return Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFEAEA),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Row ${error.row}',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    error.message,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildImportStat(String title, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F1FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 20, color: const Color(0xFF4F46E5)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -407,13 +653,17 @@ class _TimetableScreenState extends State<TimetableScreen> {
           Row(
             children: [
               OutlinedButton.icon(
-                onPressed: () {
-                  _showComingSoon(
-                    'Excel import can be connected to your existing import dialog.',
-                  );
-                },
-                icon: const Icon(Icons.upload_file_rounded),
-                label: const Text('Import Excel'),
+                onPressed: _isImportingExcel ? null : _importTimetableExcel,
+                icon: _isImportingExcel
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.upload_file_rounded),
+                label: Text(
+                  _isImportingExcel ? 'Importing...' : 'Import Excel',
+                ),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
@@ -426,9 +676,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
               ),
               const SizedBox(width: 10),
               FilledButton.icon(
-                onPressed: () {
-                  _showComingSoon('Use your existing Add Period dialog here.');
-                },
+                onPressed: () {},
                 icon: const Icon(Icons.add_rounded),
                 label: const Text('Add Period'),
                 style: FilledButton.styleFrom(

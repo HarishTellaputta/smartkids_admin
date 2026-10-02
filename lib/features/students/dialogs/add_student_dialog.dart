@@ -13,9 +13,7 @@ import 'package:smartkids_admin/services/parent_service.dart';
 import 'package:smartkids_admin/features/teachers/services/class_service.dart';
 import 'package:smartkids_admin/features/teachers/models/class_model.dart';
 
-
 import 'package:smartkids_admin/core/network/api_client.dart';
-
 
 class AddStudentDialog extends StatefulWidget {
   final StudentService studentService;
@@ -32,10 +30,10 @@ class AddStudentDialog extends StatefulWidget {
 }
 
 class _AddStudentDialogState extends State<AddStudentDialog> {
-  ApiClient apiClient= ApiClient();
+  ApiClient apiClient = ApiClient();
+
   final _formKey = GlobalKey<FormState>();
 
-  final admissionNoController = TextEditingController();
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
   final emailController = TextEditingController();
@@ -78,7 +76,6 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
 
   @override
   void dispose() {
-    admissionNoController.dispose();
     firstNameController.dispose();
     lastNameController.dispose();
     emailController.dispose();
@@ -310,8 +307,13 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
         lastName,
       ].where((name) => name.isNotEmpty).join(' ');
 
+      // ========================================================
+      // IMPORTANT:
+      // Admission number is NOT sent from frontend.
+      // Backend will generate it automatically.
+      // ========================================================
+
       final data = <String, dynamic>{
-        'admissionNo': _nullable(admissionNoController.text),
         'name': fullName,
         'email': _nullable(emailController.text),
         'phone': _nullable(phoneController.text),
@@ -324,7 +326,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
         'academicYearId': selectedAcademicYear!.id,
         'sectionId': selectedSection!.id,
 
-        // Parent is optional.
+        // Parent is optional
         'parentId': selectedParent?.id,
 
         'status': selectedStatus,
@@ -476,22 +478,55 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
   }) {
     return DropdownButtonFormField<String>(
       initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+      isExpanded: true,
+
+      icon: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          size: 20,
+          color: Colors.grey.shade700,
         ),
       ),
+
+      dropdownColor: Colors.white,
+
+      menuMaxHeight: 280,
+
+      decoration: _premiumDropdownDecoration(label: label, icon: icon),
+
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade800,
+      ),
+
       items: items.map((item) {
-        return DropdownMenuItem<String>(value: item, child: Text(item));
+        return DropdownMenuItem<String>(
+          value: item,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              item,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ),
+        );
       }).toList(),
+
       onChanged: isSaving ? null : onChanged,
     );
   }
-
   // ============================================================
   // ACADEMIC YEAR DROPDOWN
   // ============================================================
@@ -500,25 +535,86 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     return DropdownButtonFormField<AcademicYear>(
       initialValue: selectedAcademicYear,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Academic Year',
-        prefixIcon: const Icon(Icons.calendar_month_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+
+      icon: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          size: 20,
+          color: Colors.grey.shade700,
         ),
       ),
+
+      dropdownColor: Colors.white,
+      menuMaxHeight: 300,
+
+      decoration: _premiumDropdownDecoration(
+        label: 'Academic Year',
+        icon: Icons.calendar_month_rounded,
+      ),
+
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade800,
+      ),
+
       items: academicYears.map((year) {
+        final isCurrent = year.current == true;
+
         return DropdownMenuItem<AcademicYear>(
           value: year,
-          child: Text(
-            year.name ?? 'Academic Year',
-            overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  year.name ?? 'Academic Year',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+
+              if (isCurrent) ...[
+                const SizedBox(width: 8),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.green.shade100),
+                  ),
+                  child: Text(
+                    'CURRENT',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.green.shade700,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         );
       }).toList(),
+
       onChanged: isSaving ? null : _onAcademicYearChanged,
+
       validator: (value) {
         if (value == null) {
           return 'Academic Year is required';
@@ -528,7 +624,6 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       },
     );
   }
-
   // ============================================================
   // CLASS DROPDOWN
   // ============================================================
@@ -537,15 +632,37 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     return DropdownButtonFormField<SchoolClass>(
       initialValue: selectedClass,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Class',
-        prefixIcon: const Icon(Icons.school_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+
+      icon: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          size: 20,
+          color: Colors.grey.shade700,
         ),
       ),
+
+      dropdownColor: Colors.white,
+      menuMaxHeight: 320,
+
+      decoration: _premiumDropdownDecoration(
+        label: 'Class',
+        icon: Icons.school_rounded,
+        hintText: 'Select class',
+      ),
+
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade800,
+      ),
+
       items: classes.map((schoolClass) {
         final displayName =
             schoolClass.name ??
@@ -555,12 +672,45 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
 
         return DropdownMenuItem<SchoolClass>(
           value: schoolClass,
-          child: Text(displayName, overflow: TextOverflow.ellipsis),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.class_rounded,
+                  size: 17,
+                  color: Colors.indigo.shade600,
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Text(
+                  displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       }).toList(),
+
       onChanged: isSaving || selectedAcademicYear == null
           ? null
           : _onClassChanged,
+
       validator: (value) {
         if (value == null) {
           return 'Class is required';
@@ -570,7 +720,6 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       },
     );
   }
-
   // ============================================================
   // SECTION DROPDOWN
   // ============================================================
@@ -578,20 +727,29 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
   Widget _sectionDropdown() {
     if (isLoadingSections) {
       return InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Section',
-          prefixIcon: const Icon(Icons.groups_outlined),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        decoration: _premiumDropdownDecoration(
+          label: 'Section',
+          icon: Icons.groups_rounded,
         ),
-        child: const Row(
+        child: Row(
           children: [
             SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.blue.shade600,
+              ),
             ),
-            SizedBox(width: 10),
-            Text('Loading sections...'),
+            const SizedBox(width: 10),
+            Text(
+              'Loading sections...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       );
@@ -600,21 +758,78 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     return DropdownButtonFormField<Section>(
       initialValue: selectedSection,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Section',
-        prefixIcon: const Icon(Icons.groups_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+
+      icon: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          size: 20,
+          color: Colors.grey.shade700,
         ),
       ),
+
+      dropdownColor: Colors.white,
+      menuMaxHeight: 280,
+
+      decoration: _premiumDropdownDecoration(
+        label: 'Section',
+        icon: Icons.groups_rounded,
+        hintText: 'Select section',
+      ),
+
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade800,
+      ),
+
       items: sections.map((section) {
         return DropdownMenuItem<Section>(
           value: section,
-          child: Text(section.name, overflow: TextOverflow.ellipsis),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  section.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.purple.shade700,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Text(
+                  'Section ${section.name}',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       }).toList(),
+
       onChanged: isSaving || selectedClass == null
           ? null
           : (value) {
@@ -622,6 +837,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                 selectedSection = value;
               });
             },
+
       validator: (value) {
         if (value == null) {
           return 'Section is required';
@@ -631,7 +847,6 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       },
     );
   }
-
   // ============================================================
   // PARENT DROPDOWN
   // ============================================================
@@ -640,25 +855,91 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     return DropdownButtonFormField<Parent>(
       initialValue: selectedParent,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Parent',
-        prefixIcon: const Icon(Icons.family_restroom_outlined),
-        hintText: 'Select parent (optional)',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+
+      icon: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          size: 20,
+          color: Colors.grey.shade700,
         ),
       ),
+
+      dropdownColor: Colors.white,
+      menuMaxHeight: 320,
+
+      decoration: _premiumDropdownDecoration(
+        label: 'Parent',
+        icon: Icons.family_restroom_rounded,
+        hintText: 'Select parent (optional)',
+      ),
+
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade800,
+      ),
+
       items: [
-        const DropdownMenuItem<Parent>(value: null, child: Text('No Parent')),
+        const DropdownMenuItem<Parent>(
+          value: null,
+          child: Row(
+            children: [
+              Icon(Icons.person_off_outlined, size: 20, color: Colors.grey),
+              SizedBox(width: 10),
+              Text(
+                'No Parent',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+
         ...parents.map((parent) {
           return DropdownMenuItem<Parent>(
             value: parent,
-            child: Text(parent.displayName, overflow: TextOverflow.ellipsis),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.person_rounded,
+                    size: 18,
+                    color: Colors.orange.shade700,
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child: Text(
+                    parent.displayName,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         }),
       ],
+
       onChanged: isSaving
           ? null
           : (value) {
@@ -668,7 +949,6 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             },
     );
   }
-
   // ============================================================
   // BUILD ACADEMIC DROPDOWNS
   // ============================================================
@@ -938,83 +1218,29 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
 
                 const SizedBox(height: 14),
 
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final twoColumns = constraints.maxWidth >= 560;
-
-                    if (!twoColumns) {
-                      return Column(
-                        children: [
-                          _dropdownField(
-                            label: 'Blood Group',
-                            icon: Icons.bloodtype_outlined,
-                            value: selectedBloodGroup,
-                            items: const [
-                              'A+',
-                              'A-',
-                              'B+',
-                              'B-',
-                              'AB+',
-                              'AB-',
-                              'O+',
-                              'O-',
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  selectedBloodGroup = value;
-                                });
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          _textField(
-                            controller: admissionNoController,
-                            label: 'Admission No',
-                            icon: Icons.badge_outlined,
-                            required: true,
-                          ),
-                        ],
-                      );
+                // ==================================================
+                // BLOOD GROUP
+                // ==================================================
+                _dropdownField(
+                  label: 'Blood Group',
+                  icon: Icons.bloodtype_outlined,
+                  value: selectedBloodGroup,
+                  items: const [
+                    'A+',
+                    'A-',
+                    'B+',
+                    'B-',
+                    'AB+',
+                    'AB-',
+                    'O+',
+                    'O-',
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedBloodGroup = value;
+                      });
                     }
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _dropdownField(
-                            label: 'Blood Group',
-                            icon: Icons.bloodtype_outlined,
-                            value: selectedBloodGroup,
-                            items: const [
-                              'A+',
-                              'A-',
-                              'B+',
-                              'B-',
-                              'AB+',
-                              'AB-',
-                              'O+',
-                              'O-',
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  selectedBloodGroup = value;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _textField(
-                            controller: admissionNoController,
-                            label: 'Admission No',
-                            icon: Icons.badge_outlined,
-                            required: true,
-                          ),
-                        ),
-                      ],
-                    );
                   },
                 ),
 
@@ -1212,6 +1438,71 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
           ),
         ),
       ],
+    );
+  }
+
+  InputDecoration _premiumDropdownDecoration({
+    required String label,
+    required IconData icon,
+    String? hintText,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hintText,
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
+
+      prefixIcon: Container(
+        margin: const EdgeInsets.all(7),
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 20, color: Colors.blue.shade700),
+      ),
+
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+
+      labelStyle: TextStyle(
+        color: Colors.grey.shade600,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+
+      floatingLabelStyle: TextStyle(
+        color: Colors.blue.shade700,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+      ),
+
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.blue.shade500, width: 1.5),
+      ),
+
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+      ),
+
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+      ),
     );
   }
 }

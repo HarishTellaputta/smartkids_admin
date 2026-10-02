@@ -70,11 +70,11 @@ class ReportService {
   // GET /api/v1/reports/fees
   // ============================================================
 
-  Future<List<FeeReportModel>> getFeeReport({
+  Future<FeeReportPage> getFeeReport({
     required String from,
     required String to,
     int page = 0,
-    int size = 50,
+    int size = 10,
   }) async {
     try {
       final response = await apiClient.dio.get(
@@ -82,7 +82,55 @@ class ReportService {
         queryParameters: {'from': from, 'to': to, 'page': page, 'size': size},
       );
 
-      return _parseList(response.data, FeeReportModel.fromJson);
+      final data = response.data;
+
+      if (data is Map<String, dynamic>) {
+        final content = data['content'];
+
+        final items = content is List
+            ? content
+                  .whereType<Map>()
+                  .map(
+                    (item) => FeeReportModel.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
+                  )
+                  .toList()
+            : <FeeReportModel>[];
+
+        return FeeReportPage(
+          items: items,
+          totalElements: _toInt(data['totalElements']),
+          totalPages: _toInt(data['totalPages']),
+          currentPage: _toInt(data['number']),
+          pageSize: _toInt(data['size']),
+          first: data['first'] == true,
+          last: data['last'] == true,
+        );
+      }
+
+      // Fallback if backend ever returns a direct List
+      if (data is List) {
+        final items = data
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  FeeReportModel.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+
+        return FeeReportPage(
+          items: items,
+          totalElements: items.length,
+          totalPages: items.isEmpty ? 1 : 1,
+          currentPage: 0,
+          pageSize: items.length,
+          first: true,
+          last: true,
+        );
+      }
+
+      throw Exception('Invalid fee report response.');
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     } catch (e) {
@@ -90,6 +138,11 @@ class ReportService {
     }
   }
 
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
   // ============================================================
   // ACADEMIC PERFORMANCE
   // GET /api/v1/reports/academic-performance
@@ -279,4 +332,23 @@ class ReportService {
         return e.message ?? 'Network error occurred.';
     }
   }
+}
+class FeeReportPage {
+  final List<FeeReportModel> items;
+  final int totalElements;
+  final int totalPages;
+  final int currentPage;
+  final int pageSize;
+  final bool first;
+  final bool last;
+
+  const FeeReportPage({
+    required this.items,
+    required this.totalElements,
+    required this.totalPages,
+    required this.currentPage,
+    required this.pageSize,
+    required this.first,
+    required this.last,
+  });
 }

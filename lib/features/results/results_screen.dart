@@ -1,9 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../mcq/services/mcq_test_service.dart';
-
 
 class ResultsScreen extends StatefulWidget {
   const ResultsScreen({super.key});
@@ -126,12 +124,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
       if (test == null) continue;
 
-      if (selectedClass != 'All Classes' &&
-          test.className != selectedClass) {
+      if (selectedClass != 'All Classes' && test.className != selectedClass) {
         continue;
       }
 
-      final value = test.sectionName;
+      final value = attempt.sectionName;
 
       if (value != null && value.trim().isNotEmpty) {
         values.add(value.trim());
@@ -151,13 +148,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
       if (test == null) continue;
 
-      if (selectedClass != 'All Classes' &&
-          test.className != selectedClass) {
+      if (selectedClass != 'All Classes' && test.className != selectedClass) {
         continue;
       }
 
       if (selectedSection != 'All Sections' &&
-          test.sectionName != selectedSection) {
+          attempt.sectionName != selectedSection) {
         continue;
       }
 
@@ -184,8 +180,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       }
     }
 
-    final list = values.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final list = values.toList()..sort((a, b) => b.compareTo(a));
 
     return ['All Dates', ...list];
   }
@@ -193,7 +188,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // ============================================================
   // FILTERED RESULTS
   // ============================================================
-
   List<McqAttemptModel> get filteredAttempts {
     return _attempts.where((attempt) {
       final test = attempt.test;
@@ -203,28 +197,21 @@ class _ResultsScreenState extends State<ResultsScreen> {
       }
 
       final classMatch =
-          selectedClass == 'All Classes' ||
-          test.className == selectedClass;
+          selectedClass == 'All Classes' || test.className == selectedClass;
 
       final sectionMatch =
           selectedSection == 'All Sections' ||
-          test.sectionName == selectedSection;
+          attempt.sectionName == selectedSection;
 
       final subjectMatch =
-          selectedSubject == 'All Subjects' ||
-          test.subject == selectedSubject;
+          selectedSubject == 'All Subjects' || test.subject == selectedSubject;
 
       final dateMatch =
-          selectedDate == 'All Dates' ||
-          _formatDate(test.date) == selectedDate;
+          selectedDate == 'All Dates' || _formatDate(test.date) == selectedDate;
 
-      return classMatch &&
-          sectionMatch &&
-          subjectMatch &&
-          dateMatch;
+      return classMatch && sectionMatch && subjectMatch && dateMatch;
     }).toList();
   }
-
   // ============================================================
   // SUMMARY
   // ============================================================
@@ -310,9 +297,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
         return Row(
           children: [
-            Expanded(
-              child: _headerText(),
-            ),
+            Expanded(child: _headerText()),
             _refreshButton(),
           ],
         );
@@ -335,10 +320,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         const SizedBox(height: 7),
         Text(
           'View student MCQ test results and academic performance.',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
         ),
       ],
     );
@@ -347,23 +329,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _refreshButton() {
     return OutlinedButton.icon(
       onPressed: _isLoading ? null : _loadResults,
-      icon: const Icon(
-        Icons.refresh,
-        size: 18,
-      ),
+      icon: const Icon(Icons.refresh, size: 18),
       label: const Text('Refresh'),
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFF374151),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 17,
-          vertical: 14,
-        ),
-        side: const BorderSide(
-          color: Color(0xFFD1D5DB),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 14),
+        side: const BorderSide(color: Color(0xFFD1D5DB)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -375,29 +347,20 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _buildLoading() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        vertical: 90,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 90),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: const Center(
         child: Column(
           children: [
-            CircularProgressIndicator(
-              color: Color(0xFF2563EB),
-            ),
+            CircularProgressIndicator(color: Color(0xFF2563EB)),
             SizedBox(height: 16),
             Text(
               'Loading MCQ results...',
-              style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
             ),
           ],
         ),
@@ -416,9 +379,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         children: [
@@ -440,26 +401,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
           Text(
             _errorMessage ?? 'Something went wrong.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 20),
           ElevatedButton.icon(
             onPressed: _loadResults,
-            icon: const Icon(
-              Icons.refresh,
-              size: 18,
-            ),
+            icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Retry'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
             ),
           ),
         ],
@@ -499,9 +451,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -521,21 +471,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
           return Row(
             children: [
-              Expanded(
-                child: _classDropdown(),
-              ),
+              Expanded(child: _classDropdown()),
               const SizedBox(width: 12),
-              Expanded(
-                child: _sectionDropdown(),
-              ),
+              Expanded(child: _sectionDropdown()),
               const SizedBox(width: 12),
-              Expanded(
-                child: _subjectDropdown(),
-              ),
+              Expanded(child: _subjectDropdown()),
               const SizedBox(width: 12),
-              Expanded(
-                child: _dateDropdown(),
-              ),
+              Expanded(child: _dateDropdown()),
             ],
           );
         },
@@ -546,9 +488,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _classDropdown() {
     final items = classItems;
 
-    final value = items.contains(selectedClass)
-        ? selectedClass
-        : 'All Classes';
+    final value = items.contains(selectedClass) ? selectedClass : 'All Classes';
 
     return _dropdown(
       value: value,
@@ -605,9 +545,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _dateDropdown() {
     final items = dateItems;
 
-    final value = items.contains(selectedDate)
-        ? selectedDate
-        : 'All Dates';
+    final value = items.contains(selectedDate) ? selectedDate : 'All Dates';
 
     return _dropdown(
       value: value,
@@ -627,35 +565,24 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }) {
     return Container(
       height: 46,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: items.contains(value)
-              ? value
-              : items.first,
+          value: items.contains(value) ? value : items.first,
           isExpanded: true,
-          icon: const Icon(
-            Icons.keyboard_arrow_down,
-            size: 19,
-          ),
+          icon: const Icon(Icons.keyboard_arrow_down, size: 19),
           items: items.map((item) {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
                 item,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                ),
+                style: const TextStyle(fontSize: 12),
               ),
             );
           }).toList(),
@@ -736,9 +663,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
@@ -749,10 +674,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
               color: background,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: color,
-            ),
+            child: Icon(icon, color: color),
           ),
           const SizedBox(width: 14),
           Column(
@@ -761,10 +683,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
               const SizedBox(height: 4),
               Text(
@@ -795,9 +714,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -815,25 +732,18 @@ class _ResultsScreenState extends State<ResultsScreen> {
               const Spacer(),
               Text(
                 '${data.length} results',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          data.isEmpty
-              ? _emptyState()
-              : _resultsDataTable(data),
+          data.isEmpty ? _emptyState() : _resultsDataTable(data),
         ],
       ),
     );
   }
 
-  Widget _resultsDataTable(
-    List<McqAttemptModel> data,
-  ) {
+  Widget _resultsDataTable(List<McqAttemptModel> data) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -841,37 +751,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
         horizontalMargin: 8,
         dataRowMinHeight: 72,
         dataRowMaxHeight: 88,
-        headingRowColor: const WidgetStatePropertyAll(
-          Color(0xFFF9FAFB),
-        ),
+        headingRowColor: const WidgetStatePropertyAll(Color(0xFFF9FAFB)),
         columns: const [
-          DataColumn(
-            label: Text('Student'),
-          ),
-          DataColumn(
-            label: Text('Class'),
-          ),
-          DataColumn(
-            label: Text('Section'),
-          ),
-          DataColumn(
-            label: Text('Subject'),
-          ),
-          DataColumn(
-            label: Text('Date'),
-          ),
-          DataColumn(
-            label: Text('Score'),
-          ),
-          DataColumn(
-            label: Text('Percentage'),
-          ),
-          DataColumn(
-            label: Text('Status'),
-          ),
-          DataColumn(
-            label: Text('Action'),
-          ),
+          DataColumn(label: Text('Student')),
+          DataColumn(label: Text('Class')),
+          DataColumn(label: Text('Section')),
+          DataColumn(label: Text('Subject')),
+          DataColumn(label: Text('Date')),
+          DataColumn(label: Text('Score')),
+          DataColumn(label: Text('Percentage')),
+          DataColumn(label: Text('Status')),
+          DataColumn(label: Text('Action')),
         ],
         rows: data.map((attempt) {
           final test = attempt.test;
@@ -880,23 +770,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
           return DataRow(
             cells: [
-              DataCell(
-                _studentCell(attempt),
-              ),
+              DataCell(_studentCell(attempt)),
               DataCell(
                 Text(
                   test?.className ?? '-',
-                  style: const TextStyle(
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
               DataCell(
                 Text(
-                  test?.sectionName ?? '-',
-                  style: const TextStyle(
-                    fontSize: 12,
-                  ),
+                  attempt.sectionName ?? '-',
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
               DataCell(
@@ -906,18 +790,14 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     test?.subject ?? '-',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                    ),
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ),
               ),
               DataCell(
                 Text(
                   _formatDate(test?.date),
-                  style: const TextStyle(
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(fontSize: 11),
                 ),
               ),
               DataCell(
@@ -929,16 +809,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   ),
                 ),
               ),
-              DataCell(
-                _percentageBadge(
-                  percentage.toInt(),
-                ),
-              ),
-              DataCell(
-                _statusBadge(
-                  _statusText(attempt),
-                ),
-              ),
+              DataCell(_percentageBadge(percentage.toInt())),
+              DataCell(_statusBadge(_statusText(attempt))),
               DataCell(
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -948,10 +820,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                       onPressed: () {
                         _showResultDetails(attempt);
                       },
-                      icon: const Icon(
-                        Icons.visibility_outlined,
-                        size: 18,
-                      ),
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
                     ),
                     IconButton(
                       tooltip: 'Performance',
@@ -978,9 +847,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // STUDENT CELL
   // ============================================================
 
-  Widget _studentCell(
-    McqAttemptModel attempt,
-  ) {
+  Widget _studentCell(McqAttemptModel attempt) {
     final name = attempt.studentName?.trim().isNotEmpty == true
         ? attempt.studentName!
         : 'Unknown Student';
@@ -1041,15 +908,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // STATUS
   // ============================================================
 
-  String _statusText(
-    McqAttemptModel attempt,
-  ) {
+  String _statusText(McqAttemptModel attempt) {
     final status = attempt.status.toUpperCase();
 
     if (status == 'SUBMITTED') {
-      return (attempt.percentage ?? 0) >= 50
-          ? 'Passed'
-          : 'Failed';
+      return (attempt.percentage ?? 0) >= 50 ? 'Passed' : 'Failed';
     }
 
     if (status == 'IN_PROGRESS') {
@@ -1067,9 +930,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // RESULT DETAILS
   // ============================================================
 
-  void _showResultDetails(
-    McqAttemptModel attempt,
-  ) {
+  void _showResultDetails(McqAttemptModel attempt) {
     final test = attempt.test;
 
     showDialog(
@@ -1078,9 +939,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         return AlertDialog(
           title: const Text(
             'MCQ Student Result',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
             width: 480,
@@ -1092,26 +951,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     'Student',
                     attempt.studentName ?? 'Unknown Student',
                   ),
-                  _detailRow(
-                    'Admission No',
-                    attempt.admissionNo ?? '-',
-                  ),
-                  _detailRow(
-                    'Class',
-                    test?.className ?? '-',
-                  ),
-                  _detailRow(
-                    'Section',
-                    test?.sectionName ?? '-',
-                  ),
-                  _detailRow(
-                    'Subject',
-                    test?.subject ?? '-',
-                  ),
-                  _detailRow(
-                    'Date',
-                    _formatDate(test?.date),
-                  ),
+                  _detailRow('Admission No', attempt.admissionNo ?? '-'),
+                  _detailRow('Class', test?.className ?? '-'),
+                  _detailRow('Section', attempt.sectionName ?? '-'),
+                  _detailRow('Subject', test?.subject ?? '-'),
+                  _detailRow('Date', _formatDate(test?.date)),
                   _detailRow(
                     'Score',
                     '${attempt.score ?? 0} / ${attempt.totalQuestions ?? 0}',
@@ -1120,22 +964,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     'Correct Answers',
                     '${attempt.correctAnswers ?? 0}',
                   ),
-                  _detailRow(
-                    'Wrong Answers',
-                    '${attempt.wrongAnswers ?? 0}',
-                  ),
+                  _detailRow('Wrong Answers', '${attempt.wrongAnswers ?? 0}'),
                   _detailRow(
                     'Percentage',
                     '${(attempt.percentage ?? 0).toStringAsFixed(1)}%',
                   ),
-                  _detailRow(
-                    'Status',
-                    _statusText(attempt),
-                  ),
-                  _detailRow(
-                    'Started At',
-                    _formatDateTime(attempt.startedAt),
-                  ),
+                  _detailRow('Status', _statusText(attempt)),
+                  _detailRow('Started At', _formatDateTime(attempt.startedAt)),
                   _detailRow(
                     'Submitted At',
                     _formatDateTime(attempt.submittedAt),
@@ -1157,16 +992,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'Answer review will be connected next.',
-                    ),
+                    content: Text('Answer review will be connected next.'),
                   ),
                 );
               },
-              icon: const Icon(
-                Icons.fact_check_outlined,
-                size: 17,
-              ),
+              icon: const Icon(Icons.fact_check_outlined, size: 17),
               label: const Text('View Answers'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
@@ -1183,9 +1013,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // PERFORMANCE
   // ============================================================
 
-  void _showPerformance(
-    McqAttemptModel attempt,
-  ) {
+  void _showPerformance(McqAttemptModel attempt) {
     final percentage = attempt.percentage ?? 0;
 
     showDialog(
@@ -1194,9 +1022,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         return AlertDialog(
           title: Text(
             '${attempt.studentName ?? 'Student'} - Performance',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
             width: 500,
@@ -1267,14 +1093,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // DETAIL ROW
   // ============================================================
 
-  Widget _detailRow(
-    String label,
-    String value,
-  ) {
+  Widget _detailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1282,10 +1103,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
             width: 115,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
           ),
           Expanded(
@@ -1307,19 +1125,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // PERFORMANCE ROW
   // ============================================================
 
-  Widget _performanceRow(
-    String title,
-    String value,
-    Color color,
-  ) {
+  Widget _performanceRow(String title, String value, Color color) {
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 8,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 11,
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(9),
@@ -1329,10 +1138,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
           ),
           Text(
@@ -1352,9 +1158,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // BADGES
   // ============================================================
 
-  Widget _percentageBadge(
-    int percentage,
-  ) {
+  Widget _percentageBadge(int percentage) {
     Color color;
 
     if (percentage >= 80) {
@@ -1367,17 +1171,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
     return Text(
       '$percentage%',
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        color: color,
-      ),
+      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
     );
   }
 
-  Widget _statusBadge(
-    String status,
-  ) {
+  Widget _statusBadge(String status) {
     final normalized = status.toLowerCase();
 
     final isPassed = normalized == 'passed';
@@ -1402,10 +1200,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
@@ -1427,17 +1222,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Widget _emptyState() {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 60,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 60),
       child: Center(
         child: Column(
           children: [
-            const Icon(
-              Icons.quiz_outlined,
-              size: 52,
-              color: Color(0xFFD1D5DB),
-            ),
+            const Icon(Icons.quiz_outlined, size: 52, color: Color(0xFFD1D5DB)),
             const SizedBox(height: 12),
             const Text(
               'No MCQ results found',
@@ -1451,18 +1240,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
             const Text(
               'Students must complete an MCQ test to see results here.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF9CA3AF),
-              ),
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
             ),
             const SizedBox(height: 18),
             OutlinedButton.icon(
               onPressed: _loadResults,
-              icon: const Icon(
-                Icons.refresh,
-                size: 17,
-              ),
+              icon: const Icon(Icons.refresh, size: 17),
               label: const Text('Refresh'),
             ),
           ],
@@ -1550,8 +1333,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
       final hour = date.hour == 0
           ? 12
           : date.hour > 12
-              ? date.hour - 12
-              : date.hour;
+          ? date.hour - 12
+          : date.hour;
 
       final minute = date.minute.toString().padLeft(2, '0');
 
@@ -1566,4 +1349,3 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
   }
 }
-

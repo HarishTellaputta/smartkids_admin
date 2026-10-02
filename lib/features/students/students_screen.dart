@@ -678,47 +678,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ),
 
           const SizedBox(width: 4),
-          // ======================================================
-          // IMPORT EXCEL
-          // ======================================================
-          // OutlinedButton.icon(
-          //   onPressed: _showImportExcel,
-          //   icon: const Icon(Icons.upload_file_outlined, size: 18),
-          //   label: const Text(
-          //     'Import Excel',
-          //     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          //   ),
-          //   style: OutlinedButton.styleFrom(
-          //     minimumSize: const Size(120, 42),
-          //     foregroundColor: Colors.indigo,
-          //     side: BorderSide(color: Colors.indigo.shade200),
-          //     shape: RoundedRectangleBorder(
-          //       borderRadius: BorderRadius.circular(9),
-          //     ),
-          //   ),
-          // ),
-
-          // const SizedBox(width: 8),
-          // // ======================================================
-          // // ADD STUDENT
-          // // ======================================================
-          // ElevatedButton.icon(
-          //   onPressed: _showAddStudentDialog,
-          //   icon: const Icon(Icons.add, size: 18),
-          //   label: const Text(
-          //     'Add Student',
-          //     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          //   ),
-          //   style: ElevatedButton.styleFrom(
-          //     minimumSize: const Size(125, 42),
-          //     backgroundColor: Theme.of(context).primaryColor,
-          //     foregroundColor: Colors.white,
-          //     elevation: 0,
-          //     shape: RoundedRectangleBorder(
-          //       borderRadius: BorderRadius.circular(9),
-          //     ),
-          //   ),
-          // ),
         ],
       ),
     );

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
@@ -17,12 +16,10 @@ class McqPerformanceScreen extends StatefulWidget {
   const McqPerformanceScreen({super.key});
 
   @override
-  State<McqPerformanceScreen> createState() =>
-      _McqPerformanceScreenState();
+  State<McqPerformanceScreen> createState() => _McqPerformanceScreenState();
 }
 
-class _McqPerformanceScreenState
-    extends State<McqPerformanceScreen> {
+class _McqPerformanceScreenState extends State<McqPerformanceScreen> {
   late final ApiClient _apiClient;
   late final ReportService _service;
   late final ClassService _classService;
@@ -40,6 +37,9 @@ class _McqPerformanceScreenState
   bool _loadingSections = false;
   bool _loadingSubjects = false;
 
+  int _currentPage = 1;
+  static const int _rowsPerPage = 10;
+
   String? _error;
 
   DateTime? _selectedDate;
@@ -56,8 +56,7 @@ class _McqPerformanceScreenState
     _service = ReportService(_apiClient);
     _classService = ClassService(_apiClient);
     _sectionService = SectionService(_apiClient);
-    _classSubjectService =
-        ClassSubjectService(_apiClient);
+    _classSubjectService = ClassSubjectService(_apiClient);
 
     _loadInitialData();
   }
@@ -86,9 +85,7 @@ class _McqPerformanceScreenState
       if (!mounted) return;
 
       setState(() {
-        _error = e
-            .toString()
-            .replaceFirst('Exception: ', '');
+        _error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (!mounted) return;
@@ -110,11 +107,8 @@ class _McqPerformanceScreenState
     });
 
     try {
-      final result =
-          await _service.getMcqPerformance(
-        date: _selectedDate == null
-            ? null
-            : _formatDate(_selectedDate!),
+      final result = await _service.getMcqPerformance(
+        date: _selectedDate == null ? null : _formatDate(_selectedDate!),
         classId: _selectedClass?.id,
         sectionId: _selectedSection?.id,
         subject: _selectedSubject?.subjectName,
@@ -124,14 +118,13 @@ class _McqPerformanceScreenState
 
       setState(() {
         _items = result;
+        _currentPage = 1;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _error = e
-            .toString()
-            .replaceFirst('Exception: ', '');
+        _error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (!mounted) return;
@@ -146,9 +139,7 @@ class _McqPerformanceScreenState
   // CLASS CHANGE
   // ============================================================
 
-  Future<void> _onClassChanged(
-    SchoolClass? value,
-  ) async {
+  Future<void> _onClassChanged(SchoolClass? value) async {
     setState(() {
       _selectedClass = value;
       _selectedSection = null;
@@ -156,6 +147,8 @@ class _McqPerformanceScreenState
 
       _sections = [];
       _subjects = [];
+
+      _currentPage = 1;
 
       _loadingSections = value != null;
       _loadingSubjects = value != null;
@@ -167,31 +160,20 @@ class _McqPerformanceScreenState
 
     try {
       final results = await Future.wait([
-        _sectionService.getSectionsByClassId(
-          value.id!,
-        ),
-        _classSubjectService.getClassSubjects(
-          value.id!,
-        ),
+        _sectionService.getSectionsByClassId(value.id!),
+        _classSubjectService.getClassSubjects(value.id!),
       ]);
 
       if (!mounted) return;
 
       setState(() {
         _sections = results[0] as List<Section>;
-        _subjects =
-            results[1] as List<ClassSubjectModel>;
+        _subjects = results[1] as List<ClassSubjectModel>;
       });
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(
-        e.toString().replaceFirst(
-              'Exception: ',
-              '',
-            ),
-        isError: true,
-      );
+      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
     } finally {
       if (!mounted) return;
 
@@ -217,10 +199,7 @@ class _McqPerformanceScreenState
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme:
-                const ColorScheme.light(
-              primary: Color(0xFF4F46E5),
-            ),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF4F46E5)),
           ),
           child: child!,
         );
@@ -251,6 +230,8 @@ class _McqPerformanceScreenState
 
       _sections = [];
       _subjects = [];
+
+      _currentPage = 1;
     });
 
     await _load();
@@ -260,10 +241,7 @@ class _McqPerformanceScreenState
   // MESSAGE
   // ============================================================
 
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
+  void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -276,6 +254,57 @@ class _McqPerformanceScreenState
   }
 
   // ============================================================
+  // PAGINATION HELPERS
+  // ============================================================
+
+  int get _totalPages {
+    if (_items.isEmpty) return 1;
+
+    return (_items.length / _rowsPerPage).ceil();
+  }
+
+  List<McqPerformanceModel> get _paginatedItems {
+    if (_items.isEmpty) {
+      return [];
+    }
+
+    final start = (_currentPage - 1) * _rowsPerPage;
+
+    if (start >= _items.length) {
+      return [];
+    }
+
+    final end = (start + _rowsPerPage > _items.length)
+        ? _items.length
+        : start + _rowsPerPage;
+
+    return _items.sublist(start, end);
+  }
+
+  int get _pageStart {
+    if (_items.isEmpty) return 0;
+
+    return ((_currentPage - 1) * _rowsPerPage) + 1;
+  }
+
+  int get _pageEnd {
+    if (_items.isEmpty) return 0;
+
+    final end = _currentPage * _rowsPerPage;
+
+    return end > _items.length ? _items.length : end;
+  }
+
+  void _goToPage(int page) {
+    if (page < 1 || page > _totalPages) {
+      return;
+    }
+
+    setState(() {
+      _currentPage = page;
+    });
+  }
+  // ============================================================
   // BUILD
   // ============================================================
 
@@ -286,13 +315,10 @@ class _McqPerformanceScreenState
       appBar: _appBar(),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final isMobile =
-              constraints.maxWidth < 750;
+          final isMobile = constraints.maxWidth < 750;
 
           return SingleChildScrollView(
-            padding: EdgeInsets.all(
-              isMobile ? 16 : 24,
-            ),
+            padding: EdgeInsets.all(isMobile ? 16 : 24),
             child: _pageContent(isMobile),
           );
         },
@@ -318,8 +344,7 @@ class _McqPerformanceScreenState
             height: 42,
             decoration: BoxDecoration(
               color: const Color(0xFFEEF2FF),
-              borderRadius:
-                  BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.analytics_rounded,
@@ -329,8 +354,7 @@ class _McqPerformanceScreenState
           ),
           const SizedBox(width: 14),
           const Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'MCQ Performance',
@@ -355,28 +379,20 @@ class _McqPerformanceScreenState
       ),
       actions: [
         Padding(
-          padding:
-              const EdgeInsets.only(right: 24),
+          padding: const EdgeInsets.only(right: 24),
           child: IconButton(
             tooltip: 'Refresh',
             onPressed: _loading ? null : _load,
             style: IconButton.styleFrom(
-              backgroundColor:
-                  const Color(0xFFF3F4F6),
+              backgroundColor: const Color(0xFFF3F4F6),
             ),
             icon: _loading
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child:
-                        CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(
-                    Icons.refresh_rounded,
-                    size: 21,
-                  ),
+                : const Icon(Icons.refresh_rounded, size: 21),
           ),
         ),
       ],
@@ -401,15 +417,11 @@ class _McqPerformanceScreenState
     }
 
     if (_error != null && _items.isEmpty) {
-      return SizedBox(
-        height: 600,
-        child: _errorView(),
-      );
+      return SizedBox(height: 600, child: _errorView());
     }
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _filterPanel(isMobile),
         const SizedBox(height: 20),
@@ -425,19 +437,17 @@ class _McqPerformanceScreenState
             ),
           )
         else if (_error != null)
-          SizedBox(
-            height: 500,
-            child: _errorView(),
-          )
+          SizedBox(height: 500, child: _errorView())
         else if (_items.isEmpty)
-          SizedBox(
-            height: 500,
-            child: _emptyView(),
-          )
+          SizedBox(height: 500, child: _emptyView())
         else ...[
           _summarySection(isMobile),
           const SizedBox(height: 20),
           _performanceSection(),
+          if (_items.isNotEmpty) ...[
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            _paginationSection(),
+          ],
         ],
       ],
     );
@@ -450,13 +460,10 @@ class _McqPerformanceScreenState
   Widget _filterPanel(bool isMobile) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(
-        isMobile ? 17 : 21,
-      ),
+      padding: EdgeInsets.all(isMobile ? 17 : 21),
       decoration: _cardDecoration(),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -465,8 +472,7 @@ class _McqPerformanceScreenState
                 height: 40,
                 decoration: BoxDecoration(
                   color: const Color(0xFFEEF2FF),
-                  borderRadius:
-                      BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 child: const Icon(
                   Icons.filter_alt_rounded,
@@ -477,8 +483,7 @@ class _McqPerformanceScreenState
               const SizedBox(width: 12),
               const Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Performance Filters',
@@ -506,38 +511,23 @@ class _McqPerformanceScreenState
           const SizedBox(height: 20),
 
           LayoutBuilder(
-            builder:
-                (context, constraints) {
-              final width =
-                  constraints.maxWidth;
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
 
-              final fieldWidth =
-                  width >= 1150
-                      ? (width - 48) / 4
-                      : width >= 720
-                          ? (width - 16) / 2
-                          : width;
+              final fieldWidth = width >= 1150
+                  ? (width - 48) / 4
+                  : width >= 720
+                  ? (width - 16) / 2
+                  : width;
 
               return Wrap(
                 spacing: 16,
                 runSpacing: 14,
                 children: [
-                  SizedBox(
-                    width: fieldWidth,
-                    child: _dateField(),
-                  ),
-                  SizedBox(
-                    width: fieldWidth,
-                    child: _classField(),
-                  ),
-                  SizedBox(
-                    width: fieldWidth,
-                    child: _sectionField(),
-                  ),
-                  SizedBox(
-                    width: fieldWidth,
-                    child: _subjectField(),
-                  ),
+                  SizedBox(width: fieldWidth, child: _dateField()),
+                  SizedBox(width: fieldWidth, child: _classField()),
+                  SizedBox(width: fieldWidth, child: _sectionField()),
+                  SizedBox(width: fieldWidth, child: _subjectField()),
                 ],
               );
             },
@@ -546,62 +536,41 @@ class _McqPerformanceScreenState
           const SizedBox(height: 18),
 
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               OutlinedButton(
-                onPressed:
-                    _loading ? null : _clearFilters,
-                style:
-                    OutlinedButton.styleFrom(
-                  foregroundColor:
-                      const Color(0xFF374151),
-                  side: const BorderSide(
-                    color: Color(0xFFE5E7EB),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(
+                onPressed: _loading ? null : _clearFilters,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF374151),
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 18,
                     vertical: 13,
                   ),
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: const Text(
                   'Clear',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: 10),
               ElevatedButton.icon(
-                onPressed:
-                    _loading ? null : _applyFilters,
-                icon: const Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                ),
-                label:
-                    const Text('Apply Filters'),
-                style:
-                    ElevatedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xFF4F46E5),
+                onPressed: _loading ? null : _applyFilters,
+                icon: const Icon(Icons.search_rounded, size: 18),
+                label: const Text('Apply Filters'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding:
-                      const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 19,
                     vertical: 13,
                   ),
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
@@ -620,9 +589,7 @@ class _McqPerformanceScreenState
     return _clickableField(
       label: 'Date',
       icon: Icons.calendar_today_outlined,
-      value: _selectedDate == null
-          ? 'All Dates'
-          : _displayDate(_selectedDate!),
+      value: _selectedDate == null ? 'All Dates' : _displayDate(_selectedDate!),
       onTap: _pickDate,
     );
   }
@@ -632,29 +599,21 @@ class _McqPerformanceScreenState
   // ============================================================
 
   Widget _classField() {
-    return DropdownButtonFormField<
-        SchoolClass>(
+    return DropdownButtonFormField<SchoolClass>(
       value: _selectedClass,
       isExpanded: true,
-      decoration: _inputDecoration(
-        label: 'Class',
-        icon: Icons.school_outlined,
-      ),
+      decoration: _inputDecoration(label: 'Class', icon: Icons.school_outlined),
       hint: const Text('All Classes'),
       items: _classes.map((item) {
         return DropdownMenuItem<SchoolClass>(
           value: item,
           child: Text(
-            item.name ??
-                item.grade ??
-                item.code ??
-                'Class ${item.id}',
+            item.name ?? item.grade ?? item.code ?? 'Class ${item.id}',
             overflow: TextOverflow.ellipsis,
           ),
         );
       }).toList(),
-      onChanged:
-          _loading ? null : _onClassChanged,
+      onChanged: _loading ? null : _onClassChanged,
     );
   }
 
@@ -674,27 +633,22 @@ class _McqPerformanceScreenState
         _selectedClass == null
             ? 'Select class first'
             : _loadingSections
-                ? 'Loading sections...'
-                : 'All Sections',
+            ? 'Loading sections...'
+            : 'All Sections',
       ),
       items: _sections.map((item) {
         return DropdownMenuItem<Section>(
           value: item,
-          child: Text(
-            item.name,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text(item.name, overflow: TextOverflow.ellipsis),
         );
       }).toList(),
-      onChanged:
-          _selectedClass == null ||
-                  _loadingSections
-              ? null
-              : (value) {
-                  setState(() {
-                    _selectedSection = value;
-                  });
-                },
+      onChanged: _selectedClass == null || _loadingSections
+          ? null
+          : (value) {
+              setState(() {
+                _selectedSection = value;
+              });
+            },
     );
   }
 
@@ -703,8 +657,7 @@ class _McqPerformanceScreenState
   // ============================================================
 
   Widget _subjectField() {
-    return DropdownButtonFormField<
-        ClassSubjectModel>(
+    return DropdownButtonFormField<ClassSubjectModel>(
       value: _selectedSubject,
       isExpanded: true,
       decoration: _inputDecoration(
@@ -715,28 +668,22 @@ class _McqPerformanceScreenState
         _selectedClass == null
             ? 'Select class first'
             : _loadingSubjects
-                ? 'Loading subjects...'
-                : 'All Subjects',
+            ? 'Loading subjects...'
+            : 'All Subjects',
       ),
       items: _subjects.map((item) {
-        return DropdownMenuItem<
-            ClassSubjectModel>(
+        return DropdownMenuItem<ClassSubjectModel>(
           value: item,
-          child: Text(
-            item.subjectName,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text(item.subjectName, overflow: TextOverflow.ellipsis),
         );
       }).toList(),
-      onChanged:
-          _selectedClass == null ||
-                  _loadingSubjects
-              ? null
-              : (value) {
-                  setState(() {
-                    _selectedSubject = value;
-                  });
-                },
+      onChanged: _selectedClass == null || _loadingSubjects
+          ? null
+          : (value) {
+              setState(() {
+                _selectedSubject = value;
+              });
+            },
     );
   }
 
@@ -754,10 +701,7 @@ class _McqPerformanceScreenState
       onTap: _loading ? null : onTap,
       borderRadius: BorderRadius.circular(11),
       child: InputDecorator(
-        decoration: _inputDecoration(
-          label: label,
-          icon: icon,
-        ),
+        decoration: _inputDecoration(label: label, icon: icon),
         child: Text(
           value,
           style: const TextStyle(
@@ -776,39 +720,21 @@ class _McqPerformanceScreenState
   }) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(
-        icon,
-        size: 18,
-        color: const Color(0xFF6B7280),
-      ),
+      prefixIcon: Icon(icon, size: 18, color: const Color(0xFF6B7280)),
       filled: true,
       fillColor: const Color(0xFFFAFAFB),
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal: 13,
-        vertical: 14,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: Color(0xFFE5E7EB),
-        ),
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: Color(0xFFE5E7EB),
-        ),
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: Color(0xFF818CF8),
-          width: 1.4,
-        ),
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: Color(0xFF818CF8), width: 1.4),
       ),
     );
   }
@@ -821,23 +747,19 @@ class _McqPerformanceScreenState
     final total = _items.length;
 
     final completed = _items.where((item) {
-      final status =
-          (item.status ?? '').toUpperCase();
+      final status = (item.status ?? '').toUpperCase();
 
-      return status == 'COMPLETED' ||
-          status == 'SUBMITTED';
+      return status == 'COMPLETED' || status == 'SUBMITTED';
     }).length;
 
     final correct = _items.fold<int>(
       0,
-      (sum, item) =>
-          sum + (item.correctAnswers ?? 0),
+      (sum, item) => sum + (item.correctAnswers ?? 0),
     );
 
     final wrong = _items.fold<int>(
       0,
-      (sum, item) =>
-          sum + (item.wrongAnswers ?? 0),
+      (sum, item) => sum + (item.wrongAnswers ?? 0),
     );
 
     final cards = [
@@ -846,32 +768,28 @@ class _McqPerformanceScreenState
         value: '$total',
         icon: Icons.quiz_outlined,
         iconColor: const Color(0xFF4F46E5),
-        iconBackground:
-            const Color(0xFFEEF2FF),
+        iconBackground: const Color(0xFFEEF2FF),
       ),
       _summaryCard(
         title: 'Completed',
         value: '$completed',
         icon: Icons.check_circle_outline,
         iconColor: const Color(0xFF059669),
-        iconBackground:
-            const Color(0xFFECFDF5),
+        iconBackground: const Color(0xFFECFDF5),
       ),
       _summaryCard(
         title: 'Correct Answers',
         value: '$correct',
         icon: Icons.task_alt_rounded,
         iconColor: const Color(0xFF2563EB),
-        iconBackground:
-            const Color(0xFFEFF6FF),
+        iconBackground: const Color(0xFFEFF6FF),
       ),
       _summaryCard(
         title: 'Wrong Answers',
         value: '$wrong',
         icon: Icons.close_rounded,
         iconColor: const Color(0xFFDC2626),
-        iconBackground:
-            const Color(0xFFFEF2F2),
+        iconBackground: const Color(0xFFFEF2F2),
       ),
     ];
 
@@ -899,12 +817,9 @@ class _McqPerformanceScreenState
 
     return Row(
       children: [
-        for (int i = 0;
-            i < cards.length;
-            i++) ...[
+        for (int i = 0; i < cards.length; i++) ...[
           Expanded(child: cards[i]),
-          if (i < cards.length - 1)
-            const SizedBox(width: 14),
+          if (i < cards.length - 1) const SizedBox(width: 14),
         ],
       ],
     );
@@ -927,26 +842,19 @@ class _McqPerformanceScreenState
             height: 46,
             decoration: BoxDecoration(
               color: iconBackground,
-              borderRadius:
-                  BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(
-              icon,
-              size: 22,
-              color: iconColor,
-            ),
+            child: Icon(icon, size: 22, color: iconColor),
           ),
           const SizedBox(width: 13),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 11,
                     color: Color(0xFF6B7280),
@@ -981,19 +889,12 @@ class _McqPerformanceScreenState
       child: Column(
         children: [
           Padding(
-            padding:
-                const EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              17,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 17),
             child: Row(
               children: [
                 const Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Student Performance',
@@ -1019,27 +920,234 @@ class _McqPerformanceScreenState
               ],
             ),
           ),
-          const Divider(
-            height: 1,
-            color: Color(0xFFE5E7EB),
-          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _performanceTable(),
         ],
       ),
     );
   }
+  // ============================================================
+  // PAGINATION UI
+  // ============================================================
+
+  Widget _paginationSection() {
+    final totalPages = _totalPages;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 650;
+
+          if (isMobile) {
+            return Column(
+              children: [
+                Text(
+                  'Showing $_pageStart–$_pageEnd of ${_items.length} records',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _paginationButton(
+                      icon: Icons.chevron_left_rounded,
+                      enabled: _currentPage > 1,
+                      onTap: () {
+                        _goToPage(_currentPage - 1);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ..._pageButtons(totalPages),
+                    const SizedBox(width: 8),
+                    _paginationButton(
+                      icon: Icons.chevron_right_rounded,
+                      enabled: _currentPage < totalPages,
+                      onTap: () {
+                        _goToPage(_currentPage + 1);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Showing $_pageStart–$_pageEnd of ${_items.length} records',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  _paginationButton(
+                    icon: Icons.chevron_left_rounded,
+                    enabled: _currentPage > 1,
+                    onTap: () {
+                      _goToPage(_currentPage - 1);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ..._pageButtons(totalPages),
+                  const SizedBox(width: 8),
+                  _paginationButton(
+                    icon: Icons.chevron_right_rounded,
+                    enabled: _currentPage < totalPages,
+                    onTap: () {
+                      _goToPage(_currentPage + 1);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _paginationButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: enabled ? Colors.white : const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: enabled
+                  ? const Color(0xFFE5E7EB)
+                  : const Color(0xFFF0F1F3),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _pageButtons(int totalPages) {
+    final pages = <int>[];
+
+    if (totalPages <= 7) {
+      for (int i = 1; i <= totalPages; i++) {
+        pages.add(i);
+      }
+    } else {
+      pages.add(1);
+
+      if (_currentPage > 4) {
+        pages.add(-1);
+      }
+
+      int start = _currentPage - 1;
+      int end = _currentPage + 1;
+
+      if (_currentPage <= 4) {
+        start = 2;
+        end = 5;
+      }
+
+      if (_currentPage >= totalPages - 3) {
+        start = totalPages - 4;
+        end = totalPages - 1;
+      }
+
+      for (int i = start; i <= end; i++) {
+        if (i > 1 && i < totalPages) {
+          pages.add(i);
+        }
+      }
+
+      if (_currentPage < totalPages - 3) {
+        pages.add(-1);
+      }
+
+      pages.add(totalPages);
+    }
+
+    return pages.map((page) {
+      if (page == -1) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            '...',
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF9CA3AF),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        );
+      }
+
+      final selected = page == _currentPage;
+
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: selected ? null : () => _goToPage(page),
+            borderRadius: BorderRadius.circular(9),
+            child: Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF4F46E5) : Colors.white,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: selected
+                      ? const Color(0xFF4F46E5)
+                      : const Color(0xFFE5E7EB),
+                ),
+              ),
+              child: Text(
+                '$page',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: selected ? Colors.white : const Color(0xFF374151),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
 
   Widget _recordBadge() {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         '${_items.length} Records',
@@ -1057,7 +1165,7 @@ class _McqPerformanceScreenState
   // ============================================================
 
   Widget _performanceTable() {
-    const tableWidth = 1050.0;
+    const tableWidth = 1110.0;
 
     return ClipRRect(
       borderRadius: const BorderRadius.only(
@@ -1072,20 +1180,11 @@ class _McqPerformanceScreenState
             children: [
               _tableHeader(),
 
-              const Divider(
-                height: 1,
-                color: Color(0xFFE5E7EB),
-              ),
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
 
-              ...List.generate(
-                _items.length,
-                (index) {
-                  return _tableRow(
-                    _items[index],
-                    index,
-                  );
-                },
-              ),
+              ...List.generate(_paginatedItems.length, (index) {
+                return _tableRow(_paginatedItems[index], index);
+              }),
             ],
           ),
         ),
@@ -1096,131 +1195,83 @@ class _McqPerformanceScreenState
   Widget _tableHeader() {
     return Container(
       height: 52,
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       color: const Color(0xFFFAFAFB),
       child: Row(
         children: const [
-          SizedBox(
-            width: 230,
-            child: Text(
-              'TEST',
-              style: _headerStyle,
-            ),
-          ),
-          SizedBox(
-            width: 205,
-            child: Text(
-              'STUDENT',
-              style: _headerStyle,
-            ),
-          ),
-          SizedBox(
-            width: 125,
-            child: Text(
-              'SCORE',
-              style: _headerStyle,
-            ),
-          ),
-          SizedBox(
-            width: 90,
-            child: Text(
-              'CORRECT',
-              style: _headerStyle,
-            ),
-          ),
-          SizedBox(
-            width: 80,
-            child: Text(
-              'WRONG',
-              style: _headerStyle,
-            ),
-          ),
-          SizedBox(
-            width: 120,
-            child: Text(
-              'PERCENTAGE',
-              style: _headerStyle,
-            ),
-          ),
-          SizedBox(
-            width: 120,
-            child: Text(
-              'STATUS',
-              style: _headerStyle,
-            ),
-          ),
+          SizedBox(width: 60, child: Text('#', style: _headerStyle)),
+
+          SizedBox(width: 230, child: Text('TEST', style: _headerStyle)),
+
+          SizedBox(width: 205, child: Text('STUDENT', style: _headerStyle)),
+
+          SizedBox(width: 125, child: Text('SCORE', style: _headerStyle)),
+
+          SizedBox(width: 90, child: Text('CORRECT', style: _headerStyle)),
+
+          SizedBox(width: 80, child: Text('WRONG', style: _headerStyle)),
+
+          SizedBox(width: 120, child: Text('PERCENTAGE', style: _headerStyle)),
+
+          SizedBox(width: 120, child: Text('STATUS', style: _headerStyle)),
         ],
       ),
     );
   }
 
-  Widget _tableRow(
-    McqPerformanceModel item,
-    int index,
-  ) {
+  Widget _tableRow(McqPerformanceModel item, int index) {
     return Container(
       height: 72,
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: const BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 0.6,
-          ),
+          bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.6),
         ),
       ),
       child: Row(
         children: [
+          // #
           SizedBox(
-            width: 230,
-            child: _testCell(item),
-          ),
-          SizedBox(
-            width: 205,
-            child: _studentCell(item),
-          ),
-          SizedBox(
-            width: 125,
-            child: _scoreCell(item),
-          ),
-          SizedBox(
-            width: 90,
-            child: _numberCell(
-              item.correctAnswers,
+            width: 60,
+            child: Text(
+              '${((_currentPage - 1) * _rowsPerPage) + index + 1}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+              ),
             ),
           ),
-          SizedBox(
-            width: 80,
-            child: _numberCell(
-              item.wrongAnswers,
-            ),
-          ),
-          SizedBox(
-            width: 120,
-            child: _percentageCell(item),
-          ),
-          SizedBox(
-            width: 120,
-            child: _statusChip(item.status),
-          ),
+
+          // TEST
+          SizedBox(width: 230, child: _testCell(item)),
+
+          // STUDENT
+          SizedBox(width: 205, child: _studentCell(item)),
+
+          // SCORE
+          SizedBox(width: 125, child: _scoreCell(item)),
+
+          // CORRECT
+          SizedBox(width: 90, child: _numberCell(item.correctAnswers)),
+
+          // WRONG
+          SizedBox(width: 80, child: _numberCell(item.wrongAnswers)),
+
+          // PERCENTAGE
+          SizedBox(width: 120, child: _percentageCell(item)),
+
+          // STATUS
+          SizedBox(width: 120, child: _statusChip(item.status)),
         ],
       ),
     );
   }
-
   // ============================================================
   // TEST CELL
   // ============================================================
 
-  Widget _testCell(
-    McqPerformanceModel item,
-  ) {
+  Widget _testCell(McqPerformanceModel item) {
     return Row(
       children: [
         Container(
@@ -1228,8 +1279,7 @@ class _McqPerformanceScreenState
           height: 39,
           decoration: BoxDecoration(
             color: const Color(0xFFEEF2FF),
-            borderRadius:
-                BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: const Icon(
             Icons.quiz_rounded,
@@ -1240,19 +1290,15 @@ class _McqPerformanceScreenState
         const SizedBox(width: 11),
         Expanded(
           child: Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                item.subject?.trim().isNotEmpty ==
-                        true
+                item.subject?.trim().isNotEmpty == true
                     ? item.subject!
                     : 'MCQ Test',
                 maxLines: 1,
-                overflow:
-                    TextOverflow.ellipsis,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -1279,15 +1325,12 @@ class _McqPerformanceScreenState
   // STUDENT
   // ============================================================
 
-  Widget _studentCell(
-    McqPerformanceModel item,
-  ) {
+  Widget _studentCell(McqPerformanceModel item) {
     return Row(
       children: [
         CircleAvatar(
           radius: 19,
-          backgroundColor:
-              const Color(0xFFF3F4F6),
+          backgroundColor: const Color(0xFFF3F4F6),
           child: Text(
             _initial(item.studentName),
             style: const TextStyle(
@@ -1318,9 +1361,7 @@ class _McqPerformanceScreenState
   // SCORE
   // ============================================================
 
-  Widget _scoreCell(
-    McqPerformanceModel item,
-  ) {
+  Widget _scoreCell(McqPerformanceModel item) {
     return Text(
       '${item.score ?? 0} / ${item.totalQuestions ?? 0}',
       style: const TextStyle(
@@ -1350,11 +1391,8 @@ class _McqPerformanceScreenState
   // PERCENTAGE
   // ============================================================
 
-  Widget _percentageCell(
-    McqPerformanceModel item,
-  ) {
-    final percentage =
-        item.percentage ?? 0;
+  Widget _percentageCell(McqPerformanceModel item) {
+    final percentage = item.percentage ?? 0;
 
     return Row(
       children: [
@@ -1372,17 +1410,12 @@ class _McqPerformanceScreenState
         const SizedBox(width: 7),
         Expanded(
           child: ClipRRect(
-            borderRadius:
-                BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(20),
             child: LinearProgressIndicator(
-              value: (percentage / 100)
-                  .clamp(0.0, 1.0),
+              value: (percentage / 100).clamp(0.0, 1.0),
               minHeight: 6,
-              backgroundColor:
-                  const Color(0xFFE5E7EB),
-              valueColor:
-                  const AlwaysStoppedAnimation<
-                      Color>(
+              backgroundColor: const Color(0xFFE5E7EB),
+              valueColor: const AlwaysStoppedAnimation<Color>(
                 Color(0xFF4F46E5),
               ),
             ),
@@ -1397,8 +1430,7 @@ class _McqPerformanceScreenState
   // ============================================================
 
   Widget _statusChip(String? status) {
-    final value =
-        status?.trim().toUpperCase() ?? '';
+    final value = status?.trim().toUpperCase() ?? '';
 
     Color background;
     Color foreground;
@@ -1430,36 +1462,24 @@ class _McqPerformanceScreenState
         icon = Icons.info_outline_rounded;
     }
 
-    final label = value.isEmpty
-        ? 'UNKNOWN'
-        : _capitalizeStatus(value);
+    final label = value.isEmpty ? 'UNKNOWN' : _capitalizeStatus(value);
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 13,
-            color: foreground,
-          ),
+          Icon(icon, size: 13, color: foreground),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
               label,
               maxLines: 1,
-              overflow:
-                  TextOverflow.ellipsis,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 10,
                 color: foreground,
@@ -1477,10 +1497,8 @@ class _McqPerformanceScreenState
         .toLowerCase()
         .split('_')
         .map(
-          (word) => word.isEmpty
-              ? word
-              : word[0].toUpperCase() +
-                  word.substring(1),
+          (word) =>
+              word.isEmpty ? word : word[0].toUpperCase() + word.substring(1),
         )
         .join(' ');
   }
@@ -1492,10 +1510,7 @@ class _McqPerformanceScreenState
   Widget _emptyView() {
     return Center(
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 35,
-          vertical: 38,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 38),
         decoration: _cardDecoration(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1505,8 +1520,7 @@ class _McqPerformanceScreenState
               height: 68,
               decoration: BoxDecoration(
                 color: const Color(0xFFEEF2FF),
-                borderRadius:
-                    BorderRadius.circular(19),
+                borderRadius: BorderRadius.circular(19),
               ),
               child: const Icon(
                 Icons.analytics_outlined,
@@ -1527,10 +1541,7 @@ class _McqPerformanceScreenState
             const Text(
               'Try changing the selected filters to view performance records.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
           ],
         ),
@@ -1545,12 +1556,8 @@ class _McqPerformanceScreenState
   Widget _errorView() {
     return Center(
       child: Container(
-        constraints:
-            const BoxConstraints(
-          maxWidth: 520,
-        ),
-        padding:
-            const EdgeInsets.all(32),
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.all(32),
         decoration: _cardDecoration(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1560,8 +1567,7 @@ class _McqPerformanceScreenState
               height: 62,
               decoration: BoxDecoration(
                 color: const Color(0xFFFEF2F2),
-                borderRadius:
-                    BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: const Icon(
                 Icons.error_outline_rounded,
@@ -1582,35 +1588,23 @@ class _McqPerformanceScreenState
             Text(
               _error ?? 'Something went wrong.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
               onPressed: _load,
-              icon: const Icon(
-                Icons.refresh_rounded,
-                size: 17,
-              ),
+              icon: const Icon(Icons.refresh_rounded, size: 17),
               label: const Text('Try Again'),
-              style:
-                  ElevatedButton.styleFrom(
-                backgroundColor:
-                    const Color(0xFF4F46E5),
-                foregroundColor:
-                    Colors.white,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
                 elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 18,
                   vertical: 12,
                 ),
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),
@@ -1625,11 +1619,9 @@ class _McqPerformanceScreenState
   // ============================================================
 
   String _formatDate(DateTime date) {
-    final month =
-        date.month.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
 
-    final day =
-        date.day.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
 
     return '${date.year}-$month-$day';
   }
@@ -1656,8 +1648,7 @@ class _McqPerformanceScreenState
   }
 
   String _initial(String? name) {
-    if (name == null ||
-        name.trim().isEmpty) {
+    if (name == null || name.trim().isEmpty) {
       return '?';
     }
 
@@ -1667,11 +1658,8 @@ class _McqPerformanceScreenState
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
       color: Colors.white,
-      borderRadius:
-          BorderRadius.circular(16),
-      border: Border.all(
-        color: const Color(0xFFE5E7EB),
-      ),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE5E7EB)),
       boxShadow: const [
         BoxShadow(
           color: Color(0x08000000),
@@ -1689,4 +1677,3 @@ const TextStyle _headerStyle = TextStyle(
   color: Color(0xFF6B7280),
   letterSpacing: 0.6,
 );
-

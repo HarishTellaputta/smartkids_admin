@@ -3,6 +3,7 @@ import '../models/exam_schedule_model.dart';
 import '../models/examination_model.dart';
 import '../models/grade_rule_model.dart';
 import '../models/exam_result_model.dart';
+
 import 'package:smartkids_admin/features/teachers/models/teacher_performance_model.dart';
 
 class ExaminationService {
@@ -576,4 +577,65 @@ class ExaminationService {
 
     return [];
   }
+
+  Future<List<ExamResultResponseModel>> getResults({
+  int? scheduleId,
+  int? studentId,
+}) async {
+  try {
+    final response = await _dio.get(
+      '/api/v1/examinations/results',
+      queryParameters: {
+        if (scheduleId != null) 'scheduleId': scheduleId,
+        if (studentId != null) 'studentId': studentId,
+      },
+    );
+
+    final data = response.data;
+
+    if (data is List) {
+      return data
+          .map(
+            (e) => ExamResultResponseModel.fromJson(
+              Map<String, dynamic>.from(e),
+            ),
+          )
+          .toList();
+    }
+
+    return [];
+  } on DioException catch (e) {
+    throw Exception(
+      e.response?.data?.toString() ??
+          e.message ??
+          'Failed to load examination results',
+    );
+  }
+}
+
+Future<ExamResultResponseModel> setResultPublication({
+  required int id,
+  required bool published,
+}) async {
+  try {
+    final response = await _dio.patch(
+      '/api/v1/examinations/results/$id/publish',
+      queryParameters: {
+        'published': published,
+      },
+    );
+
+    return ExamResultResponseModel.fromJson(
+      Map<String, dynamic>.from(response.data),
+    );
+  } on DioException catch (e) {
+    throw Exception(
+      e.response?.data?.toString() ??
+          e.message ??
+          'Failed to update result publication',
+    );
+  }
+}
+
+
 }

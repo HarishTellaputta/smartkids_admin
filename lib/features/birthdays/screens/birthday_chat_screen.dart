@@ -7,38 +7,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/birthday_chat_message_model.dart';
 import '../models/student_birthday_model.dart';
 import '../services/birthday_chat_service.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:characters/characters.dart';
 
 class BirthdayChatScreen extends StatefulWidget {
   final StudentBirthdayModel student;
 
-  const BirthdayChatScreen({
-    super.key,
-    required this.student,
-  });
+  const BirthdayChatScreen({super.key, required this.student});
 
   @override
   State<BirthdayChatScreen> createState() => _BirthdayChatScreenState();
 }
 
-class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
+class _BirthdayChatScreenState extends State<BirthdayChatScreen>
+    with WidgetsBindingObserver {
   final BirthdayChatService _service = BirthdayChatService();
 
   final TextEditingController _messageController = TextEditingController();
+
   final ScrollController _scrollController = ScrollController();
+
   final FocusNode _messageFocusNode = FocusNode();
 
-  List<BirthdayChatMessageModel> _messages = [];
-
-  bool _isLoading = true;
-  bool _isSending = false;
-  bool _isLoadingUser = true;
-
-  int? _currentUserId;
-
-  BirthdayChatMessageModel? _replyingTo;
-  BirthdayChatMessageModel? _editingMessage;
-
-  static const List<String> _availableReactions = [
+  final List<String> _availableReactions = const [
     '❤️',
     '👍',
     '😂',
@@ -49,17 +40,37 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     '🎂',
   ];
 
+  List<BirthdayChatMessageModel> _messages = [];
+
+  bool _isLoading = true;
+  bool _isSending = false;
+  bool _isLoadingUser = true;
+  bool _showEmojiPicker = false;
+
+  int? _currentUserId;
+
+  BirthdayChatMessageModel? _replyingTo;
+  BirthdayChatMessageModel? _editingMessage;
+
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+
     _initialize();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
     _messageController.dispose();
     _scrollController.dispose();
     _messageFocusNode.dispose();
+
     super.dispose();
   }
 
@@ -73,19 +84,26 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
   }
 
   // ============================================================
-  // CURRENT USER ID
+  // CURRENT USER
   // ============================================================
 
   Future<void> _loadCurrentUserId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
       final token = prefs.getString('jwt_token');
 
-      int? userId;
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
 
-      if (token != null && token.isNotEmpty) {
-        userId = _extractUserIdFromJwt(token);
+        setState(() {
+          _isLoadingUser = false;
+        });
+
+        return;
       }
+
+      final userId = _extractUserIdFromJwt(token);
 
       if (!mounted) return;
 
@@ -97,7 +115,6 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
       if (!mounted) return;
 
       setState(() {
-        _currentUserId = null;
         _isLoadingUser = false;
       });
     }
@@ -113,20 +130,12 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
 
       final normalized = base64Url.normalize(parts[1]);
 
-      final payload = utf8.decode(
-        base64Url.decode(normalized),
-      );
+      final payload = utf8.decode(base64Url.decode(normalized));
 
       final Map<String, dynamic> data =
           jsonDecode(payload) as Map<String, dynamic>;
 
-      final possibleKeys = [
-        'userId',
-        'user_id',
-        'id',
-        'uid',
-        'user',
-      ];
+      const possibleKeys = ['userId', 'user_id', 'id', 'uid', 'user', 'sub'];
 
       for (final key in possibleKeys) {
         final value = data[key];
@@ -135,8 +144,13 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
           return value;
         }
 
+        if (value is num) {
+          return value.toInt();
+        }
+
         if (value is String) {
           final parsed = int.tryParse(value);
+
           if (parsed != null) {
             return parsed;
           }
@@ -149,38 +163,38 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     }
   }
 
-  // ============================================================
-  // CHECK OWN MESSAGE
-  // ============================================================
-
   bool _isMyMessage(BirthdayChatMessageModel message) {
-    if (_currentUserId == null || message.senderId == null) {
-      return false;
-    }
-
-    return message.senderId == _currentUserId;
+    return _currentUserId != null &&
+        message.senderId != null &&
+        message.senderId == _currentUserId;
   }
 
   // ============================================================
   // LOAD MESSAGES
   // ============================================================
 
-  Future<void> _loadMessages({
-    bool showLoader = true,
-  }) async {
+  Future<void> _loadMessages({bool showLoader = true}) async {
+    final studentId = widget.student.studentId;
+
+    if (studentId == null) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Student information is missing.';
+      });
+
+      return;
+    }
+
     if (showLoader && mounted) {
       setState(() {
         _isLoading = true;
+        _errorMessage = null;
       });
     }
 
     try {
-      final studentId = widget.student.studentId;
-
-      if (studentId == null) {
-        throw Exception('Student ID not found.');
-      }
-
       final messages = await _service.getMessages(studentId);
 
       if (!mounted) return;
@@ -188,25 +202,34 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
       setState(() {
         _messages = messages;
         _isLoading = false;
+        _errorMessage = null;
       });
 
-      _scrollToBottom();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom(animated: false);
+      });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _isLoading = false;
+        _errorMessage = _cleanError(e);
       });
-
-      _showSnackBar(
-        _cleanError(e),
-        isError: true,
-      );
     }
   }
 
+  String _cleanError(Object error) {
+    final text = error.toString();
+
+    if (text.startsWith('Exception: ')) {
+      return text.substring(11);
+    }
+
+    return text;
+  }
+
   // ============================================================
-  // SEND / UPDATE MESSAGE
+  // SEND / EDIT
   // ============================================================
 
   Future<void> _sendMessage() async {
@@ -219,45 +242,30 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     final studentId = widget.student.studentId;
 
     if (studentId == null) {
-      _showSnackBar(
-        'Student ID not found.',
-        isError: true,
-      );
+      _showSnackBar('Student information is missing.', isError: true);
       return;
     }
 
-    FocusScope.of(context).unfocus();
+    final editing = _editingMessage;
 
     setState(() {
       _isSending = true;
     });
 
     try {
-      // --------------------------------------------------------
-      // EDIT EXISTING MESSAGE
-      // --------------------------------------------------------
-
-      if (_editingMessage != null) {
-        final messageId = _editingMessage!.id;
-
-        if (messageId == null) {
-          throw Exception('Message ID not found.');
-        }
-
-        final updatedMessage = await _service.editMessage(
-          messageId: messageId,
+      if (editing != null) {
+        final updated = await _service.editMessage(
+          messageId: editing.id!,
           message: text,
         );
 
         if (!mounted) return;
 
-        final index = _messages.indexWhere(
-          (message) => message.id == messageId,
-        );
+        final index = _messages.indexWhere((item) => item.id == editing.id);
 
         setState(() {
           if (index != -1) {
-            _messages[index] = updatedMessage;
+            _messages[index] = updated;
           }
 
           _editingMessage = null;
@@ -265,35 +273,32 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
           _isSending = false;
         });
 
-        _showSnackBar(
-          'Message updated',
+        _showSnackBar('Message updated');
+      } else {
+        final replyId = _replyingTo?.id;
+
+        final newMessage = await _service.sendMessage(
+          studentId: studentId,
+          message: text,
+          replyToMessageId: replyId,
         );
 
-        return;
+        if (!mounted) return;
+
+        setState(() {
+          _messages.add(newMessage);
+
+          _replyingTo = null;
+          _messageController.clear();
+          _isSending = false;
+        });
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
       }
 
-      // --------------------------------------------------------
-      // NEW MESSAGE / REPLY
-      // --------------------------------------------------------
-
-      final replyMessageId = _replyingTo?.id;
-
-      final newMessage = await _service.sendMessage(
-        studentId: studentId,
-        message: text,
-        replyToMessageId: replyMessageId,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _messages.add(newMessage);
-        _replyingTo = null;
-        _messageController.clear();
-        _isSending = false;
-      });
-
-      _scrollToBottom();
+      _messageFocusNode.requestFocus();
     } catch (e) {
       if (!mounted) return;
 
@@ -301,83 +306,31 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
         _isSending = false;
       });
 
-      _showSnackBar(
-        _cleanError(e),
-        isError: true,
-      );
+      _showSnackBar(_cleanError(e), isError: true);
     }
   }
 
   // ============================================================
-  // DELETE MESSAGE
+  // DELETE
   // ============================================================
 
-  Future<void> _deleteMessage(
-    BirthdayChatMessageModel message,
-  ) async {
-    final messageId = message.id;
-
-    if (messageId == null) {
+  Future<void> _deleteMessage(BirthdayChatMessageModel message) async {
+    if (message.id == null || !_isMyMessage(message)) {
       return;
     }
 
-    if (!_isMyMessage(message)) {
-      _showSnackBar(
-        'You can delete only your own message.',
-        isError: true,
-      );
-      return;
-    }
+    final confirmed = await _showDeleteConfirmation();
 
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text(
-            'Delete message?',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          content: const Text(
-            'This message will be removed from the chat.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFE53935),
-              ),
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldDelete != true) {
+    if (!confirmed) {
       return;
     }
 
     try {
-      await _service.deleteMessage(messageId);
+      await _service.deleteMessage(message.id!);
 
       if (!mounted) return;
 
-      final index = _messages.indexWhere(
-        (item) => item.id == messageId,
-      );
+      final index = _messages.indexWhere((item) => item.id == message.id);
 
       if (index != -1) {
         setState(() {
@@ -392,92 +345,152 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      _showSnackBar(
-        _cleanError(e),
-        isError: true,
-      );
+      _showSnackBar(_cleanError(e), isError: true);
     }
+  }
+
+  Future<bool> _showDeleteConfirmation() async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _sheetHandle(),
+
+                const SizedBox(height: 20),
+
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0F0),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Color(0xFFE53935),
+                    size: 28,
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                const Text(
+                  'Delete message?',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF171A21),
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                const Text(
+                  'This message will be marked as deleted.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Color(0xFF7A8190)),
+                ),
+
+                const SizedBox(height: 22),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(context, false);
+                        },
+                        style: _outlineButtonStyle(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context, true);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE53935),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          minimumSize: const Size(0, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    return result ?? false;
   }
 
   // ============================================================
   // REPLY
   // ============================================================
 
-  void _startReply(
-    BirthdayChatMessageModel message,
-  ) {
+  void _startReply(BirthdayChatMessageModel message) {
     if (message.deleted) {
       return;
     }
 
     setState(() {
-      _replyingTo = message;
       _editingMessage = null;
-      _messageController.clear();
+      _replyingTo = message;
     });
 
-    Future.delayed(
-      const Duration(milliseconds: 100),
-      () {
-        if (!mounted) return;
-
-        _messageFocusNode.requestFocus();
-      },
-    );
+    _messageFocusNode.requestFocus();
   }
 
   void _cancelReply() {
     setState(() {
       _replyingTo = null;
     });
-
-    _messageController.clear();
   }
 
   // ============================================================
   // EDIT
   // ============================================================
 
-  void _startEdit(
-    BirthdayChatMessageModel message,
-  ) {
-    if (message.deleted) {
-      return;
-    }
-
-    if (!_isMyMessage(message)) {
-      _showSnackBar(
-        'You can edit only your own message.',
-        isError: true,
-      );
-      return;
-    }
-
-    final text = message.message?.trim() ?? '';
-
-    if (text.isEmpty) {
+  void _startEdit(BirthdayChatMessageModel message) {
+    if (message.deleted || !_isMyMessage(message)) {
       return;
     }
 
     setState(() {
-      _editingMessage = message;
       _replyingTo = null;
-      _messageController.text = text;
-      _messageController.selection = TextSelection.fromPosition(
-        TextPosition(
-          offset: _messageController.text.length,
-        ),
+      _editingMessage = message;
+
+      _messageController.text = message.message ?? '';
+
+      _messageController.selection = TextSelection.collapsed(
+        offset: _messageController.text.length,
       );
     });
 
-    Future.delayed(
-      const Duration(milliseconds: 100),
-      () {
-        if (!mounted) return;
-
-        _messageFocusNode.requestFocus();
-      },
-    );
+    _messageFocusNode.requestFocus();
   }
 
   void _cancelEdit() {
@@ -485,8 +498,40 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
       _editingMessage = null;
       _messageController.clear();
     });
+  }
 
-    FocusScope.of(context).unfocus();
+  void _toggleEmojiPicker() {
+    if (_showEmojiPicker) {
+      setState(() {
+        _showEmojiPicker = false;
+      });
+
+      FocusScope.of(context).requestFocus(_messageFocusNode);
+    } else {
+      FocusScope.of(context).unfocus();
+
+      setState(() {
+        _showEmojiPicker = true;
+      });
+    }
+  }
+
+  // ============================================================
+  // COPY
+  // ============================================================
+
+  Future<void> _copyMessage(BirthdayChatMessageModel message) async {
+    if (message.deleted ||
+        message.message == null ||
+        message.message!.trim().isEmpty) {
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: message.message!));
+
+    if (!mounted) return;
+
+    _showSnackBar('Message copied');
   }
 
   // ============================================================
@@ -497,163 +542,170 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     required BirthdayChatMessageModel message,
     required String reaction,
   }) async {
-    final messageId = message.id;
-
-    if (messageId == null || message.deleted) {
+    if (message.id == null || message.deleted) {
       return;
     }
 
     try {
-      final existingReaction = message.reactions.where(
+      final existing = message.reactions.where(
         (item) => item.reaction == reaction,
       );
 
-      final alreadyReacted = existingReaction.isNotEmpty &&
-          existingReaction.first.reactedByCurrentUser;
+      final alreadyReacted =
+          existing.isNotEmpty && existing.first.reactedByCurrentUser;
 
       if (alreadyReacted) {
         await _service.removeReaction(
-          messageId: messageId,
+          messageId: message.id!,
           reaction: reaction,
         );
       } else {
-        await _service.addReaction(
-          messageId: messageId,
-          reaction: reaction,
-        );
+        await _service.addReaction(messageId: message.id!, reaction: reaction);
       }
 
+      await _refreshMessagesSilently();
+    } catch (e) {
       if (!mounted) return;
 
-      // Reload only the messages so that reaction counts and
-      // reactedByCurrentUser stay in sync with backend.
-      final studentId = widget.student.studentId;
+      _showSnackBar(_cleanError(e), isError: true);
+    }
+  }
 
-      if (studentId == null) {
-        return;
-      }
+  Future<void> _refreshMessagesSilently() async {
+    final studentId = widget.student.studentId;
 
-      final refreshedMessages = await _service.getMessages(
-        studentId,
-      );
+    if (studentId == null) {
+      return;
+    }
+
+    try {
+      final messages = await _service.getMessages(studentId);
 
       if (!mounted) return;
 
       setState(() {
-        _messages = refreshedMessages;
+        _messages = messages;
       });
-    } catch (e) {
-      if (!mounted) return;
-
-      _showSnackBar(
-        _cleanError(e),
-        isError: true,
-      );
-    }
+    } catch (_) {}
   }
 
   // ============================================================
   // REACTION PICKER
   // ============================================================
 
-  Future<void> _showReactionPicker(
-    BirthdayChatMessageModel message,
-  ) async {
-    if (message.deleted) {
+  Future<void> _showReactionPicker(BirthdayChatMessageModel message) async {
+    if (message.deleted || message.id == null) {
       return;
     }
+
+    final myReactions = message.reactions
+        .where((item) => item.reactedByCurrentUser)
+        .toList();
 
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) {
         return SafeArea(
           child: Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              16,
-              20,
-              20,
-            ),
-            decoration: BoxDecoration(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+            decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD7DCE5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+                _sheetHandle(),
+
                 const SizedBox(height: 18),
+
                 const Text(
                   'React to this message',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF202531),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF171A21),
                   ),
                 ),
+
                 const SizedBox(height: 18),
+
                 Wrap(
                   alignment: WrapAlignment.center,
                   spacing: 10,
                   runSpacing: 10,
-                  children: _availableReactions.map(
-                    (reaction) {
-                      final existing = message.reactions.where(
-                        (item) => item.reaction == reaction,
-                      );
+                  children: _availableReactions.map((reaction) {
+                    final existing = message.reactions.where(
+                      (item) => item.reaction == reaction,
+                    );
 
-                      final selected = existing.isNotEmpty &&
-                          existing.first.reactedByCurrentUser;
+                    final selected =
+                        existing.isNotEmpty &&
+                        existing.first.reactedByCurrentUser;
 
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () async {
-                          Navigator.pop(context);
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(17),
+                      onTap: () async {
+                        Navigator.pop(context);
 
-                          await _toggleReaction(
-                            message: message,
-                            reaction: reaction,
-                          );
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(
-                            milliseconds: 180,
-                          ),
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
+                        await _toggleReaction(
+                          message: message,
+                          reaction: reaction,
+                        );
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? const Color(0xFFEDE9FE)
+                              : const Color(0xFFF6F7FA),
+                          borderRadius: BorderRadius.circular(17),
+                          border: Border.all(
                             color: selected
-                                ? const Color(0xFFEDE9FE)
-                                : const Color(0xFFF5F7FB),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: selected
-                                  ? const Color(0xFF7C3AED)
-                                  : const Color(0xFFE4E7EC),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              reaction,
-                              style: const TextStyle(
-                                fontSize: 25,
-                              ),
-                            ),
+                                ? const Color(0xFF7C3AED)
+                                : const Color(0xFFE4E7EC),
+                            width: selected ? 1.5 : 1,
                           ),
                         ),
-                      );
-                    },
-                  ).toList(),
+                        child: Center(
+                          child: Text(
+                            reaction,
+                            style: const TextStyle(fontSize: 26),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
+
+                if (myReactions.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+
+                        for (final reaction in myReactions) {
+                          await _service.removeReaction(
+                            messageId: message.id!,
+                            reaction: reaction.reaction,
+                          );
+                        }
+
+                        await _refreshMessagesSilently();
+                      },
+                      icon: const Icon(Icons.remove_circle_outline),
+                      label: const Text('Remove my reaction'),
+                      style: _outlineButtonStyle(),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -666,9 +718,7 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
   // MESSAGE OPTIONS
   // ============================================================
 
-  Future<void> _showMessageOptions(
-    BirthdayChatMessageModel message,
-  ) async {
+  Future<void> _showMessageOptions(BirthdayChatMessageModel message) async {
     if (message.deleted) {
       return;
     }
@@ -681,50 +731,15 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
       builder: (context) {
         return SafeArea(
           child: Container(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              18,
-            ),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(26),
-              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD8DCE5),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                // Message preview
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF6F7FA),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    message.message ?? '',
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF353B48),
-                      height: 1.4,
-                    ),
-                  ),
-                ),
+                _sheetHandle(),
 
                 const SizedBox(height: 12),
 
@@ -743,19 +758,16 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
                   onTap: () {
                     Navigator.pop(context);
 
-                    Future.delayed(
-                      const Duration(milliseconds: 120),
-                      () {
-                        if (mounted) {
-                          _showReactionPicker(message);
-                        }
-                      },
-                    );
+                    Future.delayed(const Duration(milliseconds: 120), () {
+                      if (mounted) {
+                        _showReactionPicker(message);
+                      }
+                    });
                   },
                 ),
 
                 _messageOption(
-                  icon: Icons.copy_outlined,
+                  icon: Icons.copy_rounded,
                   title: 'Copy',
                   onTap: () {
                     Navigator.pop(context);
@@ -765,7 +777,7 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
 
                 if (isMine) ...[
                   _messageOption(
-                    icon: Icons.edit_outlined,
+                    icon: Icons.edit_rounded,
                     title: 'Edit',
                     onTap: () {
                       Navigator.pop(context);
@@ -776,18 +788,10 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
                   _messageOption(
                     icon: Icons.delete_outline_rounded,
                     title: 'Delete',
-                    destructive: true,
+                    danger: true,
                     onTap: () {
                       Navigator.pop(context);
-
-                      Future.delayed(
-                        const Duration(milliseconds: 120),
-                        () {
-                          if (mounted) {
-                            _deleteMessage(message);
-                          }
-                        },
-                      );
+                      _deleteMessage(message);
                     },
                   ),
                 ],
@@ -803,131 +807,184 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
-    bool destructive = false,
+    bool danger = false,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 6,
-      ),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
       leading: Container(
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color: destructive
-              ? const Color(0xFFFFF1F1)
-              : const Color(0xFFF3F5F9),
+          color: danger ? const Color(0xFFFFF1F1) : const Color(0xFFF5F6FA),
           borderRadius: BorderRadius.circular(13),
         ),
         child: Icon(
           icon,
+          color: danger ? const Color(0xFFE53935) : const Color(0xFF424956),
           size: 21,
-          color: destructive
-              ? const Color(0xFFE53935)
-              : const Color(0xFF4B5563),
         ),
       ),
       title: Text(
         title,
         style: TextStyle(
-          fontSize: 15,
+          fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: destructive
-              ? const Color(0xFFE53935)
-              : const Color(0xFF252B36),
+          color: danger ? const Color(0xFFE53935) : const Color(0xFF20242C),
         ),
       ),
-      onTap: onTap,
     );
   }
 
   // ============================================================
-  // COPY
+  // SCROLL
   // ============================================================
 
-  Future<void> _copyMessage(
-    BirthdayChatMessageModel message,
-  ) async {
-    final text = message.message?.trim();
-
-    if (text == null || text.isEmpty) {
+  void _scrollToBottom({bool animated = true}) {
+    if (!_scrollController.hasClients) {
       return;
     }
 
-    await Clipboard.setData(
-      ClipboardData(text: text),
-    );
+    final position = _scrollController.position.maxScrollExtent;
 
-    if (!mounted) return;
-
-    _showSnackBar('Message copied');
+    if (animated) {
+      _scrollController.animateTo(
+        position,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _scrollController.jumpTo(position);
+    }
   }
 
   // ============================================================
-  // UI
+  // SNACKBAR
+  // ============================================================
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          backgroundColor: isError
+              ? const Color(0xFF32343A)
+              : const Color(0xFF20242C),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          content: Row(
+            children: [
+              Icon(
+                isError
+                    ? Icons.error_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
+  // ============================================================
+  // BUILD
   // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    final studentName =
-        widget.student.studentName ?? 'Student';
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: _buildAppBar(studentName),
+      backgroundColor: const Color(0xFFF7F8FB),
+      appBar: _buildAppBar(),
       body: Column(
         children: [
-          Expanded(
-            child: _buildChatBody(),
-          ),
+          Expanded(child: _buildChatBody()),
           _buildComposer(),
         ],
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(
-    String studentName,
-  ) {
+  // ============================================================
+  // APP BAR
+  // ============================================================
+
+  PreferredSizeWidget _buildAppBar() {
+    final name = widget.student.studentName?.trim().isNotEmpty == true
+        ? widget.student.studentName!.trim()
+        : 'Birthday Student';
+
     return AppBar(
       elevation: 0,
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
       leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
+        color: const Color(0xFF242832),
         onPressed: () {
           Navigator.pop(context);
         },
-        icon: const Icon(
-          Icons.arrow_back_rounded,
-          color: Color(0xFF252A34),
-        ),
       ),
       titleSpacing: 0,
       title: Row(
         children: [
-          _buildHeaderAvatar(),
-          const SizedBox(width: 12),
+          _buildStudentAvatar(size: 42),
+
+          const SizedBox(width: 11),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  studentName,
+                  name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF202531),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF191C23),
                   ),
                 ),
+
                 const SizedBox(height: 2),
-                const Text(
-                  'Birthday Chat',
-                  style: TextStyle(
-                    color: Color(0xFF8A92A0),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF22C55E),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    const Text(
+                      'Birthday Chat',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF7C8492),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -937,46 +994,82 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
       actions: [
         IconButton(
           tooltip: 'Refresh',
-          onPressed: () {
-            _loadMessages();
-          },
-          icon: const Icon(
-            Icons.refresh_rounded,
-            color: Color(0xFF555D6D),
-          ),
+          onPressed: _isLoading ? null : () => _loadMessages(),
+          icon: const Icon(Icons.refresh_rounded, size: 22),
+          color: const Color(0xFF454B57),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
       ],
     );
   }
 
-  Widget _buildHeaderAvatar() {
+  Widget _buildStudentAvatar({double size = 48}) {
     final photoUrl = widget.student.photoUrl;
 
     if (photoUrl != null && photoUrl.trim().isNotEmpty) {
-      return CircleAvatar(
-        radius: 21,
-        backgroundColor: const Color(0xFFFFE4EC),
-        backgroundImage: NetworkImage(
-          photoUrl,
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFFE6E8EF)),
+        ),
+        child: ClipOval(
+          child: Image.network(
+            photoUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) {
+              return _avatarFallback(size);
+            },
+          ),
         ),
       );
     }
 
-    return CircleAvatar(
-      radius: 21,
-      backgroundColor: const Color(0xFFFFE4EC),
-      child: const Icon(
-        Icons.cake_rounded,
-        color: Color(0xFFE85D8A),
-        size: 22,
+    return _avatarFallback(size);
+  }
+
+  Widget _avatarFallback(double size) {
+    final name = widget.student.studentName ?? 'S';
+
+    final letter = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'S';
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: size * .38,
+        ),
       ),
     );
   }
 
+  // ============================================================
+  // CHAT BODY
+  // ============================================================
+
   Widget _buildChatBody() {
     if (_isLoading || _isLoadingUser) {
       return _buildLoadingState();
+    }
+
+    if (_errorMessage != null) {
+      return _buildErrorState();
     }
 
     if (_messages.isEmpty) {
@@ -984,32 +1077,25 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: () => _loadMessages(
-        showLoader: false,
-      ),
+      color: const Color(0xFF5B5FEF),
+      onRefresh: () => _loadMessages(showLoader: false),
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          18,
-          20,
-          18,
-          20,
-        ),
+        padding: const EdgeInsets.fromLTRB(14, 18, 14, 18),
         itemCount: _messages.length,
         itemBuilder: (context, index) {
           final message = _messages[index];
 
-          final showDate = index == 0 ||
-              !_isSameDay(
-                message.createdAt,
-                _messages[index - 1].createdAt,
-              );
+          final showDate =
+              index == 0 ||
+              !_isSameDay(_messages[index - 1].createdAt, message.createdAt);
 
           return Column(
             children: [
-              if (showDate) _buildDateDivider(message),
-              _buildMessageBubble(message),
+              if (showDate) _buildDateSeparator(message.createdAt),
+
+              _buildMessageRow(message),
             ],
           );
         },
@@ -1018,273 +1104,437 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
   }
 
   // ============================================================
-  // MESSAGE BUBBLE
+  // LOADING
   // ============================================================
 
-  Widget _buildMessageBubble(
-    BirthdayChatMessageModel message,
-  ) {
-    final isMine = _isMyMessage(message);
-    final isDeleted = message.deleted;
+  Widget _buildLoadingState() {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(14, 24, 14, 24),
+      itemCount: 7,
+      itemBuilder: (_, index) {
+        final isRight = index % 2 == 1;
 
-    return GestureDetector(
-      onLongPress: () {
-        _showMessageOptions(message);
+        return Align(
+          alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            width: 150 + (index % 3) * 45,
+            height: 58,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        );
       },
-      onDoubleTap: () {
-        if (!isDeleted) {
-          _showReactionPicker(message);
-        }
-      },
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(
-          bottom: 10,
-        ),
-        child: Row(
-          mainAxisAlignment: isMine
-              ? MainAxisAlignment.end
-              : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.end,
+    );
+  }
+
+  // ============================================================
+  // ERROR
+  // ============================================================
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (!isMine) ...[
-              _buildSenderAvatar(message),
-              const SizedBox(width: 8),
-            ],
-
-            Flexible(
-              child: Column(
-                crossAxisAlignment: isMine
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
-                children: [
-                  if (!isMine &&
-                      message.senderName != null &&
-                      message.senderName!.trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        left: 4,
-                        bottom: 4,
-                      ),
-                      child: Text(
-                        message.senderName!,
-                        style: const TextStyle(
-                          color: Color(0xFF667085),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-
-                  Container(
-                    constraints: const BoxConstraints(
-                      maxWidth: 650,
-                    ),
-                    padding: const EdgeInsets.fromLTRB(
-                      14,
-                      11,
-                      14,
-                      9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDeleted
-                          ? const Color(0xFFF0F1F3)
-                          : isMine
-                              ? const Color(0xFF5B5FEF)
-                              : Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(18),
-                        topRight: const Radius.circular(18),
-                        bottomLeft: Radius.circular(
-                          isMine ? 18 : 5,
-                        ),
-                        bottomRight: Radius.circular(
-                          isMine ? 5 : 18,
-                        ),
-                      ),
-                      border: !isMine && !isDeleted
-                          ? Border.all(
-                              color: const Color(0xFFE7E9EE),
-                            )
-                          : null,
-                      boxShadow: !isDeleted
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(
-                                  isMine ? 0.05 : 0.035,
-                                ),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (message.replyToMessage != null &&
-                            message.replyToMessage!.trim().isNotEmpty)
-                          _buildReplyPreview(
-                            message,
-                            isMine,
-                          ),
-
-                        Text(
-                          isDeleted
-                              ? 'This message was deleted'
-                              : (message.message ?? ''),
-                          style: TextStyle(
-                            color: isDeleted
-                                ? const Color(0xFF8B909A)
-                                : isMine
-                                    ? Colors.white
-                                    : const Color(0xFF252A34),
-                            fontSize: 14.5,
-                            height: 1.4,
-                            fontStyle: isDeleted
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                          ),
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (message.edited && !isDeleted)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 6,
-                                ),
-                                child: Text(
-                                  'edited',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: isMine
-                                        ? Colors.white.withOpacity(
-                                            0.70,
-                                          )
-                                        : const Color(0xFF9298A3),
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                              ),
-
-                            Text(
-                              _formatTime(
-                                message.createdAt,
-                              ),
-                              style: TextStyle(
-                                color: isMine
-                                    ? Colors.white.withOpacity(
-                                        0.70,
-                                      )
-                                    : const Color(0xFF9298A3),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (message.reactions.isNotEmpty &&
-                      !message.deleted)
-                    _buildReactions(
-                      message,
-                      isMine,
-                    ),
-                ],
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F1),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                color: Color(0xFFE53935),
+                size: 32,
               ),
             ),
 
-            if (isMine) ...[
-              const SizedBox(width: 8),
-              _buildSenderAvatar(message),
-            ],
+            const SizedBox(height: 18),
+
+            const Text(
+              'Unable to load chat',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF20242C),
+              ),
+            ),
+
+            const SizedBox(height: 7),
+
+            Text(
+              _errorMessage ?? 'Something went wrong.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF7B8290)),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton.icon(
+              onPressed: () => _loadMessages(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF5B5FEF),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                minimumSize: const Size(135, 46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSenderAvatar(
-    BirthdayChatMessageModel message,
-  ) {
-    final name = message.senderName ?? 'User';
+  // ============================================================
+  // EMPTY
+  // ============================================================
 
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFE9EAFD),
-        border: Border.all(
-          color: Colors.white,
-          width: 2,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          _initials(name),
-          style: const TextStyle(
-            color: Color(0xFF5B5FEF),
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-          ),
+  Widget _buildEmptyState() {
+    final name = widget.student.studentName ?? 'student';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFFFF1F8), Color(0xFFF1EDFF)],
+                ),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: const Center(
+                child: Text('🎂', style: TextStyle(fontSize: 42)),
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              'Start the birthday wishes',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF20242C),
+              ),
+            ),
+
+            const SizedBox(height: 7),
+
+            Text(
+              'Be the first one to wish $name a happy birthday.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: Color(0xFF7A8190),
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE8EAF0)),
+              ),
+              child: const Text(
+                '🎉  Make it special!',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF555B68),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   // ============================================================
-  // REPLY PREVIEW INSIDE MESSAGE
+  // MESSAGE ROW
   // ============================================================
 
-  Widget _buildReplyPreview(
-    BirthdayChatMessageModel message,
-    bool isMine,
-  ) {
+  Widget _buildMessageRow(BirthdayChatMessageModel message) {
+    final isMine = _isMyMessage(message);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMine) ...[
+            _buildSmallAvatar(message),
+            const SizedBox(width: 8),
+          ],
+
+          Flexible(
+            child: GestureDetector(
+              onLongPress: () {
+                _showMessageOptions(message);
+              },
+              onDoubleTap: () {
+                if (!message.deleted) {
+                  _showReactionPicker(message);
+                }
+              },
+              child: _buildMessageBubble(message, isMine),
+            ),
+          ),
+
+          if (isMine) ...[const SizedBox(width: 8), _buildMyMessageIndicator()],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallAvatar(BirthdayChatMessageModel message) {
+    final senderName = message.senderName?.trim();
+
+    final letter = senderName != null && senderName.isNotEmpty
+        ? senderName[0].toUpperCase()
+        : '?';
+
     return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(
-        bottom: 8,
-      ),
-      padding: const EdgeInsets.fromLTRB(
-        9,
-        7,
-        9,
-        7,
-      ),
+      width: 32,
+      height: 32,
       decoration: BoxDecoration(
-        color: isMine
-            ? Colors.white.withOpacity(0.13)
-            : const Color(0xFFF5F6FA),
-        borderRadius: BorderRadius.circular(9),
-        border: Border(
-          left: BorderSide(
-            color: isMine
-                ? Colors.white.withOpacity(0.75)
-                : const Color(0xFF6366F1),
-            width: 3,
+        shape: BoxShape.circle,
+        color: const Color(0xFFEDEBFF),
+        border: Border.all(color: const Color(0xFFE2E3EE)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        letter,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF5B5FEF),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyMessageIndicator() {
+    return const SizedBox(width: 4, height: 4);
+  }
+
+  // ============================================================
+  // MESSAGE BUBBLE
+  // ============================================================
+
+  Widget _buildMessageBubble(BirthdayChatMessageModel message, bool isMine) {
+    final deleted = message.deleted;
+
+    final bubbleColor = isMine ? const Color(0xFF5B5FEF) : Colors.white;
+
+    final textColor = isMine ? Colors.white : const Color(0xFF272B34);
+
+    return Column(
+      crossAxisAlignment: isMine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        if (!isMine && !deleted)
+          Padding(
+            padding: const EdgeInsets.only(left: 5, bottom: 4),
+            child: Text(
+              message.senderName ?? 'User',
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF626A78),
+              ),
+            ),
+          ),
+
+        Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * .78,
+          ),
+          padding: const EdgeInsets.fromLTRB(13, 10, 11, 8),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(19),
+              topRight: const Radius.circular(19),
+              bottomLeft: Radius.circular(isMine ? 19 : 5),
+              bottomRight: Radius.circular(isMine ? 5 : 19),
+            ),
+            border: !isMine ? Border.all(color: const Color(0xFFE8EAF0)) : null,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isMine ? .08 : .035),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (message.replyToMessageId != null &&
+                  message.replyToMessage != null)
+                _buildReplyPreview(message, isMine),
+
+              if (message.replyToMessageId != null &&
+                  message.replyToMessage != null)
+                const SizedBox(height: 7),
+
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Text(
+                      message.message ?? '',
+                      style: TextStyle(
+                        fontSize: 14.2,
+                        height: 1.42,
+                        fontStyle: deleted
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                        color: deleted
+                            ? (isMine
+                                  ? Colors.white.withOpacity(.75)
+                                  : const Color(0xFF9298A3))
+                            : textColor,
+                        fontWeight: deleted ? FontWeight.w400 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 9),
+
+                  _buildMessageMeta(message, isMine),
+                ],
+              ),
+            ],
           ),
         ),
+
+        if (message.reactions.isNotEmpty) _buildReactionStrip(message, isMine),
+      ],
+    );
+  }
+
+  // ============================================================
+  // REPLY PREVIEW
+  // ============================================================
+
+  Widget _buildReplyPreview(BirthdayChatMessageModel message, bool isMine) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+      decoration: BoxDecoration(
+        color: isMine ? Colors.white.withOpacity(.13) : const Color(0xFFF5F6FA),
+        borderRadius: BorderRadius.circular(11),
       ),
-      child: Text(
-        message.replyToMessage!,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: isMine
-              ? Colors.white.withOpacity(0.82)
-              : const Color(0xFF667085),
-          fontSize: 11.5,
-          height: 1.35,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 3,
+            height: 35,
+            decoration: BoxDecoration(
+              color: isMine ? Colors.white : const Color(0xFF5B5FEF),
+              borderRadius: BorderRadius.circular(5),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Replying to message',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: isMine
+                        ? Colors.white.withOpacity(.88)
+                        : const Color(0xFF5B5FEF),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  message.replyToMessage ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: isMine
+                        ? Colors.white.withOpacity(.78)
+                        : const Color(0xFF747B88),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // MESSAGE META
+  // ============================================================
+
+  Widget _buildMessageMeta(BirthdayChatMessageModel message, bool isMine) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (message.edited && !message.deleted)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Text(
+              'edited',
+              style: TextStyle(
+                fontSize: 8.5,
+                color: isMine
+                    ? Colors.white.withOpacity(.65)
+                    : const Color(0xFF999FAC),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+
+        Text(
+          _formatTime(message.createdAt),
+          style: TextStyle(
+            fontSize: 9.5,
+            color: isMine
+                ? Colors.white.withOpacity(.68)
+                : const Color(0xFF9AA0AB),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -1292,82 +1542,98 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
   // REACTIONS
   // ============================================================
 
-  Widget _buildReactions(
-    BirthdayChatMessageModel message,
-    bool isMine,
-  ) {
+  Widget _buildReactionStrip(BirthdayChatMessageModel message, bool isMine) {
     return Transform.translate(
-      offset: Offset(
-        isMine ? -8 : 8,
-        -6,
-      ),
-      child: Wrap(
-        spacing: 4,
-        children: message.reactions.map(
-          (reaction) {
-            final selected =
-                reaction.reactedByCurrentUser;
-
-            return GestureDetector(
-              onTap: () {
-                _toggleReaction(
-                  message: message,
-                  reaction: reaction.reaction,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 7,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0xFFEDE9FE)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected
-                        ? const Color(0xFF8B5CF6)
-                        : const Color(0xFFE2E5EB),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(
-                        0.04,
-                      ),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      reaction.reaction,
-                      style: const TextStyle(
-                        fontSize: 13,
-                      ),
-                    ),
-                    if (reaction.count > 0) ...[
-                      const SizedBox(width: 3),
-                      Text(
-                        reaction.count.toString(),
-                        style: TextStyle(
-                          color: selected
-                              ? const Color(0xFF6D28D9)
-                              : const Color(0xFF69707D),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
+      offset: Offset(isMine ? -8 : 8, -3),
+      child: Align(
+        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
+          onTap: () {
+            _showReactionPicker(message);
           },
-        ).toList(),
+          child: Container(
+            margin: const EdgeInsets.only(top: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE4E6EC)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: message.reactions.map((reaction) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        reaction.reaction,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      if (reaction.count > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2),
+                          child: Text(
+                            '${reaction.count}',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              color: reaction.reactedByCurrentUser
+                                  ? const Color(0xFF5B5FEF)
+                                  : const Color(0xFF777E8A),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // DATE SEPARATOR
+  // ============================================================
+
+  Widget _buildDateSeparator(DateTime? date) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(color: Color(0xFFE5E7EC))),
+
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE6E8EE)),
+            ),
+            child: Text(
+              _formatDateLabel(date),
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF7C8390),
+              ),
+            ),
+          ),
+
+          const Expanded(child: Divider(color: Color(0xFFE5E7EC))),
+        ],
       ),
     );
   }
@@ -1375,43 +1641,28 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
   // ============================================================
   // COMPOSER
   // ============================================================
-
   Widget _buildComposer() {
     final isEditing = _editingMessage != null;
+
     final isReplying = _replyingTo != null;
 
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(
-          14,
-          10,
-          14,
-          12,
-        ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: const Border(
-            top: BorderSide(
-              color: Color(0xFFE8EAF0),
-            ),
-          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(.06),
+              blurRadius: 14,
               offset: const Offset(0, -3),
             ),
           ],
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            if (isReplying)
-              _buildReplyComposerPreview(),
-
-            if (isEditing)
-              _buildEditComposerPreview(),
+            if (isEditing || isReplying) _buildComposerPreview(),
 
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -1425,374 +1676,349 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF5F6F9),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: const Color(0xFFE5E7EC),
-                      ),
+                      border: Border.all(color: const Color(0xFFE7E9EE)),
                     ),
-                    child: TextField(
-                      controller: _messageController,
-                      focusNode: _messageFocusNode,
-                      minLines: 1,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.newline,
-                      textCapitalization:
-                          TextCapitalization.sentences,
-                      decoration: InputDecoration(
-                        hintText: isEditing
-                            ? 'Edit your message...'
-                            : isReplying
-                                ? 'Write a reply...'
-                                : 'Write a birthday wish...',
-                        hintStyle: const TextStyle(
-                          color: Color(0xFF9AA1AD),
-                          fontSize: 14,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // ==================================================
+                        // EMOJI BUTTON
+                        // ==================================================
+                        IconButton(
+                          onPressed: _toggleEmojiPicker,
+                          padding: const EdgeInsets.only(
+                            left: 12,
+                            right: 4,
+                            top: 8,
+                            bottom: 8,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 42,
+                            minHeight: 48,
+                          ),
+                          icon: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 180),
+                            child: Icon(
+                              _showEmojiPicker
+                                  ? Icons.keyboard_rounded
+                                  : Icons.emoji_emotions_outlined,
+                              key: ValueKey(_showEmojiPicker),
+                              size: 23,
+                              color: const Color(0xFF6D7280),
+                            ),
+                          ),
                         ),
-                        border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 15,
-                          vertical: 13,
+
+                        // ==================================================
+                        // TEXT FIELD
+                        // ==================================================
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            focusNode: _messageFocusNode,
+                            minLines: 1,
+                            maxLines: 5,
+                            textCapitalization: TextCapitalization.sentences,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+
+                            onTap: () {
+                              if (_showEmojiPicker) {
+                                setState(() {
+                                  _showEmojiPicker = false;
+                                });
+                              }
+                            },
+
+                            onChanged: (_) {
+                              if (mounted) {
+                                setState(() {});
+                              }
+                            },
+
+                            decoration: const InputDecoration(
+                              hintText: 'Write a birthday wish...',
+                              hintStyle: TextStyle(
+                                color: Color(0xFF969DA9),
+                                fontSize: 13.5,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.only(
+                                left: 4,
+                                right: 12,
+                                top: 13,
+                                bottom: 13,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
 
                 const SizedBox(width: 9),
 
-                GestureDetector(
-                  onTap: _isSending
-                      ? null
-                      : _sendMessage,
-                  child: AnimatedContainer(
-                    duration: const Duration(
-                      milliseconds: 180,
+                _buildSendButton(),
+              ],
+            ),
+
+            // ============================================================
+            // EMOJI PICKER
+            // ============================================================
+            if (_showEmojiPicker)
+              SizedBox(
+                height: 300,
+                child: EmojiPicker(
+                  onEmojiSelected: (Category? category, Emoji emoji) {
+                    final text = _messageController.text;
+
+                    final selection = _messageController.selection;
+
+                    final start = selection.start < 0
+                        ? text.length
+                        : selection.start;
+
+                    final end = selection.end < 0 ? text.length : selection.end;
+
+                    final newText = text.replaceRange(start, end, emoji.emoji);
+
+                    _messageController.value = TextEditingValue(
+                      text: newText,
+                      selection: TextSelection.collapsed(
+                        offset: start + emoji.emoji.length,
+                      ),
+                    );
+
+                    setState(() {});
+                  },
+
+                  onBackspacePressed: () {
+                    _deletePreviousCharacter();
+                  },
+
+                  config: Config(
+                    height: 300,
+
+                    checkPlatformCompatibility: true,
+
+                    emojiViewConfig: EmojiViewConfig(
+                      emojiSizeMax: 28,
+                      columns: 8,
+                      backgroundColor: const Color(0xFFF8F9FC),
                     ),
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: _isSending
-                          ? const Color(0xFFB8BBDB)
-                          : const Color(0xFF5B5FEF),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF5B5FEF,
-                          ).withOpacity(0.22),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+
+                    categoryViewConfig: const CategoryViewConfig(
+                      initCategory: Category.SMILEYS,
+                      backgroundColor: Colors.white,
+                      indicatorColor: Color(0xFF5B5FEF),
+                      iconColor: Color(0xFF9AA0AB),
+                      iconColorSelected: Color(0xFF5B5FEF),
                     ),
-                    child: Center(
-                      child: _isSending
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<
-                                        Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : Icon(
-                              isEditing
-                                  ? Icons.check_rounded
-                                  : Icons.send_rounded,
-                              color: Colors.white,
-                              size: 21,
-                            ),
+
+                    bottomActionBarConfig: const BottomActionBarConfig(
+                      backgroundColor: Colors.white,
+                      buttonColor: Color(0xFFF3F4F7),
+                      buttonIconColor: Color(0xFF5B5FEF),
+                    ),
+
+                    searchViewConfig: const SearchViewConfig(
+                      backgroundColor: Colors.white,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReplyComposerPreview() {
-    final message = _replyingTo;
+  void _deletePreviousCharacter() {
+    final text = _messageController.text;
+    final selection = _messageController.selection;
 
-    if (message == null) {
+    if (text.isEmpty) {
+      return;
+    }
+
+    final start = selection.start;
+    final end = selection.end;
+
+    if (start < 0) {
+      return;
+    }
+
+    // Delete selected text
+    if (start != end) {
+      final newText = text.replaceRange(start, end, '');
+
+      _messageController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: start),
+      );
+
+      setState(() {});
+      return;
+    }
+
+    if (start == 0) {
+      return;
+    }
+
+    final characters = text.characters.toList();
+
+    if (characters.isEmpty) {
+      return;
+    }
+
+    characters.removeLast();
+
+    final newText = characters.join();
+
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+
+    setState(() {});
+  }
+
+  Widget _buildComposerPreview() {
+    final editing = _editingMessage;
+
+    final replying = _replyingTo;
+
+    final isEditing = editing != null;
+
+    final source = isEditing ? editing : replying;
+
+    if (source == null) {
       return const SizedBox.shrink();
     }
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(
-        bottom: 9,
-      ),
-      padding: const EdgeInsets.fromLTRB(
-        12,
-        9,
-        8,
-        9,
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(11, 8, 8, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F3FF),
-        borderRadius: BorderRadius.circular(13),
-        border: const Border(
-          left: BorderSide(
-            color: Color(0xFF7C3AED),
-            width: 3,
-          ),
-        ),
+        color: const Color(0xFFF7F7FB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE7E8EF)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.reply_rounded,
-            size: 17,
-            color: Color(0xFF7C3AED),
+          Container(
+            width: 3,
+            height: 38,
+            decoration: BoxDecoration(
+              color: isEditing
+                  ? const Color(0xFFF59E0B)
+                  : const Color(0xFF5B5FEF),
+              borderRadius: BorderRadius.circular(5),
+            ),
           ),
-          const SizedBox(width: 8),
+
+          const SizedBox(width: 9),
+
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Replying to ${message.senderName ?? 'User'}',
-                  style: const TextStyle(
-                    color: Color(0xFF6D28D9),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                  isEditing
+                      ? 'Editing message'
+                      : 'Replying to ${source.senderName ?? 'message'}',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: isEditing
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF5B5FEF),
                   ),
                 ),
-                const SizedBox(height: 2),
+
+                const SizedBox(height: 3),
+
                 Text(
-                  message.message ?? '',
+                  source.message ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF667085),
-                    fontSize: 12,
+                    fontSize: 11.5,
+                    color: Color(0xFF737A87),
                   ),
                 ),
               ],
             ),
           ),
+
           IconButton(
-            tooltip: 'Cancel reply',
-            onPressed: _cancelReply,
-            icon: const Icon(
-              Icons.close_rounded,
-              size: 19,
-              color: Color(0xFF667085),
-            ),
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              if (_showEmojiPicker) {
+                setState(() {
+                  _showEmojiPicker = false;
+                });
+              }
+
+              if (isEditing) {
+                _cancelEdit();
+              } else {
+                _cancelReply();
+              }
+            },
+            icon: const Icon(Icons.close_rounded, size: 19),
+            color: const Color(0xFF7B818C),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEditComposerPreview() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(
-        bottom: 9,
-      ),
-      padding: const EdgeInsets.fromLTRB(
-        12,
-        9,
-        8,
-        9,
-      ),
+  Widget _buildSendButton() {
+    final hasText = _messageController.text.trim().isNotEmpty;
+
+    final enabled = hasText && !_isSending;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E8),
-        borderRadius: BorderRadius.circular(13),
-        border: const Border(
-          left: BorderSide(
-            color: Color(0xFFF59E0B),
-            width: 3,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.edit_outlined,
-            size: 17,
-            color: Color(0xFFD97706),
-          ),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Editing message',
-                  style: TextStyle(
-                    color: Color(0xFFB45309),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+        gradient: enabled
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+              )
+            : null,
+        color: enabled ? null : const Color(0xFFE8EAF0),
+        shape: BoxShape.circle,
+        boxShadow: enabled
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF5B5FEF).withOpacity(.22),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Update your message and tap ✓',
-                  style: TextStyle(
-                    color: Color(0xFF78716C),
-                    fontSize: 12,
-                  ),
+              ]
+            : null,
+      ),
+      child: IconButton(
+        onPressed: enabled ? _sendMessage : null,
+        icon: _isSending
+            ? const SizedBox(
+                width: 19,
+                height: 19,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
                 ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Cancel edit',
-            onPressed: _cancelEdit,
-            icon: const Icon(
-              Icons.close_rounded,
-              size: 19,
-              color: Color(0xFF78716C),
-            ),
-          ),
-        ],
+              )
+            : const Icon(Icons.arrow_upward_rounded, size: 22),
+        color: enabled ? Colors.white : const Color(0xFF9AA0AB),
       ),
-    );
-  }
-
-  // ============================================================
-  // DATE DIVIDER
-  // ============================================================
-
-  Widget _buildDateDivider(
-    BirthdayChatMessageModel message,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 14,
-        top: 2,
-      ),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Divider(
-              color: Color(0xFFE3E6EC),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 11,
-                vertical: 5,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF1F6),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _formatDate(message.createdAt),
-                style: const TextStyle(
-                  color: Color(0xFF7A8190),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const Expanded(
-            child: Divider(
-              color: Color(0xFFE3E6EC),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // LOADING
-  // ============================================================
-
-  Widget _buildLoadingState() {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: Color(0xFF5B5FEF),
-      ),
-    );
-  }
-
-  // ============================================================
-  // EMPTY
-  // ============================================================
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 82,
-              height: 82,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFE9F0),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.cake_rounded,
-                size: 38,
-                color: Color(0xFFE85D8A),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'No birthday wishes yet',
-              style: TextStyle(
-                color: Color(0xFF252A34),
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Be the first person to wish ${widget.student.studentName ?? 'this student'} a happy birthday.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF858C99),
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // SCROLL
-  // ============================================================
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) {
-        if (!_scrollController.hasClients) {
-          return;
-        }
-
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(
-            milliseconds: 300,
-          ),
-          curve: Curves.easeOut,
-        );
-      },
     );
   }
 
@@ -1800,47 +2026,52 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
   // HELPERS
   // ============================================================
 
-  String _formatTime(DateTime? dateTime) {
-    if (dateTime == null) {
-      return '';
-    }
-
-    final local = dateTime.toLocal();
-
-    final hour = local.hour == 0
-        ? 12
-        : local.hour > 12
-            ? local.hour - 12
-            : local.hour;
-
-    final minute = local.minute
-        .toString()
-        .padLeft(2, '0');
-
-    final period = local.hour >= 12
-        ? 'PM'
-        : 'AM';
-
-    return '$hour:$minute $period';
+  Widget _sheetHandle() {
+    return Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: const Color(0xFFD9DCE3),
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
   }
 
-  String _formatDate(DateTime? dateTime) {
-    if (dateTime == null) {
+  ButtonStyle _outlineButtonStyle() {
+    return OutlinedButton.styleFrom(
+      foregroundColor: const Color(0xFF555B68),
+      side: const BorderSide(color: Color(0xFFE0E3E9)),
+      minimumSize: const Size(double.infinity, 46),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    );
+  }
+
+  bool _isSameDay(DateTime? first, DateTime? second) {
+    if (first == null || second == null) {
+      return false;
+    }
+
+    final a = first.toLocal();
+    final b = second.toLocal();
+
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateLabel(DateTime? date) {
+    if (date == null) {
       return '';
     }
 
-    final local = dateTime.toLocal();
+    final value = date.toLocal();
     final now = DateTime.now();
 
-    if (_isSameDay(local, now)) {
+    if (_isSameDay(value, now)) {
       return 'Today';
     }
 
-    final yesterday = now.subtract(
-      const Duration(days: 1),
-    );
+    final yesterday = now.subtract(const Duration(days: 1));
 
-    if (_isSameDay(local, yesterday)) {
+    if (_isSameDay(value, yesterday)) {
       return 'Yesterday';
     }
 
@@ -1859,91 +2090,26 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen> {
       'Dec',
     ];
 
-    return '${months[local.month - 1]} ${local.day}, ${local.year}';
+    return '${value.day} ${months[value.month - 1]} ${value.year}';
   }
 
-  bool _isSameDay(
-    DateTime? first,
-    DateTime? second,
-  ) {
-    if (first == null || second == null) {
-      return false;
+  String _formatTime(DateTime? date) {
+    if (date == null) {
+      return '';
     }
 
-    final a = first.toLocal();
-    final b = second.toLocal();
+    final value = date.toLocal();
 
-    return a.year == b.year &&
-        a.month == b.month &&
-        a.day == b.day;
-  }
+    final hour = value.hour == 0
+        ? 12
+        : value.hour > 12
+        ? value.hour - 12
+        : value.hour;
 
-  String _initials(String name) {
-    final trimmed = name.trim();
+    final minute = value.minute.toString().padLeft(2, '0');
 
-    if (trimmed.isEmpty) {
-      return 'U';
-    }
+    final period = value.hour >= 12 ? 'PM' : 'AM';
 
-    final parts = trimmed.split(
-      RegExp(r'\s+'),
-    );
-
-    if (parts.length == 1) {
-      return parts.first.substring(
-        0,
-        1,
-      ).toUpperCase();
-    }
-
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
-  }
-
-  String _cleanError(Object error) {
-    final text = error.toString();
-
-    if (text.startsWith('Exception: ')) {
-      return text.substring(
-        'Exception: '.length,
-      );
-    }
-
-    return text;
-  }
-
-  void _showSnackBar(
-    String message, {
-    bool isError = false,
-  }) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            message,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: isError
-              ? const Color(0xFFD32F2F)
-              : const Color(0xFF252A34),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.fromLTRB(
-            16,
-            0,
-            16,
-            16,
-          ),
-        ),
-      );
+    return '$hour:$minute $period';
   }
 }

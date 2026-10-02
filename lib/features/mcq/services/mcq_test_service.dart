@@ -466,7 +466,6 @@ class McqTestService {
 // MCQ ATTEMPT MODEL
 // ============================================================
 
-
 class McqAttemptModel {
   final int? attemptId;
   final int? testId;
@@ -475,6 +474,9 @@ class McqAttemptModel {
   final int? studentId;
   final String? studentName;
   final String? admissionNo;
+
+  final int? sectionId;
+  final String? sectionName;
 
   final String status;
   final String? startedAt;
@@ -495,6 +497,8 @@ class McqAttemptModel {
     this.studentId,
     this.studentName,
     this.admissionNo,
+    this.sectionId,
+    this.sectionName,
     required this.status,
     this.startedAt,
     this.expiresAt,
@@ -516,6 +520,9 @@ class McqAttemptModel {
       studentId: _parseInt(json['studentId']),
       studentName: json['studentName']?.toString(),
       admissionNo: json['admissionNo']?.toString(),
+      // Student section from backend
+      sectionId: _parseInt(json['sectionId']),
+      sectionName: json['sectionName']?.toString(),
 
       status: json['status']?.toString() ?? '',
 
@@ -531,9 +538,7 @@ class McqAttemptModel {
       percentage: _parseDouble(json['percentage']),
 
       test: json['test'] is Map
-          ? McqTestModel.fromJson(
-              Map<String, dynamic>.from(json['test']),
-            )
+          ? McqTestModel.fromJson(Map<String, dynamic>.from(json['test']))
           : null,
     );
   }

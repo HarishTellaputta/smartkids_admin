@@ -8,6 +8,7 @@ import 'package:smartkids_admin/features/exams/services/examination_excel_picker
 import 'package:smartkids_admin/features/exams/models/excel_import_response_model.dart';
 import 'package:smartkids_admin/features/exams/services/excel_file_picker_service.dart';
 import 'package:smartkids_admin/features/exams/services/examination_bulk_import_service.dart';
+import 'package:smartkids_admin/features/exams/models/exam_result_model.dart';
 
 import 'package:smartkids_admin/features/exams/models/exam_schedule_model.dart';
 import '../../features/exams/exam_details_screen.dart';
@@ -877,16 +878,74 @@ class _ExamsScreenState extends State<ExamsScreen> {
   // ============================================================
 
   void _showExamDetails(ExaminationModel exam) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ExamDetailsScreen(
-        exam: exam,
-        service: _service!,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExamDetailsScreen(exam: exam, service: _service!),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Future<void> _showExamResults(ExaminationModel exam) async {
+    if (exam.id == null) {
+      _showSnack('Examination ID not available.');
+      return;
+    }
+
+    if (_service == null) {
+      _showSnack('Examination service is not initialized.');
+      return;
+    }
+
+    setState(() {
+      isLoadingSchedules = true;
+    });
+
+    try {
+      final schedules = await _service!.getSchedulesByExamination(exam.id!);
+
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingSchedules = false;
+      });
+
+      final allResults = <ExamResultResponseModel>[];
+
+      for (final schedule in schedules) {
+        if (schedule.id == null) continue;
+
+        final results = await _service!.getResults(scheduleId: schedule.id!);
+
+        allResults.addAll(results);
+      }
+
+      if (!mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (_) {
+          return _ExamResultsDialog(
+            exam: exam,
+            results: allResults,
+            service: _service!,
+            onChanged: () async {
+              Navigator.of(context).pop();
+              await _showExamResults(exam);
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingSchedules = false;
+      });
+
+      _showSnack(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
 
   Widget _detailHeaderCard(ExaminationModel exam) {
     return Container(
@@ -1884,7 +1943,29 @@ class _ExamsScreenState extends State<ExamsScreen> {
             ),
           ),
         ),
+
         const SizedBox(width: 4),
+
+        Tooltip(
+          message: 'Exam Results',
+          child: IconButton(
+            onPressed: () => _showExamResults(exam),
+            icon: const Icon(
+              Icons.assessment_outlined,
+              size: 18,
+              color: Color(0xFF7C3AED),
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFF5F3FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(9),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 4),
+
         Tooltip(
           message: 'Edit',
           child: IconButton(
@@ -1905,7 +1986,6 @@ class _ExamsScreenState extends State<ExamsScreen> {
       ],
     );
   }
-
   // ============================================================
   // EMPTY STATE
   // ============================================================
@@ -2335,6 +2415,564 @@ class _ExamsScreenState extends State<ExamsScreen> {
             tooltip: 'Retry',
             onPressed: _loadExaminations,
             icon: const Icon(Icons.refresh_rounded, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamResultsDialog extends StatefulWidget {
+  final ExaminationModel exam;
+  final List<ExamResultResponseModel> results;
+  final ExaminationService service;
+  final VoidCallback onChanged;
+
+  const _ExamResultsDialog({
+    required this.exam,
+    required this.results,
+    required this.service,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ExamResultsDialog> createState() => _ExamResultsDialogState();
+}
+
+class _ExamResultsDialogState extends State<_ExamResultsDialog> {
+  late List<ExamResultResponseModel> results;
+  String searchQuery = '';
+  bool isPublishingAll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    results = List.from(widget.results);
+  }
+
+  List<ExamResultResponseModel> get filteredResults {
+    final query = searchQuery.trim().toLowerCase();
+
+    if (query.isEmpty) {
+      return results;
+    }
+
+    return results.where((result) {
+      return result.studentName!.toLowerCase().contains(query) ||
+          result.studentRollNumber!.toLowerCase().contains(query) ||
+          result.grade!.toLowerCase().contains(query) ||
+          result.status!.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  int get publishedCount => results.where((e) => e.isPublished).length;
+
+  int get pendingCount => results.where((e) => !e.isPublished).length;
+
+  Future<void> _publishResult(ExamResultResponseModel result) async {
+    if (result.id == null) return;
+
+    try {
+      final updated = await widget.service.setResultPublication(
+        id: result.id!,
+        published: !result.isPublished,
+      );
+
+      if (!mounted) return;
+
+      final index = results.indexWhere((e) => e.id == updated.id);
+
+      if (index != -1) {
+        setState(() {
+          results[index] = updated;
+        });
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            updated.isPublished
+                ? 'Result published successfully.'
+                : 'Result unpublished successfully.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _publishAll() async {
+    final pending = results
+        .where((result) => !result.isPublished && result.id != null)
+        .toList();
+
+    if (pending.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('All results are already published.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isPublishingAll = true;
+    });
+
+    try {
+      for (final result in pending) {
+        await widget.service.setResultPublication(
+          id: result.id!,
+          published: true,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        results = results.map((result) {
+          if (result.id != null && !result.isPublished) {
+            return ExamResultResponseModel(
+              id: result.id,
+              examScheduleId: result.examScheduleId,
+              studentId: result.studentId,
+              studentName: result.studentName,
+              studentRollNumber: result.studentRollNumber,
+              markedByTeacherId: result.markedByTeacherId,
+              markedByTeacherName: result.markedByTeacherName,
+              marksObtained: result.marksObtained,
+              maxMarks: result.maxMarks,
+              percentage: result.percentage,
+              grade: result.grade,
+              classRank: result.classRank,
+              sectionRank: result.sectionRank,
+              remarks: result.remarks,
+              status: 'PUBLISHED',
+              isPublished: true,
+              markedAt: result.markedAt,
+              publishedAt: DateTime.now(),
+              createdAt: result.createdAt,
+              updatedAt: result.updatedAt,
+            );
+          }
+
+          return result;
+        }).toList();
+
+        isPublishingAll = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('${pending.length} result(s) published successfully.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isPublishingAll = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 10),
+      contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+      title: Row(
+        children: [
+          Container(
+            height: 44,
+            width: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F3FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.assessment_rounded,
+              color: Color(0xFF7C3AED),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.exam.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Examination Results',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 1100,
+        height: 620,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _summary(
+                    'Total',
+                    '${results.length}',
+                    Icons.people_outline,
+                    const Color(0xFF2563EB),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _summary(
+                    'Published',
+                    '$publishedCount',
+                    Icons.check_circle_outline,
+                    const Color(0xFF16A34A),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _summary(
+                    'Pending',
+                    '$pendingCount',
+                    Icons.pending_actions_outlined,
+                    const Color(0xFFD97706),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        searchQuery = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search student, roll number, grade...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: isPublishingAll ? null : _publishAll,
+                  icon: isPublishingAll
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.publish_rounded, size: 17),
+                  label: Text(
+                    isPublishingAll ? 'Publishing...' : 'Publish All',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: filteredResults.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.assessment_outlined,
+                            size: 48,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'No results found',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF374151),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            results.isEmpty
+                                ? 'No examination results have been entered yet.'
+                                : 'Try a different search.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columnSpacing: 24,
+                            headingRowColor: const WidgetStatePropertyAll(
+                              Color(0xFFF9FAFB),
+                            ),
+                            columns: const [
+                              DataColumn(label: Text('Student')),
+                              DataColumn(label: Text('Marks')),
+                              DataColumn(label: Text('%')),
+                              DataColumn(label: Text('Grade')),
+                              DataColumn(label: Text('Class Rank')),
+                              DataColumn(label: Text('Section Rank')),
+                              DataColumn(label: Text('Status')),
+                              DataColumn(label: Text('Action')),
+                            ],
+                            rows: filteredResults.map((result) {
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    SizedBox(
+                                      width: 210,
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            result.studentName ?? '-',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            'Roll: ${result.studentRollNumber}',
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: Color(0xFF6B7280),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '${result.marksObtained}/${result.maxMarks}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '${result.percentage?.toStringAsFixed(1) ?? '-'}%',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                 DataCell(_gradeBadge(result.grade ?? '-')),
+                                  DataCell(Text('${result.classRank ?? '-'}')),
+                                  DataCell(
+                                    Text('${result.sectionRank ?? '-'}'),
+                                  ),
+                                  DataCell(
+                                    _publicationBadge(result.isPublished),
+                                  ),
+                                  DataCell(
+                                    result.isPublished
+                                        ? OutlinedButton.icon(
+                                            onPressed: () =>
+                                                _publishResult(result),
+                                            icon: const Icon(
+                                              Icons.visibility_off_outlined,
+                                              size: 15,
+                                            ),
+                                            label: const Text('Unpublish'),
+                                          )
+                                        : ElevatedButton.icon(
+                                            onPressed: () =>
+                                                _publishResult(result),
+                                            icon: const Icon(
+                                              Icons.publish_rounded,
+                                              size: 15,
+                                            ),
+                                            label: const Text('Publish'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFF16A34A,
+                                              ),
+                                              foregroundColor: Colors.white,
+                                            ),
+                                          ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  Widget _summary(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.06),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: color.withOpacity(.14)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: color),
+          const SizedBox(width: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _gradeBadge(String grade) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(
+        grade,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF2563EB),
+        ),
+      ),
+    );
+  }
+
+  Widget _publicationBadge(bool published) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: published ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            published ? Icons.check_circle_outline : Icons.pending_outlined,
+            size: 13,
+            color: published
+                ? const Color(0xFF15803D)
+                : const Color(0xFFD97706),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            published ? 'Published' : 'Pending',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: published
+                  ? const Color(0xFF15803D)
+                  : const Color(0xFFD97706),
+            ),
           ),
         ],
       ),

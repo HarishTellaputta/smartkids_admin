@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -6,22 +5,20 @@ import 'package:smartkids_admin/models/parent_model.dart';
 import 'package:smartkids_admin/services/parent_service.dart';
 import 'package:smartkids_admin/features/students/student_details_screen.dart';
 import 'package:smartkids_admin/models/student_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smartkids_admin/models/student_model.dart';
+import 'package:smartkids_admin/services/student_service.dart';
 
 class ParentDetailsScreen extends StatefulWidget {
   final Parent parent;
 
-  const ParentDetailsScreen({
-    super.key,
-    required this.parent,
-  });
+  const ParentDetailsScreen({super.key, required this.parent});
 
   @override
-  State<ParentDetailsScreen> createState() =>
-      _ParentDetailsScreenState();
+  State<ParentDetailsScreen> createState() => _ParentDetailsScreenState();
 }
 
-class _ParentDetailsScreenState
-    extends State<ParentDetailsScreen> {
+class _ParentDetailsScreenState extends State<ParentDetailsScreen> {
   Parent? parent;
 
   bool isLoading = true;
@@ -53,21 +50,17 @@ class _ParentDetailsScreenState
     });
 
     try {
-      final prefs =
-          await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance();
 
       final token = prefs.getString('jwt_token');
 
       if (token == null || token.isEmpty) {
-        throw Exception(
-          'Authentication token not found',
-        );
+        throw Exception('Authentication token not found');
       }
 
       final service = ParentService(token);
 
-      final result =
-          await service.getParent(widget.parent.id!);
+      final result = await service.getParent(widget.parent.id!);
 
       if (!mounted) return;
 
@@ -80,12 +73,104 @@ class _ParentDetailsScreenState
 
       setState(() {
         isLoading = false;
-        errorMessage =
-            'Unable to load latest parent details';
+        errorMessage = 'Unable to load latest parent details';
       });
     }
   }
 
+  Future<void> _openStudentDetails(ParentStudent student) async {
+    if (student.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student ID not available'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading indicator while fetching complete student
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          return const Center(child: CircularProgressIndicator());
+        },
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null || token.isEmpty) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        throw Exception('Authentication token not found');
+      }
+
+      print('========================================');
+      print('OPENING STUDENT FROM PARENT');
+      print('STUDENT ID: ${student.id}');
+      print('========================================');
+
+      // Fetch COMPLETE student details from backend
+      final studentService = StudentService(token);
+
+      final fullStudent = await studentService.getStudent(student.id!);
+
+      print('========================================');
+      print('FULL STUDENT LOADED');
+      print('ID: ${fullStudent.id}');
+      print('NAME: ${fullStudent.name}');
+      print('ADMISSION NO: ${fullStudent.admissionNo}');
+      print('ROLL NUMBER: ${fullStudent.rollNumber}');
+      print('CLASS: ${fullStudent.className}');
+      print('SECTION: ${fullStudent.sectionName}');
+      print('PARENT ID: ${fullStudent.parentId}');
+      print('PARENT NAME: ${fullStudent.parentName}');
+      print('DOB: ${fullStudent.dateOfBirth}');
+      print('GENDER: ${fullStudent.gender}');
+      print('BLOOD GROUP: ${fullStudent.bloodGroup}');
+      print('PHONE: ${fullStudent.phone}');
+      print('EMAIL: ${fullStudent.email}');
+      print('ACADEMIC YEAR: ${fullStudent.academicYearName}');
+      print('STATUS: ${fullStudent.status}');
+      print('========================================');
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Open Student Details with COMPLETE student object
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StudentDetailsScreen(student: fullStudent),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // Close loading dialog if still open
+      Navigator.of(context).pop();
+
+      print('========================================');
+      print('ERROR OPENING STUDENT FROM PARENT');
+      print('ERROR: $e');
+      print('========================================');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Unable to load student details'),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(label: 'OK', onPressed: () {}),
+        ),
+      );
+    }
+  }
   // ============================================================
   // BUILD
   // ============================================================
@@ -100,9 +185,7 @@ class _ParentDetailsScreenState
         elevation: 0,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        iconTheme: const IconThemeData(
-          color: Color(0xFF172033),
-        ),
+        iconTheme: const IconThemeData(color: Color(0xFF172033)),
         title: const Text(
           'Parent Details',
           style: TextStyle(
@@ -115,56 +198,36 @@ class _ParentDetailsScreenState
           IconButton(
             tooltip: 'Refresh',
             onPressed: _loadParentDetails,
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
+            icon: const Icon(Icons.refresh_rounded),
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (
-            context,
-            constraints,
-          ) {
-            final isMobile =
-                constraints.maxWidth < 760;
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 760;
 
             return SingleChildScrollView(
-              padding: EdgeInsets.all(
-                isMobile ? 16 : 28,
-              ),
+              padding: EdgeInsets.all(isMobile ? 16 : 28),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 1250,
-                  ),
+                  constraints: const BoxConstraints(maxWidth: 1250),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildProfileHeader(
-                        currentParent,
-                        isMobile,
-                      ),
+                      _buildProfileHeader(currentParent, isMobile),
 
                       const SizedBox(height: 20),
 
-                      if (errorMessage != null)
-                        _buildErrorBanner(),
+                      if (errorMessage != null) _buildErrorBanner(),
 
-                      if (errorMessage != null)
-                        const SizedBox(height: 16),
+                      if (errorMessage != null) const SizedBox(height: 16),
 
                       if (isMobile)
-                        _buildMobileLayout(
-                          currentParent,
-                        )
+                        _buildMobileLayout(currentParent)
                       else
-                        _buildDesktopLayout(
-                          currentParent,
-                        ),
+                        _buildDesktopLayout(currentParent),
 
                       const SizedBox(height: 24),
 
@@ -184,29 +247,20 @@ class _ParentDetailsScreenState
   // PROFILE HEADER
   // ============================================================
 
-  Widget _buildProfileHeader(
-    Parent currentParent,
-    bool isMobile,
-  ) {
+  Widget _buildProfileHeader(Parent currentParent, bool isMobile) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(
-        isMobile ? 20 : 28,
-      ),
+      padding: EdgeInsets.all(isMobile ? 20 : 28),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF581C87),
-            Color(0xFFA21CAF),
-          ],
+          colors: [Color(0xFF581C87), Color(0xFFA21CAF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFA21CAF)
-                .withOpacity(.18),
+            color: const Color(0xFFA21CAF).withOpacity(.18),
             blurRadius: 28,
             offset: const Offset(0, 12),
           ),
@@ -241,8 +295,7 @@ class _ParentDetailsScreenState
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   currentParent.displayName,
@@ -263,8 +316,7 @@ class _ParentDetailsScreenState
                   children: [
                     _headerChip(
                       Icons.family_restroom_outlined,
-                      currentParent.relationship ??
-                          'Parent',
+                      currentParent.relationship ?? 'Parent',
                     ),
                     _headerChip(
                       Icons.school_outlined,
@@ -280,16 +332,11 @@ class _ParentDetailsScreenState
 
           if (!isMobile)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 9,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.12),
                 borderRadius: BorderRadius.circular(30),
-                border: Border.all(
-                  color: Colors.white.withOpacity(.15),
-                ),
+                border: Border.all(color: Colors.white.withOpacity(.15)),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -316,15 +363,9 @@ class _ParentDetailsScreenState
     );
   }
 
-  Widget _headerChip(
-    IconData icon,
-    String text,
-  ) {
+  Widget _headerChip(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(.11),
         borderRadius: BorderRadius.circular(9),
@@ -332,11 +373,7 @@ class _ParentDetailsScreenState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: Colors.white70,
-          ),
+          Icon(icon, size: 14, color: Colors.white70),
           const SizedBox(width: 5),
           Text(
             text,
@@ -362,16 +399,11 @@ class _ParentDetailsScreenState
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFFDE68A),
-        ),
+        border: Border.all(color: const Color(0xFFFDE68A)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: Color(0xFFD97706),
-          ),
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -383,10 +415,7 @@ class _ParentDetailsScreenState
               ),
             ),
           ),
-          TextButton(
-            onPressed: _loadParentDetails,
-            child: const Text('Retry'),
-          ),
+          TextButton(onPressed: _loadParentDetails, child: const Text('Retry')),
         ],
       ),
     );
@@ -396,34 +425,21 @@ class _ParentDetailsScreenState
   // DESKTOP
   // ============================================================
 
-  Widget _buildDesktopLayout(
-    Parent currentParent,
-  ) {
+  Widget _buildDesktopLayout(Parent currentParent) {
     return Column(
       children: [
         Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildContactInformation(
-                currentParent,
-              ),
-            ),
+            Expanded(child: _buildContactInformation(currentParent)),
             const SizedBox(width: 18),
-            Expanded(
-              child: _buildFamilyInformation(
-                currentParent,
-              ),
-            ),
+            Expanded(child: _buildFamilyInformation(currentParent)),
           ],
         ),
 
         const SizedBox(height: 18),
 
-        _buildConnectedStudents(
-          currentParent,
-        ),
+        _buildConnectedStudents(currentParent),
       ],
     );
   }
@@ -432,26 +448,18 @@ class _ParentDetailsScreenState
   // MOBILE
   // ============================================================
 
-  Widget _buildMobileLayout(
-    Parent currentParent,
-  ) {
+  Widget _buildMobileLayout(Parent currentParent) {
     return Column(
       children: [
-        _buildContactInformation(
-          currentParent,
-        ),
+        _buildContactInformation(currentParent),
 
         const SizedBox(height: 16),
 
-        _buildFamilyInformation(
-          currentParent,
-        ),
+        _buildFamilyInformation(currentParent),
 
         const SizedBox(height: 16),
 
-        _buildConnectedStudents(
-          currentParent,
-        ),
+        _buildConnectedStudents(currentParent),
       ],
     );
   }
@@ -460,9 +468,7 @@ class _ParentDetailsScreenState
   // CONTACT INFORMATION
   // ============================================================
 
-  Widget _buildContactInformation(
-    Parent currentParent,
-  ) {
+  Widget _buildContactInformation(Parent currentParent) {
     return _sectionCard(
       icon: Icons.contact_phone_outlined,
       iconBackground: const Color(0xFFF0F9FF),
@@ -474,8 +480,7 @@ class _ParentDetailsScreenState
           _detailRow(
             Icons.phone_outlined,
             'Phone',
-            currentParent.contactPhone ??
-                'Not provided',
+            currentParent.contactPhone ?? 'Not provided',
           ),
 
           _divider(),
@@ -483,8 +488,7 @@ class _ParentDetailsScreenState
           _detailRow(
             Icons.email_outlined,
             'Email',
-            currentParent.contactEmail ??
-                'Not provided',
+            currentParent.contactEmail ?? 'Not provided',
           ),
 
           _divider(),
@@ -492,8 +496,7 @@ class _ParentDetailsScreenState
           _detailRow(
             Icons.location_on_outlined,
             'Address',
-            currentParent.address ??
-                'Not provided',
+            currentParent.address ?? 'Not provided',
           ),
         ],
       ),
@@ -504,9 +507,7 @@ class _ParentDetailsScreenState
   // FAMILY INFORMATION
   // ============================================================
 
-  Widget _buildFamilyInformation(
-    Parent currentParent,
-  ) {
+  Widget _buildFamilyInformation(Parent currentParent) {
     return _sectionCard(
       icon: Icons.family_restroom_rounded,
       iconBackground: const Color(0xFFFDF4FF),
@@ -518,8 +519,7 @@ class _ParentDetailsScreenState
           _detailRow(
             Icons.badge_outlined,
             'Relationship',
-            currentParent.relationship ??
-                'Not provided',
+            currentParent.relationship ?? 'Not provided',
           ),
 
           _divider(),
@@ -527,8 +527,7 @@ class _ParentDetailsScreenState
           _familyPersonRow(
             icon: Icons.person_outline_rounded,
             title: 'Father',
-            value: currentParent.fatherName ??
-                'Not provided',
+            value: currentParent.fatherName ?? 'Not provided',
           ),
 
           _divider(),
@@ -536,14 +535,11 @@ class _ParentDetailsScreenState
           _familyPersonRow(
             icon: Icons.person_outline_rounded,
             title: 'Mother',
-            value: currentParent.motherName ??
-                'Not provided',
+            value: currentParent.motherName ?? 'Not provided',
           ),
 
           if (currentParent.guardianName != null &&
-              currentParent.guardianName!
-                  .trim()
-                  .isNotEmpty) ...[
+              currentParent.guardianName!.trim().isNotEmpty) ...[
             _divider(),
             _familyPersonRow(
               icon: Icons.supervisor_account_outlined,
@@ -560,33 +556,24 @@ class _ParentDetailsScreenState
   // CONNECTED STUDENTS
   // ============================================================
 
-  Widget _buildConnectedStudents(
-    Parent currentParent,
-  ) {
+  Widget _buildConnectedStudents(Parent currentParent) {
     return _sectionCard(
       icon: Icons.groups_rounded,
       iconBackground: const Color(0xFFEFF6FF),
       iconColor: const Color(0xFF2563EB),
       title: 'Connected Students',
-      subtitle:
-          'Students linked to this parent account',
+      subtitle: 'Students linked to this parent account',
       child: Column(
         children: [
           if (isLoading)
             const Padding(
-              padding: EdgeInsets.symmetric(
-                vertical: 28,
-              ),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: CircularProgressIndicator()),
             )
           else if (currentParent.students.isEmpty)
             _emptyStudents()
           else
-            ...currentParent.students.map(
-              _studentButton,
-            ),
+            ...currentParent.students.map(_studentButton),
         ],
       ),
     );
@@ -596,46 +583,25 @@ class _ParentDetailsScreenState
   // STUDENT BUTTON
   // ============================================================
 
-  Widget _studentButton(
-    ParentStudent student,
-  ) {
+  Widget _studentButton(ParentStudent student) {
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 10,
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            if (student.id == null) return;
 
-            final studentModel =Student(
-              id: student.id,
-              name: student.name,
-              admissionNo: student.admissionNo,
-              sectionName: student.sectionName,
-            );
+          // IMPORTANT:
+          // Don't create a partial Student object here.
+          // Fetch the complete student from backend first.
+          onTap: () => _openStudentDetails(student),
 
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    StudentDetailsScreen(
-                  student: studentModel,
-                ),
-              ),
-            );
-          },
           child: Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFE2E8F0),
-              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
               children: [
@@ -643,17 +609,12 @@ class _ParentDetailsScreenState
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    gradient:
-                        const LinearGradient(
-                      colors: [
-                        Color(0xFFEFF6FF),
-                        Color(0xFFDBEAFE),
-                      ],
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius:
-                        BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(
                     Icons.school_rounded,
@@ -666,15 +627,12 @@ class _ParentDetailsScreenState
 
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        student.name ??
-                            'Unnamed Student',
+                        student.name ?? 'Unnamed Student',
                         maxLines: 1,
-                        overflow:
-                            TextOverflow.ellipsis,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
@@ -688,14 +646,13 @@ class _ParentDetailsScreenState
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          if (student.admissionNo !=
-                              null)
+                          if (student.admissionNo != null)
                             _studentMeta(
                               Icons.badge_outlined,
                               student.admissionNo!,
                             ),
-                          if (student.sectionName !=
-                              null)
+
+                          if (student.sectionName != null)
                             _studentMeta(
                               Icons.class_outlined,
                               student.sectionName!,
@@ -713,13 +670,8 @@ class _ParentDetailsScreenState
                   height: 38,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius:
-                        BorderRadius.circular(11),
-                    border: Border.all(
-                      color: const Color(
-                        0xFFE2E8F0,
-                      ),
-                    ),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: const Icon(
                     Icons.arrow_forward_ios_rounded,
@@ -735,18 +687,11 @@ class _ParentDetailsScreenState
     );
   }
 
-  Widget _studentMeta(
-    IconData icon,
-    String text,
-  ) {
+  Widget _studentMeta(IconData icon, String text) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 12,
-          color: const Color(0xFF94A3B8),
-        ),
+        Icon(icon, size: 12, color: const Color(0xFF94A3B8)),
         const SizedBox(width: 4),
         Text(
           text,
@@ -771,9 +716,7 @@ class _ParentDetailsScreenState
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         children: [
@@ -782,8 +725,7 @@ class _ParentDetailsScreenState
             height: 58,
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
-              borderRadius:
-                  BorderRadius.circular(17),
+              borderRadius: BorderRadius.circular(17),
             ),
             child: const Icon(
               Icons.school_outlined,
@@ -809,10 +751,7 @@ class _ParentDetailsScreenState
             'No students are currently connected '
             'to this parent account.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              color: Color(0xFF94A3B8),
-            ),
+            style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
           ),
         ],
       ),
@@ -837,21 +776,17 @@ class _ParentDetailsScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
-        ),
+        border: Border.all(color: const Color(0xFFE7EBF2)),
         boxShadow: [
           BoxShadow(
-            color:
-                Colors.black.withOpacity(.035),
+            color: Colors.black.withOpacity(.035),
             blurRadius: 18,
             offset: const Offset(0, 7),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -860,22 +795,16 @@ class _ParentDetailsScreenState
                 height: 43,
                 decoration: BoxDecoration(
                   color: iconBackground,
-                  borderRadius:
-                      BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 21,
-                ),
+                child: Icon(icon, color: iconColor, size: 21),
               ),
 
               const SizedBox(width: 12),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
@@ -912,36 +841,25 @@ class _ParentDetailsScreenState
   // DETAIL ROW
   // ============================================================
 
-  Widget _detailRow(
-    IconData icon,
-    String title,
-    String value,
-  ) {
+  Widget _detailRow(IconData icon, String title, String value) {
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAFC),
-            borderRadius:
-                BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: const Color(0xFF64748B),
-          ),
+          child: Icon(icon, size: 18, color: const Color(0xFF64748B)),
         ),
 
         const SizedBox(width: 11),
 
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
@@ -985,22 +903,16 @@ class _ParentDetailsScreenState
           height: 36,
           decoration: BoxDecoration(
             color: const Color(0xFFFDF4FF),
-            borderRadius:
-                BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: const Color(0xFFA21CAF),
-          ),
+          child: Icon(icon, size: 18, color: const Color(0xFFA21CAF)),
         ),
 
         const SizedBox(width: 11),
 
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
@@ -1034,13 +946,8 @@ class _ParentDetailsScreenState
 
   Widget _divider() {
     return const Padding(
-      padding: EdgeInsets.symmetric(
-        vertical: 13,
-      ),
-      child: Divider(
-        height: 1,
-        color: Color(0xFFF1F5F9),
-      ),
+      padding: EdgeInsets.symmetric(vertical: 13),
+      child: Divider(height: 1, color: Color(0xFFF1F5F9)),
     );
   }
 
@@ -1051,24 +958,16 @@ class _ParentDetailsScreenState
   Widget _buildFooter() {
     return Row(
       children: [
-        const Icon(
-          Icons.info_outline,
-          size: 15,
-          color: Color(0xFF94A3B8),
-        ),
+        const Icon(Icons.info_outline, size: 15, color: Color(0xFF94A3B8)),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             'Parent information is based on the '
             'latest available school records.',
-            style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xFF94A3B8),
-            ),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
           ),
         ),
       ],
     );
   }
 }
-

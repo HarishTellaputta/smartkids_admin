@@ -421,6 +421,10 @@ class _ApplyFeeStructureScreenState extends State<ApplyFeeStructureScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ==========================================================
+          // HEADER
+          // ==========================================================
+
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
             child: Row(
@@ -437,6 +441,7 @@ class _ApplyFeeStructureScreenState extends State<ApplyFeeStructureScreen> {
                     color: Color(0xFF2563EB),
                   ),
                 ),
+
                 const SizedBox(width: 12),
 
                 const Expanded(
@@ -487,225 +492,300 @@ class _ApplyFeeStructureScreenState extends State<ApplyFeeStructureScreen> {
 
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-          LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                    child: DataTable(
-                      headingRowHeight: 50,
-                      dataRowMinHeight: 68,
-                      dataRowMaxHeight: 80,
-                      columnSpacing: 32,
-                      horizontalMargin: 22,
-                      headingTextStyle: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF64748B),
-                      ),
-                      columns: const [
-                        DataColumn(label: Text('FEE')),
-                        DataColumn(label: Text('CLASS')),
-                        DataColumn(label: Text('AMOUNT')),
-                        DataColumn(label: Text('DUE DATE')),
-                        DataColumn(label: Text('STATUS')),
-                        DataColumn(label: Text('ACTION')),
-                      ],
-                      rows: feeStructures.map((item) {
-                        final structure = Map<String, dynamic>.from(item);
+          // ==========================================================
+          // TABLE
+          // ==========================================================
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                        ),
+                        child: DataTable(
+                          headingRowHeight: 50,
+                          dataRowMinHeight: 64,
+                          dataRowMaxHeight: 76,
+                          columnSpacing: 32,
+                          horizontalMargin: 22,
 
-                        final id = int.tryParse(
-                          structure['id']?.toString() ?? '',
-                        );
+                          headingTextStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF64748B),
+                          ),
 
-                        final name = structure['name']?.toString() ?? '-';
+                          dataTextStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF334155),
+                          ),
 
-                        final className =
-                            structure['className']?.toString() ??
-                            structure['class_name']?.toString() ??
-                            structure['classId']?.toString() ??
-                            '-';
-
-                        final amount = _formatCurrency(structure['amount']);
-
-                        final dueDate = _formatDate(structure['dueDate']);
-
-                        final status =
-                            structure['status']?.toString() ?? 'ACTIVE';
-
-                        final applied = structure['applied'] == true;
-
-                        final isApplying = applyingId == id;
-
-                        final isEnabling = enablingId == id;
-
-                        return DataRow(
-                          cells: [
-                            // FEE
-                            DataCell(
-                              Text(
-                                name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                            ),
-
-                            // CLASS
-                            DataCell(Text(className)),
-
-                            // AMOUNT
-                            DataCell(
-                              Text(
-                                amount,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-
-                            // DUE DATE
-                            DataCell(Text(dueDate)),
-
-                            // STATUS
-                            DataCell(_statusChip(status)),
-
-                            // ACTION
-                            DataCell(
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // =========================
-                                  // APPLIED
-                                  // =========================
-                                  if (applied)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 11,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFDCFCE7),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.check_circle_rounded,
-                                            size: 17,
-                                            color: Color(0xFF15803D),
-                                          ),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'Applied',
-                                            style: TextStyle(
-                                              color: Color(0xFF15803D),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  // =========================
-                                  // NOT APPLIED
-                                  // =========================
-                                  else
-                                    ElevatedButton.icon(
-                                      onPressed: id == null || isApplying
-                                          ? null
-                                          : () {
-                                              _confirmApply(structure);
-                                            },
-                                      icon: isApplying
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.play_arrow_rounded,
-                                              size: 17,
-                                            ),
-                                      label: Text(
-                                        isApplying ? 'Applying...' : 'Apply',
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF2563EB,
-                                        ),
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                  // =========================
-                                  // ENABLE BUTTON
-                                  // =========================
-                                  if (applied) ...[
-                                    const SizedBox(width: 8),
-
-                                    OutlinedButton.icon(
-                                      onPressed: id == null || isEnabling
-                                          ? null
-                                          : () {
-                                              _confirmEnable(id, name);
-                                            },
-                                      icon: isEnabling
-                                          ? const SizedBox(
-                                              width: 15,
-                                              height: 15,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.lock_open_rounded,
-                                              size: 16,
-                                            ),
-                                      label: Text(
-                                        isEnabling ? 'Enabling...' : 'Enable',
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(
-                                          0xFF059669,
-                                        ),
-                                        side: const BorderSide(
-                                          color: Color(0xFF86EFAC),
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
+                          columns: const [
+                            DataColumn(label: Text('FEE')),
+                            DataColumn(label: Text('CLASS')),
+                            DataColumn(label: Text('AMOUNT')),
+                            DataColumn(label: Text('DUE DATE')),
+                            DataColumn(label: Text('STATUS')),
+                            DataColumn(label: Text('ACTION')),
                           ],
-                        );
-                      }).toList(),
+
+                          rows: feeStructures.map((item) {
+                            final structure = Map<String, dynamic>.from(item);
+
+                            final id = int.tryParse(
+                              structure['id']?.toString() ?? '',
+                            );
+
+                            final name = structure['name']?.toString() ?? '-';
+
+                            final className =
+                                structure['className']?.toString() ??
+                                structure['class_name']?.toString() ??
+                                structure['classId']?.toString() ??
+                                '-';
+
+                            final amount = _formatCurrency(structure['amount']);
+
+                            final dueDate = _formatDate(structure['dueDate']);
+
+                            final status =
+                                structure['status']?.toString() ?? 'ACTIVE';
+
+                            final applied = structure['applied'] == true;
+
+                            final isApplying = applyingId == id;
+
+                            final isEnabling = enablingId == id;
+
+                            return DataRow(
+                              cells: [
+                                // ==================================================
+                                // FEE
+                                // ==================================================
+
+                                DataCell(
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 190,
+                                    ),
+                                    child: Text(
+                                      name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                // ==================================================
+                                // CLASS
+                                // ==================================================
+                                DataCell(
+                                  Text(
+                                    className,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+
+                                // ==================================================
+                                // AMOUNT
+                                // ==================================================
+                                DataCell(
+                                  Text(
+                                    amount,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+
+                                // ==================================================
+                                // DUE DATE
+                                // ==================================================
+                                DataCell(
+                                  Text(
+                                    dueDate,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+
+                                // ==================================================
+                                // STATUS
+                                // ==================================================
+                                DataCell(_statusChip(status)),
+
+                                // ==================================================
+                                // ACTION
+                                // ==================================================
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // ==========================================
+                                      // APPLIED
+                                      // ==========================================
+
+                                      if (applied)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 11,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFDCFCE7),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.check_circle_rounded,
+                                                size: 17,
+                                                color: Color(0xFF15803D),
+                                              ),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'Applied',
+                                                style: TextStyle(
+                                                  color: Color(0xFF15803D),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      // ==========================================
+                                      // NOT APPLIED
+                                      // ==========================================
+                                      else
+                                        ElevatedButton.icon(
+                                          onPressed: id == null || isApplying
+                                              ? null
+                                              : () {
+                                                  _confirmApply(structure);
+                                                },
+                                          icon: isApplying
+                                              ? const SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Colors.white,
+                                                      ),
+                                                )
+                                              : const Icon(
+                                                  Icons.play_arrow_rounded,
+                                                  size: 17,
+                                                ),
+                                          label: Text(
+                                            isApplying
+                                                ? 'Applying...'
+                                                : 'Apply',
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(
+                                              0xFF2563EB,
+                                            ),
+                                            foregroundColor: Colors.white,
+                                            disabledBackgroundColor:
+                                                const Color(0xFF93C5FD),
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 13,
+                                              vertical: 10,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        ),
+
+                                      // ==========================================
+                                      // ENABLE
+                                      // ==========================================
+                                      if (applied) ...[
+                                        const SizedBox(width: 8),
+
+                                        OutlinedButton.icon(
+                                          onPressed: id == null || isEnabling
+                                              ? null
+                                              : () {
+                                                  _confirmEnable(id, name);
+                                                },
+                                          icon: isEnabling
+                                              ? const SizedBox(
+                                                  width: 15,
+                                                  height: 15,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                )
+                                              : const Icon(
+                                                  Icons.lock_open_rounded,
+                                                  size: 16,
+                                                ),
+                                          label: Text(
+                                            isEnabling
+                                                ? 'Enabling...'
+                                                : 'Enable',
+                                          ),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: const Color(
+                                              0xFF059669,
+                                            ),
+                                            disabledForegroundColor:
+                                                const Color(0xFF86EFAC),
+                                            side: const BorderSide(
+                                              color: Color(0xFF86EFAC),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 10,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),

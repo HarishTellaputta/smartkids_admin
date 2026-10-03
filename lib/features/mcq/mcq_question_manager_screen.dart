@@ -38,7 +38,7 @@ class McqQuestionManagerScreen extends StatefulWidget {
 }
 
 class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
-  ApiClient apiClient= ApiClient();
+  ApiClient apiClient = ApiClient();
   ClassService? _classService;
   SectionService? _sectionService;
   SubjectService? _subjectService;
@@ -947,9 +947,7 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
         debugPrint('IMPORT: User cancelled file selection.');
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No Excel file selected.')),
-          );
+          _showSnackBar('No Excel file selected.');
         }
 
         return;
@@ -981,14 +979,15 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '$imported MCQ question${imported == 1 ? '' : 's'} imported successfully.',
-          ),
-          backgroundColor: Colors.green,
-        ),
+      // ------------------------------------------------------------
+      // PREMIUM SUCCESS / COMPLETED DIALOG
+      // ------------------------------------------------------------
+      await _showImportSuccessDialog(
+        importedCount: imported,
+        fileName: file.name,
       );
+
+      if (!mounted) return;
 
       debugPrint('IMPORT STEP 6: Refreshing question list...');
 
@@ -1006,12 +1005,12 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Excel import failed: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      final message = e.toString().replaceFirst('Exception: ', '').trim();
+
+      // ------------------------------------------------------------
+      // PREMIUM FAILURE DIALOG
+      // ------------------------------------------------------------
+      await _showImportFailureDialog(message);
     } finally {
       if (mounted) {
         setState(() {
@@ -1021,82 +1020,454 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
     }
   }
 
-  void _showExcelTemplate() {
-    showDialog(
+  Future<void> _showImportSuccessDialog({
+    required int importedCount,
+    required String fileName,
+  }) async {
+    final bool importedAny = importedCount > 0;
+
+    final Color accentColor = importedAny
+        ? const Color(0xFF16A34A)
+        : const Color(0xFFF59E0B);
+
+    final Color lightColor = importedAny
+        ? const Color(0xFFF0FDF4)
+        : const Color(0xFFFFFBEB);
+
+    final IconData icon = importedAny
+        ? Icons.check_circle_rounded
+        : Icons.info_rounded;
+
+    final String title = importedAny ? 'Import Successful' : 'Import Completed';
+
+    final String subtitle = importedAny
+        ? 'Your MCQ questions have been imported successfully.'
+        : 'The Excel file was processed, but no new questions were imported.';
+
+    await showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.table_chart),
-              const SizedBox(width: 10),
-              const Expanded(child: Text('Excel Format')),
-            ],
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
           ),
-          content: SizedBox(
-            width: 700,
-            child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.14),
+                    blurRadius: 35,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Your Excel file should contain these columns:'),
-                  const SizedBox(height: 16),
+                  // =====================================================
+                  // HEADER
+                  // =====================================================
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
+                      color: lightColor,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
                     ),
-                    child: const SelectableText(
-                      'Subject | Class | Question | Option A | '
-                      'Option B | Option C | Option D | '
-                      'Correct Answer | Marks | Explanation | '
-                      'Question Date',
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(icon, size: 38, color: accentColor),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          subtitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Example:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(10),
+
+                  // =====================================================
+                  // CONTENT
+                  // =====================================================
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 22, 24, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Import Summary',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // File
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.description_outlined,
+                                  color: Color(0xFF2563EB),
+                                  size: 21,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Excel File',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      fileName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1F2937),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Imported count
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 15,
+                          ),
+                          decoration: BoxDecoration(
+                            color: lightColor,
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(
+                              color: accentColor.withOpacity(0.20),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: accentColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(11),
+                                ),
+                                child: Icon(
+                                  importedAny
+                                      ? Icons.quiz_outlined
+                                      : Icons.info_outline_rounded,
+                                  color: accentColor,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 13),
+                              const Expanded(
+                                child: Text(
+                                  'Questions Imported',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF475569),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                importedCount.toString(),
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: accentColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    child: const SelectableText(
-                      'Mathematics | Class 10 | '
-                      'What is 2 + 2? | 3 | 4 | 5 | 6 | '
-                      'B | 1 | 2 + 2 = 4 | 11-09-2026',
-                    ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Correct Answer must be A, B, C or D.\n'
-                    'Question Date supports dd-MM-yyyy, '
-                    'dd/MM/yyyy and yyyy-MM-dd.',
+
+                  // =====================================================
+                  // FOOTER
+                  // =====================================================
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 14, 24, 24),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Done',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
         );
       },
     );
   }
 
+  Future<void> _showImportFailureDialog(String message) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.14),
+                    blurRadius: 35,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // =====================================================
+                  // HEADER
+                  // =====================================================
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 25),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF5F5),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.error_outline_rounded,
+                            size: 39,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Import Failed',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        const Text(
+                          'We could not import the selected Excel file.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // =====================================================
+                  // ERROR MESSAGE
+                  // =====================================================
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7F7),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEE2E2),
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Color(0xFFDC2626),
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Error Details',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF991B1B),
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                SelectableText(
+                                  message.isEmpty
+                                      ? 'An unexpected error occurred during Excel import.'
+                                      : message,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.5,
+                                    color: Color(0xFF4B5563),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // =====================================================
+                  // ACTION
+                  // =====================================================
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 14, 24, 24),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
   // ============================================================
   // BUILD
   // ============================================================
@@ -1220,23 +1591,6 @@ class _McqQuestionManagerScreenState extends State<McqQuestionManagerScreen> {
           spacing: 9,
           runSpacing: 9,
           children: [
-            OutlinedButton.icon(
-              onPressed: _showExcelTemplate,
-              icon: const Icon(Icons.description_outlined, size: 17),
-              label: const Text('Excel Format'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF475569),
-                side: const BorderSide(color: Color(0xFFD7DEE8)),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 15,
-                  vertical: 13,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(11),
-                ),
-              ),
-            ),
-
             OutlinedButton.icon(
               onPressed: _importing ? null : _importExcel,
               icon: _importing

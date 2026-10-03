@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-
+import 'dart:typed_data';
 import 'package:smartkids_admin/core/network/api_client.dart';
 import '../models/class_model.dart';
 import '../models/class_subject_model.dart';
@@ -16,9 +16,7 @@ class ClassService {
 
   Future<List<SchoolClass>> getClasses() async {
     try {
-      final response = await apiClient.dio.get(
-        '/api/v1/classes',
-      );
+      final response = await apiClient.dio.get('/api/v1/classes');
 
       return _parseClassList(response.data);
     } on DioException catch (e) {
@@ -35,13 +33,9 @@ class ClassService {
 
   Future<SchoolClass> getClassById(int id) async {
     try {
-      final response = await apiClient.dio.get(
-        '/api/v1/classes/$id',
-      );
+      final response = await apiClient.dio.get('/api/v1/classes/$id');
 
-      return SchoolClass.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return SchoolClass.fromJson(Map<String, dynamic>.from(response.data));
     } on DioException catch (e) {
       throw Exception(_handleDioError(e));
     } catch (e) {
@@ -54,9 +48,7 @@ class ClassService {
   // GET /api/v1/classes/school/{schoolId}
   // ============================================================
 
-  Future<List<SchoolClass>> getClassesBySchool(
-    int schoolId,
-  ) async {
+  Future<List<SchoolClass>> getClassesBySchool(int schoolId) async {
     try {
       final response = await apiClient.dio.get(
         '/api/v1/classes/school/$schoolId',
@@ -66,9 +58,7 @@ class ClassService {
     } on DioException catch (e) {
       throw Exception(_handleDioError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to load school classes: $e',
-      );
+      throw Exception('Failed to load school classes: $e');
     }
   }
 
@@ -95,20 +85,13 @@ class ClassService {
         'description': description,
       };
 
-      final response = await apiClient.dio.post(
-        '/api/v1/classes',
-        data: body,
-      );
+      final response = await apiClient.dio.post('/api/v1/classes', data: body);
 
-      return SchoolClass.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return SchoolClass.fromJson(Map<String, dynamic>.from(response.data));
     } on DioException catch (e) {
       throw Exception(_handleDioError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to create class: $e',
-      );
+      throw Exception('Failed to create class: $e');
     }
   }
 
@@ -141,15 +124,11 @@ class ClassService {
         data: body,
       );
 
-      return SchoolClass.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
+      return SchoolClass.fromJson(Map<String, dynamic>.from(response.data));
     } on DioException catch (e) {
       throw Exception(_handleDioError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to update class: $e',
-      );
+      throw Exception('Failed to update class: $e');
     }
   }
 
@@ -160,15 +139,11 @@ class ClassService {
 
   Future<void> deleteClass(int id) async {
     try {
-      await apiClient.dio.delete(
-        '/api/v1/classes/$id',
-      );
+      await apiClient.dio.delete('/api/v1/classes/$id');
     } on DioException catch (e) {
       throw Exception(_handleDioError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to delete class: $e',
-      );
+      throw Exception('Failed to delete class: $e');
     }
   }
 
@@ -195,13 +170,9 @@ class ClassService {
         Map<String, dynamic>.from(response.data),
       );
     } on DioException catch (e) {
-      throw Exception(
-        _handleClassSubjectError(e),
-      );
+      throw Exception(_handleClassSubjectError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to assign subject to class: $e',
-      );
+      throw Exception('Failed to assign subject to class: $e');
     }
   }
 
@@ -211,33 +182,24 @@ class ClassService {
   // GET /classes/{classId}/subjects
   // ============================================================
 
-  Future<List<ClassSubjectModel>> getSubjectsByClass(
-    int classId,
-  ) async {
+  Future<List<ClassSubjectModel>> getSubjectsByClass(int classId) async {
     try {
-      final response = await apiClient.dio.get(
-        '/classes/$classId/subjects',
-      );
+      final response = await apiClient.dio.get('/classes/$classId/subjects');
 
       if (response.data is List) {
         return (response.data as List)
             .map(
-              (json) => ClassSubjectModel.fromJson(
-                Map<String, dynamic>.from(json),
-              ),
+              (json) =>
+                  ClassSubjectModel.fromJson(Map<String, dynamic>.from(json)),
             )
             .toList();
       }
 
       return [];
     } on DioException catch (e) {
-      throw Exception(
-        _handleClassSubjectError(e),
-      );
+      throw Exception(_handleClassSubjectError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to load class subjects: $e',
-      );
+      throw Exception('Failed to load class subjects: $e');
     }
   }
 
@@ -252,17 +214,11 @@ class ClassService {
     required int subjectId,
   }) async {
     try {
-      await apiClient.dio.delete(
-        '/classes/$classId/subjects/$subjectId',
-      );
+      await apiClient.dio.delete('/classes/$classId/subjects/$subjectId');
     } on DioException catch (e) {
-      throw Exception(
-        _handleClassSubjectError(e),
-      );
+      throw Exception(_handleClassSubjectError(e));
     } catch (e) {
-      throw Exception(
-        'Failed to remove subject from class: $e',
-      );
+      throw Exception('Failed to remove subject from class: $e');
     }
   }
 
@@ -273,22 +229,13 @@ class ClassService {
   List<SchoolClass> _parseClassList(dynamic data) {
     if (data is List) {
       return data
-          .map(
-            (json) => SchoolClass.fromJson(
-              Map<String, dynamic>.from(json),
-            ),
-          )
+          .map((json) => SchoolClass.fromJson(Map<String, dynamic>.from(json)))
           .toList();
     }
 
-    if (data is Map<String, dynamic> &&
-        data['content'] is List) {
+    if (data is Map<String, dynamic> && data['content'] is List) {
       return (data['content'] as List)
-          .map(
-            (json) => SchoolClass.fromJson(
-              Map<String, dynamic>.from(json),
-            ),
-          )
+          .map((json) => SchoolClass.fromJson(Map<String, dynamic>.from(json)))
           .toList();
     }
 
@@ -329,8 +276,7 @@ class ClassService {
         return 'Server error. Please try again later.';
       }
 
-      if (response.data is Map &&
-          response.data['message'] != null) {
+      if (response.data is Map && response.data['message'] != null) {
         return response.data['message'].toString();
       }
     }
@@ -366,8 +312,7 @@ class ClassService {
     if (response != null) {
       final statusCode = response.statusCode;
 
-      if (response.data is Map &&
-          response.data['message'] != null) {
+      if (response.data is Map && response.data['message'] != null) {
         return response.data['message'].toString();
       }
 
@@ -414,6 +359,47 @@ class ClassService {
 
       default:
         return error.message ?? 'Something went wrong.';
+    }
+  }
+
+  // ============================================================
+  // IMPORT CLASSES EXCEL
+  // POST /api/v1/classes/import?schoolId={schoolId}
+  // ============================================================
+
+  Future<Map<String, dynamic>> importClassesExcel({
+    required int schoolId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+      });
+
+      final response = await apiClient.dio.post(
+        '/api/v1/classes/import',
+        queryParameters: {'schoolId': schoolId},
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      if (response.data is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(response.data);
+      }
+
+      return {
+        'totalRows': 0,
+        'createdCount': 0,
+        'updatedCount': 0,
+        'failedCount': 0,
+        'errors': <String>[],
+        'message': 'Classes imported successfully.',
+      };
+    } on DioException catch (e) {
+      throw Exception(_handleDioError(e));
+    } catch (e) {
+      throw Exception('Failed to import classes Excel: $e');
     }
   }
 }

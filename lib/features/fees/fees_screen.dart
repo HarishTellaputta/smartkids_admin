@@ -225,7 +225,7 @@ class _FeesScreenState extends State<FeesScreen> {
           sortBy: 'id',
           sortDirection: 'asc',
         ),
-      //  _feeService.getFeeStructures(),
+        //  _feeService.getFeeStructures(),
       ]);
 
       if (!mounted) return;
@@ -476,82 +476,386 @@ class _FeesScreenState extends State<FeesScreen> {
   Future<void> _showImportResultDialog(
     FeeStructureImportResultModel result,
   ) async {
+    final bool hasErrors = result.errors > 0;
+    final bool hasWarnings = result.skipped > 0;
+
+    final Color accentColor = hasErrors
+        ? const Color(0xFFE53935)
+        : hasWarnings
+        ? const Color(0xFFF59E0B)
+        : const Color(0xFF16A34A);
+
+    final IconData statusIcon = hasErrors
+        ? Icons.warning_amber_rounded
+        : hasWarnings
+        ? Icons.info_outline_rounded
+        : Icons.check_circle_rounded;
+
+    final String title = hasErrors
+        ? 'Import Completed with Errors'
+        : hasWarnings
+        ? 'Import Completed'
+        : 'Import Successful';
+
     await showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.file_upload_outlined, color: Colors.green),
-              SizedBox(width: 10),
-              Text('Import Completed'),
-            ],
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
           ),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 580, maxHeight: 700),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 35,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _importResultRow('Total Rows', result.totalRows.toString()),
-                  _importResultRow(
-                    'Created',
-                    result.created.toString(),
-                    valueColor: Colors.green,
-                  ),
-                  _importResultRow(
-                    'Skipped',
-                    result.skipped.toString(),
-                    valueColor: Colors.orange,
-                  ),
-                  _importResultRow(
-                    'Errors',
-                    result.errors.toString(),
-                    valueColor: Colors.red,
-                  ),
-
-                  if (result.errorDetails.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Details',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  // =========================================================
+                  // HEADER
+                  // =========================================================
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(24, 24, 20, 22),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          accentColor.withOpacity(0.12),
+                          accentColor.withOpacity(0.04),
+                        ],
+                      ),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
                       ),
                     ),
-                    const SizedBox(height: 10),
-
-                    ...result.errorDetails.map(
-                      (error) => Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.red.withOpacity(0.2),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(statusIcon, color: accentColor, size: 30),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF172033),
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                hasErrors
+                                    ? 'Some fee structures could not be imported.'
+                                    : hasWarnings
+                                    ? 'The Excel file was processed successfully with some skipped rows.'
+                                    : 'All fee structures were imported successfully.',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF697386),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Text(
-                          'Row ${error.row}: ${error.message}',
-                          style: const TextStyle(color: Colors.red),
+                      ],
+                    ),
+                  ),
+
+                  // =========================================================
+                  // CONTENT
+                  // =========================================================
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 22, 24, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Import Summary',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF202938),
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // =================================================
+                          // STAT CARDS
+                          // =================================================
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final double cardWidth =
+                                  (constraints.maxWidth - 12) / 2;
+
+                              return Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  _feeImportStatCard(
+                                    width: cardWidth,
+                                    label: 'Total Rows',
+                                    value: result.totalRows.toString(),
+                                    icon: Icons.table_rows_rounded,
+                                    color: const Color(0xFF2563EB),
+                                  ),
+                                  _feeImportStatCard(
+                                    width: cardWidth,
+                                    label: 'Created',
+                                    value: result.created.toString(),
+                                    icon: Icons.add_circle_outline_rounded,
+                                    color: const Color(0xFF16A34A),
+                                  ),
+                                  _feeImportStatCard(
+                                    width: cardWidth,
+                                    label: 'Skipped',
+                                    value: result.skipped.toString(),
+                                    icon: Icons.remove_circle_outline_rounded,
+                                    color: const Color(0xFFF59E0B),
+                                  ),
+                                  _feeImportStatCard(
+                                    width: cardWidth,
+                                    label: 'Errors',
+                                    value: result.errors.toString(),
+                                    icon: Icons.error_outline_rounded,
+                                    color: const Color(0xFFE53935),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+
+                          // =================================================
+                          // ERROR DETAILS
+                          // =================================================
+                          if (result.errorDetails.isNotEmpty) ...[
+                            const SizedBox(height: 24),
+
+                            Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFEBEE),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.list_alt_rounded,
+                                    size: 19,
+                                    color: Color(0xFFE53935),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(
+                                  'Error Details',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF202938),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF7F7),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(0xFFFECACA),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  ...result.errorDetails.map(
+                                    (error) => Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: const Color(0xFFFEE2E2),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFFEBEE),
+                                              borderRadius:
+                                                  BorderRadius.circular(7),
+                                            ),
+                                            child: Text(
+                                              'Row ${error.row}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFFE53935),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              error.message,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                height: 1.4,
+                                                color: Color(0xFF4B5563),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // =========================================================
+                  // FOOTER
+                  // =========================================================
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 14, 24, 22),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Done',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
         );
       },
+    );
+  }
+
+  Widget _feeImportStatCard({
+    required double width,
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF7A8494),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:flutter/services.dart';
 import 'package:smartkids_admin/models/academic_year_model.dart';
 import 'package:smartkids_admin/models/parent_model.dart';
 import 'package:smartkids_admin/models/section_model.dart';
@@ -391,45 +391,130 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     String? hint,
     TextInputType? keyboardType,
     bool required = false,
+    bool isPhone = false,
+    bool isEmail = false,
   }) {
+    final isRequired = required || isPhone || isEmail;
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: TextInputAction.next,
       enabled: !isSaving,
+      maxLength: isPhone ? 10 : null,
+      inputFormatters: isPhone
+          ? [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ]
+          : null,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: isRequired ? '$label *' : label,
         hintText: hint,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Theme.of(context).primaryColor,
-            width: 1.5,
+        counterText: isPhone ? '' : null,
+
+        prefixIcon: Container(
+          margin: const EdgeInsets.all(7),
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(10),
           ),
+          child: Icon(icon, size: 20, color: Colors.blue.shade700),
+        ),
+
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
+
+        labelStyle: TextStyle(
+          color: Colors.grey.shade600,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+
+        floatingLabelStyle: TextStyle(
+          color: Colors.blue.shade700,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.blue.shade500, width: 1.5),
+        ),
+
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
+
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
         ),
       ),
-      validator: required
-          ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return '$label is required';
-              }
 
-              return null;
-            }
-          : null,
+      validator: (value) {
+        final text = value?.trim() ?? '';
+
+        // Required validation
+        if (isRequired && text.isEmpty) {
+          return '$label is required';
+        }
+
+        // Phone validation
+        if (isPhone) {
+          if (!RegExp(r'^[0-9]{10}$').hasMatch(text)) {
+            return 'Enter a valid 10-digit mobile number';
+          }
+
+          if (RegExp(r'^(\d)\1{9}$').hasMatch(text)) {
+            return 'Enter a valid mobile number';
+          }
+
+          if (!RegExp(r'^[6-9]').hasMatch(text)) {
+            return 'Mobile number must start with 6, 7, 8 or 9';
+          }
+        }
+
+        // Email validation
+        if (isEmail) {
+          final emailRegex = RegExp(
+            r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@'
+            r'[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}'
+            r'[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]'
+            r'(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$',
+          );
+
+          if (!emailRegex.hasMatch(text)) {
+            return 'Enter a valid email address';
+          }
+        }
+
+        return null;
+      },
     );
   }
 
   // ============================================================
   // DATE FIELD
   // ============================================================
-
   Widget _dateField({
     required TextEditingController controller,
     required String label,
@@ -441,30 +526,80 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       readOnly: true,
       enabled: !isSaving,
       decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        suffixIcon: const Icon(Icons.calendar_today_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        labelText: required ? '$label *' : label,
+
+        prefixIcon: Container(
+          margin: const EdgeInsets.all(7),
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: Colors.blue.shade700),
+        ),
+
+        suffixIcon: Container(
+          margin: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(
+            Icons.calendar_month_rounded,
+            size: 19,
+            color: Colors.blue.shade700,
+          ),
+        ),
+
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
+
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.blue.shade500, width: 1.5),
+        ),
+
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
+
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
         ),
       ),
+
       onTap: () {
         _selectDate(controller: controller);
       },
+
       validator: required
           ? (value) {
               if (value == null || value.trim().isEmpty) {
                 return '$label is required';
               }
-
               return null;
             }
           : null,
     );
   }
-
   // ============================================================
   // STRING DROPDOWN
   // ============================================================
@@ -477,7 +612,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      initialValue: value.isEmpty ? null : value,
       isExpanded: true,
 
       icon: Container(
@@ -496,10 +631,9 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       ),
 
       dropdownColor: Colors.white,
-
       menuMaxHeight: 280,
 
-      decoration: _premiumDropdownDecoration(label: label, icon: icon),
+      decoration: _premiumDropdownDecoration(label: '$label *', icon: icon),
 
       style: TextStyle(
         fontSize: 14,
@@ -510,24 +644,82 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       items: items.map((item) {
         return DropdownMenuItem<String>(
           value: item,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Text(
-              item,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade800,
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  _getDropdownIcon(item),
+                  size: 16,
+                  color: Colors.blue.shade700,
+                ),
               ),
-            ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Text(
+                  item,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       }).toList(),
 
       onChanged: isSaving ? null : onChanged,
+
+      validator: (selectedValue) {
+        if (selectedValue == null || selectedValue.trim().isEmpty) {
+          return '$label is required';
+        }
+
+        return null;
+      },
     );
   }
-  // ============================================================
+
+  IconData _getDropdownIcon(String value) {
+    switch (value) {
+      case 'Male':
+        return Icons.male_rounded;
+      case 'Female':
+        return Icons.female_rounded;
+      case 'Other':
+        return Icons.person_outline_rounded;
+
+      case 'A+':
+      case 'A-':
+      case 'B+':
+      case 'B-':
+      case 'AB+':
+      case 'AB-':
+      case 'O+':
+      case 'O-':
+        return Icons.bloodtype_rounded;
+
+      case 'ACTIVE':
+        return Icons.check_circle_outline_rounded;
+
+      case 'INACTIVE':
+        return Icons.pause_circle_outline_rounded;
+
+      default:
+        return Icons.check_rounded;
+    }
+  } // ============================================================
   // ACADEMIC YEAR DROPDOWN
   // ============================================================
 
@@ -1167,6 +1359,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                             controller: dobController,
                             label: 'Date of Birth',
                             icon: Icons.cake_outlined,
+                            required: true,
                           ),
                           const SizedBox(height: 14),
                           _dropdownField(
@@ -1265,16 +1458,22 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                         children: [
                           _textField(
                             controller: phoneController,
-                            label: 'Phone',
-                            icon: Icons.phone_outlined,
+                            label: 'Mobile Number',
+                            icon: Icons.phone_rounded,
                             keyboardType: TextInputType.phone,
+                            required: true,
+                            isPhone: true,
+                            hint: '10-digit mobile number',
                           ),
                           const SizedBox(height: 14),
                           _textField(
                             controller: emailController,
                             label: 'Email',
-                            icon: Icons.email_outlined,
+                            icon: Icons.email_rounded,
                             keyboardType: TextInputType.emailAddress,
+                            required: true,
+                            isEmail: true,
+                            hint: 'student@example.com',
                           ),
                         ],
                       );

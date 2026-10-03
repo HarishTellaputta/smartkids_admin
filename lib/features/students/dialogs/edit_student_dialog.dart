@@ -1,5 +1,5 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -34,7 +34,7 @@ class EditStudentDialog extends StatefulWidget {
 }
 
 class _EditStudentDialogState extends State<EditStudentDialog> {
-  ApiClient apiClient= ApiClient();
+  final ApiClient apiClient = ApiClient();
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController admissionNoController;
@@ -178,23 +178,15 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         _parentService.getParents(),
       ]);
 
-      final loadedAcademicYears =
-          results[0] as List<AcademicYear>;
-
-      final loadedClasses =
-          results[1] as List<SchoolClass>;
-
-      final loadedSections =
-          results[2] as List<Section>;
-
-      final loadedParents =
-          results[3] as List<Parent>;
+      final loadedAcademicYears = results[0] as List<AcademicYear>;
+      final loadedClasses = results[1] as List<SchoolClass>;
+      final loadedSections = results[2] as List<Section>;
+      final loadedParents = results[3] as List<Parent>;
 
       AcademicYear? existingAcademicYear;
 
       for (final academicYear in loadedAcademicYears) {
-        if (academicYear.id ==
-            widget.student.academicYearId) {
+        if (academicYear.id == widget.student.academicYearId) {
           existingAcademicYear = academicYear;
           break;
         }
@@ -203,7 +195,6 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       SchoolClass? existingClass;
       Section? existingSection;
 
-      // Find existing Section
       for (final section in loadedSections) {
         if (section.id == widget.student.sectionId) {
           existingSection = section;
@@ -211,8 +202,6 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         }
       }
 
-      // Section contains classId.
-      // Therefore derive the existing Class from Section.
       if (existingSection != null) {
         for (final schoolClass in loadedClasses) {
           if (schoolClass.id == existingSection.classId) {
@@ -248,7 +237,6 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         academicDataError = null;
       });
 
-      // Load sections for existing class
       if (existingClass?.id != null) {
         await _loadSectionsForClass(
           existingClass!.id!,
@@ -267,7 +255,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   }
 
   // ============================================================
-  // LOAD SECTIONS BY CLASS
+  // LOAD SECTIONS
   // ============================================================
 
   Future<void> _loadSectionsForClass(
@@ -312,17 +300,12 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         selectedSection = null;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load sections: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showErrorSnackBar('Failed to load sections: $e');
     }
   }
 
   // ============================================================
-  // ACADEMIC YEAR CHANGE
+  // DROPDOWN CHANGES
   // ============================================================
 
   void _onAcademicYearChanged(AcademicYear? value) {
@@ -332,10 +315,6 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       selectedAcademicYear = value;
     });
   }
-
-  // ============================================================
-  // CLASS CHANGE
-  // ============================================================
 
   Future<void> _onClassChanged(SchoolClass? value) async {
     if (value == null || value.id == null) return;
@@ -349,19 +328,11 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     await _loadSectionsForClass(value.id!);
   }
 
-  // ============================================================
-  // SECTION CHANGE
-  // ============================================================
-
   void _onSectionChanged(Section? value) {
     setState(() {
       selectedSection = value;
     });
   }
-
-  // ============================================================
-  // PARENT CHANGE
-  // ============================================================
 
   void _onParentChanged(Parent? value) {
     setState(() {
@@ -399,7 +370,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   }
 
   // ============================================================
-  // DATE FORMAT
+  // DATE
   // ============================================================
 
   String _formatDateString(String? value) {
@@ -422,8 +393,9 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     DateTime initialDate = DateTime.now();
 
     if (controller.text.trim().isNotEmpty) {
-      final parsed =
-          DateTime.tryParse(controller.text.trim());
+      final parsed = DateTime.tryParse(
+        controller.text.trim(),
+      );
 
       if (parsed != null) {
         initialDate = parsed;
@@ -435,6 +407,19 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       initialDate: initialDate,
       firstDate: DateTime(1950),
       lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).primaryColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: const Color(0xFF111827),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
@@ -500,53 +485,32 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   // ============================================================
 
   Future<void> _updateStudent() async {
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
     if (widget.student.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Student ID not found'),
-          backgroundColor: Colors.red,
-        ),
-      );
-
+      _showErrorSnackBar('Student ID not found');
       return;
     }
 
     if (selectedAcademicYear == null ||
         selectedAcademicYear!.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select Academic Year'),
-          backgroundColor: Colors.red,
-        ),
-      );
-
+      _showErrorSnackBar('Please select Academic Year');
       return;
     }
 
     if (selectedClass == null ||
         selectedClass!.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select Class'),
-          backgroundColor: Colors.red,
-        ),
-      );
-
+      _showErrorSnackBar('Please select Class');
       return;
     }
 
-    if (selectedSection == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select Section'),
-          backgroundColor: Colors.red,
-        ),
-      );
-
+    if (selectedSection == null ||
+        selectedSection!.id == null) {
+      _showErrorSnackBar('Please select Section');
       return;
     }
 
@@ -555,11 +519,8 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     });
 
     try {
-      final firstName =
-          firstNameController.text.trim();
-
-      final lastName =
-          lastNameController.text.trim();
+      final firstName = firstNameController.text.trim();
+      final lastName = lastNameController.text.trim();
 
       final fullName = [
         firstName,
@@ -579,26 +540,31 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
        */
 
       final data = <String, dynamic>{
-        'admissionNo':
-            _nullable(admissionNoController.text),
+        'admissionNo': _nullable(
+          admissionNoController.text,
+        ),
 
         'name': fullName,
 
-        'email':
-            _nullable(emailController.text),
+        'email': _nullable(
+          emailController.text,
+        ),
 
-        'phone':
-            _nullable(phoneController.text),
+        'phone': _nullable(
+          phoneController.text,
+        ),
 
-        'dateOfBirth':
-            _nullable(dobController.text),
+        'dateOfBirth': _nullable(
+          dobController.text,
+        ),
 
         'gender': selectedGender,
 
         'bloodGroup': selectedBloodGroup,
 
-        'admissionDate':
-            _nullable(admissionDateController.text),
+        'admissionDate': _nullable(
+          admissionDateController.text,
+        ),
 
         'academicYearId':
             selectedAcademicYear!.id,
@@ -607,20 +573,11 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
             selectedSection!.id,
 
         // Parent is optional.
-        // null means no parent.
         'parentId':
             selectedParent?.id,
 
         'status':
             selectedStatus,
-
-        /*
-         * Keep existing values for fields which are not
-         * currently editable in this dialog.
-         *
-         * These two fields are included because your
-         * backend update method explicitly updates them.
-         */
       };
 
       debugPrint(
@@ -644,7 +601,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       );
 
       debugPrint(
-        'Parent selected: ${selectedParent != null}',
+        'Parent ID: ${selectedParent?.id}',
       );
 
       debugPrint(
@@ -661,11 +618,30 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       Navigator.of(context).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Student updated successfully',
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          backgroundColor: const Color(0xFF16A34A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          backgroundColor: Colors.green,
+          content: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_outline_rounded,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Student updated successfully',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
 
@@ -677,19 +653,14 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to update student: $e',
-          ),
-          backgroundColor: Colors.red,
-        ),
+      _showErrorSnackBar(
+        'Failed to update student: ${_cleanErrorMessage(e)}',
       );
     }
   }
 
   // ============================================================
-  // NULLABLE
+  // HELPERS
   // ============================================================
 
   String? _nullable(String value) {
@@ -702,8 +673,53 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     return trimmed;
   }
 
+  String _cleanErrorMessage(Object error) {
+    final message = error.toString().trim();
+
+    if (message.startsWith('Exception:')) {
+      return message.replaceFirst('Exception:', '').trim();
+    }
+
+    return message;
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        backgroundColor: const Color(0xFFDC2626),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ============================================================
-  // TEXT FIELD
+  // PREMIUM TEXT FIELD
   // ============================================================
 
   Widget _textField({
@@ -712,47 +728,77 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     required IconData icon,
     TextInputType? keyboardType,
     bool required = false,
+    bool isPhone = false,
+    bool isEmail = false,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: TextInputAction.next,
       enabled: !isSaving,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Theme.of(context).primaryColor,
-            width: 1.5,
-          ),
-        ),
-      ),
-      validator: required
-          ? (value) {
-              if (value == null ||
-                  value.trim().isEmpty) {
-                return '$label is required';
-              }
 
-              return null;
-            }
+      inputFormatters: isPhone
+          ? [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ]
           : null,
+
+      decoration: _inputDecoration(
+        label: label,
+        icon: icon,
+        required: required,
+        hint: isPhone
+            ? '10-digit mobile number'
+            : isEmail
+                ? 'student@example.com'
+                : null,
+      ).copyWith(
+        counterText: isPhone ? '' : null,
+      ),
+
+      validator: (value) {
+        final text = value?.trim() ?? '';
+
+        if (required && text.isEmpty) {
+          return '$label is required';
+        }
+
+        if (text.isEmpty) {
+          return null;
+        }
+
+        if (isPhone) {
+          if (!RegExp(r'^[6-9][0-9]{9}$').hasMatch(text)) {
+            return 'Enter a valid 10-digit mobile number';
+          }
+
+          if (RegExp(r'^(\d)\1{9}$').hasMatch(text)) {
+            return 'Enter a valid mobile number';
+          }
+        }
+
+        if (isEmail) {
+          final emailRegex = RegExp(
+            r'^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@'
+            r'[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}'
+            r'[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]'
+            r'(?:[a-zA-Z0-9-]{0,61}'
+            r'[a-zA-Z0-9])?)+$',
+          );
+
+          if (!emailRegex.hasMatch(text)) {
+            return 'Enter a valid email address';
+          }
+        }
+
+        return null;
+      },
     );
   }
 
   // ============================================================
-  // DATE FIELD
+  // PREMIUM DATE FIELD
   // ============================================================
 
   Widget _dateField({
@@ -765,27 +811,32 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
       controller: controller,
       readOnly: true,
       enabled: !isSaving,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        suffixIcon: const Icon(
-          Icons.calendar_today_outlined,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
+
+      decoration: _inputDecoration(
+        label: label,
+        icon: icon,
+        required: required,
+      ).copyWith(
+        suffixIcon: Container(
+          margin: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: const Icon(
+            Icons.calendar_month_rounded,
+            color: Color(0xFF2563EB),
+            size: 19,
           ),
         ),
       ),
+
       onTap: () {
         _selectDate(
           controller: controller,
         );
       },
+
       validator: required
           ? (value) {
               if (value == null ||
@@ -800,7 +851,7 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   }
 
   // ============================================================
-  // STRING DROPDOWN
+  // PREMIUM STRING DROPDOWN
   // ============================================================
 
   Widget _dropdownField({
@@ -809,32 +860,182 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     required String value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
+    bool required = true,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      initialValue: value.isEmpty ? null : value,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
+      decoration: _inputDecoration(
+        label: label,
+        icon: icon,
+        required: required,
       ),
       items: items.map((item) {
         return DropdownMenuItem<String>(
           value: item,
-          child: Text(item),
+          child: Row(
+            children: [
+              Icon(
+                _dropdownIcon(item),
+                size: 18,
+                color: const Color(0xFF2563EB),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                item,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         );
       }).toList(),
-      onChanged: isSaving
-          ? null
-          : onChanged,
+      onChanged: isSaving ? null : onChanged,
+      validator: required
+          ? (value) {
+              if (value == null ||
+                  value.trim().isEmpty) {
+                return '$label is required';
+              }
+
+              return null;
+            }
+          : null,
+    );
+  }
+
+  IconData _dropdownIcon(String value) {
+    switch (value) {
+      case 'Male':
+        return Icons.male_rounded;
+
+      case 'Female':
+        return Icons.female_rounded;
+
+      case 'Other':
+        return Icons.transgender_rounded;
+
+      case 'ACTIVE':
+        return Icons.check_circle_outline_rounded;
+
+      case 'INACTIVE':
+        return Icons.pause_circle_outline_rounded;
+
+      case 'A+':
+      case 'A-':
+      case 'B+':
+      case 'B-':
+      case 'AB+':
+      case 'AB-':
+      case 'O+':
+      case 'O-':
+        return Icons.bloodtype_outlined;
+
+      default:
+        return Icons.circle_outlined;
+    }
+  }
+
+  // ============================================================
+  // PREMIUM INPUT DECORATION
+  // ============================================================
+
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+    bool required = false,
+    String? hint,
+  }) {
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return InputDecoration(
+      labelText: required ? '$label *' : label,
+      hintText: hint,
+
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+
+      prefixIcon: Container(
+        width: 52,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: const BoxDecoration(
+          color: Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(14),
+            bottomLeft: Radius.circular(14),
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: Color(0xFF2563EB),
+          size: 20,
+        ),
+      ),
+
+      prefixIconConstraints: const BoxConstraints(
+        minWidth: 52,
+        minHeight: 52,
+      ),
+
+      labelStyle: TextStyle(
+        color: Colors.grey.shade600,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
+      ),
+
+      hintStyle: TextStyle(
+        color: Colors.grey.shade400,
+        fontSize: 13,
+      ),
+
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 16,
+      ),
+
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE5E7EB),
+        ),
+      ),
+
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE5E7EB),
+        ),
+      ),
+
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: primaryColor,
+          width: 1.5,
+        ),
+      ),
+
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFEF4444),
+        ),
+      ),
+
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFEF4444),
+          width: 1.5,
+        ),
+      ),
+
+      errorStyle: const TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
@@ -846,33 +1047,31 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     return DropdownButtonFormField<AcademicYear>(
       initialValue: selectedAcademicYear,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Academic Year',
-        prefixIcon: const Icon(
-          Icons.calendar_month_outlined,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
+
+      decoration: _inputDecoration(
+        label: 'Academic Year',
+        icon: Icons.calendar_month_outlined,
+        required: true,
       ),
+
       items: academicYears.map((year) {
         return DropdownMenuItem<AcademicYear>(
           value: year,
           child: Text(
             year.name ?? 'Academic Year',
             overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         );
       }).toList(),
+
       onChanged: isSaving
           ? null
           : _onAcademicYearChanged,
+
       validator: (value) {
         if (value == null) {
           return 'Academic Year is required';
@@ -891,21 +1090,13 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     return DropdownButtonFormField<SchoolClass>(
       initialValue: selectedClass,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Class',
-        prefixIcon: const Icon(
-          Icons.school_outlined,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
+
+      decoration: _inputDecoration(
+        label: 'Class',
+        icon: Icons.school_outlined,
+        required: true,
       ),
+
       items: classes.map((schoolClass) {
         final displayName =
             schoolClass.name ??
@@ -918,12 +1109,18 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
           child: Text(
             displayName,
             overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         );
       }).toList(),
+
       onChanged: isSaving
           ? null
           : _onClassChanged,
+
       validator: (value) {
         if (value == null) {
           return 'Class is required';
@@ -941,14 +1138,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   Widget _sectionDropdown() {
     if (isLoadingSections) {
       return InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Section',
-          prefixIcon: const Icon(
-            Icons.groups_outlined,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+        decoration: _inputDecoration(
+          label: 'Section',
+          icon: Icons.groups_outlined,
+          required: true,
         ),
         child: const Row(
           children: [
@@ -960,7 +1153,13 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
               ),
             ),
             SizedBox(width: 10),
-            Text('Loading sections...'),
+            Text(
+              'Loading sections...',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       );
@@ -969,34 +1168,32 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     return DropdownButtonFormField<Section>(
       initialValue: selectedSection,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Section',
-        prefixIcon: const Icon(
-          Icons.groups_outlined,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
+
+      decoration: _inputDecoration(
+        label: 'Section',
+        icon: Icons.groups_outlined,
+        required: true,
       ),
+
       items: sections.map((section) {
         return DropdownMenuItem<Section>(
           value: section,
           child: Text(
             section.name,
             overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         );
       }).toList(),
+
       onChanged:
           isSaving || selectedClass == null
               ? null
               : _onSectionChanged,
+
       validator: (value) {
         if (value == null) {
           return 'Section is required';
@@ -1012,49 +1209,68 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   // ============================================================
 
   Widget _parentDropdown() {
-    /*
-     * IMPORTANT FIX:
-     *
-     * The dropdown type is Parent? instead of Parent.
-     * This allows the "No Parent" item to have a null value
-     * without causing a type mismatch.
-     */
     return DropdownButtonFormField<Parent?>(
       initialValue: selectedParent,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Parent',
-        prefixIcon: const Icon(
-          Icons.family_restroom_outlined,
-        ),
-        hintText: 'Select parent (optional)',
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
+
+      decoration: _inputDecoration(
+        label: 'Parent',
+        icon: Icons.family_restroom_outlined,
+        required: false,
+        hint: 'Select parent (optional)',
       ),
+
       items: [
         const DropdownMenuItem<Parent?>(
           value: null,
-          child: Text('No Parent'),
+          child: Row(
+            children: [
+              Icon(
+                Icons.person_off_outlined,
+                size: 18,
+                color: Color(0xFF6B7280),
+              ),
+              SizedBox(width: 9),
+              Text(
+                'No Parent',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
+
         ...parents.map(
           (parent) {
             return DropdownMenuItem<Parent?>(
               value: parent,
-              child: Text(
-                parent.displayName,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.person_outline_rounded,
+                    size: 18,
+                    color: Color(0xFF2563EB),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      parent.displayName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           },
         ),
       ],
+
       onChanged: isSaving
           ? null
           : _onParentChanged,
@@ -1071,10 +1287,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: Colors.grey.shade300,
+            color: const Color(0xFFE5E7EB),
           ),
         ),
         child: const Row(
@@ -1089,6 +1305,10 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
             SizedBox(width: 12),
             Text(
               'Loading academic information...',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -1100,26 +1320,27 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          borderRadius: BorderRadius.circular(10),
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: Colors.red.shade100,
+            color: const Color(0xFFFECACA),
           ),
         ),
         child: Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.error_outline,
-              color: Colors.red.shade700,
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Color(0xFFDC2626),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 academicDataError!,
-                style: TextStyle(
-                  color: Colors.red.shade800,
+                style: const TextStyle(
+                  color: Color(0xFF991B1B),
+                  fontSize: 13,
+                  height: 1.4,
                 ),
               ),
             ),
@@ -1134,7 +1355,12 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
                       _initializeServicesAndLoadData();
                     },
-              child: const Text('Retry'),
+              child: const Text(
+                'Retry',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -1184,6 +1410,56 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
   }
 
   // ============================================================
+  // SECTION TITLE
+  // ============================================================
+
+  Widget _sectionTitle(
+    String title,
+    IconData icon,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 13,
+        vertical: 11,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: const Color(0xFF2563EB),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
   // BUILD
   // ============================================================
 
@@ -1192,596 +1468,782 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
     final screenWidth =
         MediaQuery.of(context).size.width;
 
-    final dialogWidth = screenWidth > 900
-        ? 760.0
-        : screenWidth > 600
-            ? 600.0
+    final dialogWidth = screenWidth > 1000
+        ? 800.0
+        : screenWidth > 700
+            ? 650.0
             : screenWidth * 0.94;
 
-    return AlertDialog(
-      titlePadding:
-          const EdgeInsets.fromLTRB(
-        24,
-        24,
-        24,
-        8,
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 20,
       ),
-      contentPadding:
-          const EdgeInsets.fromLTRB(
-        24,
-        8,
-        24,
-        8,
-      ),
-      actionsPadding:
-          const EdgeInsets.fromLTRB(
-        24,
-        8,
-        24,
-        20,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 800,
+          maxHeight: 900,
+        ),
+        child: Container(
+          width: dialogWidth,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.14),
+                blurRadius: 35,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(),
 
-      // ========================================================
-      // TITLE
-      // ========================================================
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      24,
+                      22,
+                      24,
+                      10,
+                    ),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        _buildInfoBanner(),
 
-      title: Row(
+                        const SizedBox(height: 20),
+
+                        // PERSONAL
+                        _sectionTitle(
+                          'Personal Information',
+                          Icons.person_outline_rounded,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        LayoutBuilder(
+                          builder:
+                              (context, constraints) {
+                            final twoColumns =
+                                constraints.maxWidth >= 560;
+
+                            if (!twoColumns) {
+                              return Column(
+                                children: [
+                                  _textField(
+                                    controller:
+                                        firstNameController,
+                                    label: 'First Name',
+                                    icon:
+                                        Icons.person_outline,
+                                    required: true,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _textField(
+                                    controller:
+                                        lastNameController,
+                                    label: 'Last Name',
+                                    icon:
+                                        Icons.person_outline,
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: _textField(
+                                    controller:
+                                        firstNameController,
+                                    label: 'First Name',
+                                    icon:
+                                        Icons.person_outline,
+                                    required: true,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: _textField(
+                                    controller:
+                                        lastNameController,
+                                    label: 'Last Name',
+                                    icon:
+                                        Icons.person_outline,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        LayoutBuilder(
+                          builder:
+                              (context, constraints) {
+                            final twoColumns =
+                                constraints.maxWidth >= 560;
+
+                            if (!twoColumns) {
+                              return Column(
+                                children: [
+                                  _dateField(
+                                    controller:
+                                        dobController,
+                                    label:
+                                        'Date of Birth',
+                                    icon:
+                                        Icons.cake_outlined,
+                                    required: true,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _dropdownField(
+                                    label: 'Gender',
+                                    icon:
+                                        Icons.wc_outlined,
+                                    value:
+                                        selectedGender,
+                                    items: const [
+                                      'Male',
+                                      'Female',
+                                      'Other',
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() {
+                                          selectedGender =
+                                              value;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: _dateField(
+                                    controller:
+                                        dobController,
+                                    label:
+                                        'Date of Birth',
+                                    icon:
+                                        Icons.cake_outlined,
+                                    required: true,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: _dropdownField(
+                                    label: 'Gender',
+                                    icon:
+                                        Icons.wc_outlined,
+                                    value:
+                                        selectedGender,
+                                    items: const [
+                                      'Male',
+                                      'Female',
+                                      'Other',
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() {
+                                          selectedGender =
+                                              value;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        LayoutBuilder(
+                          builder:
+                              (context, constraints) {
+                            final twoColumns =
+                                constraints.maxWidth >= 560;
+
+                            if (!twoColumns) {
+                              return Column(
+                                children: [
+                                  _dropdownField(
+                                    label:
+                                        'Blood Group',
+                                    icon:
+                                        Icons.bloodtype_outlined,
+                                    value:
+                                        selectedBloodGroup,
+                                    items: const [
+                                      'A+',
+                                      'A-',
+                                      'B+',
+                                      'B-',
+                                      'AB+',
+                                      'AB-',
+                                      'O+',
+                                      'O-',
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() {
+                                          selectedBloodGroup =
+                                              value;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _textField(
+                                    controller:
+                                        admissionNoController,
+                                    label:
+                                        'Admission No',
+                                    icon:
+                                        Icons.badge_outlined,
+                                    required: true,
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: _dropdownField(
+                                    label:
+                                        'Blood Group',
+                                    icon:
+                                        Icons.bloodtype_outlined,
+                                    value:
+                                        selectedBloodGroup,
+                                    items: const [
+                                      'A+',
+                                      'A-',
+                                      'B+',
+                                      'B-',
+                                      'AB+',
+                                      'AB-',
+                                      'O+',
+                                      'O-',
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() {
+                                          selectedBloodGroup =
+                                              value;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: _textField(
+                                    controller:
+                                        admissionNoController,
+                                    label:
+                                        'Admission No',
+                                    icon:
+                                        Icons.badge_outlined,
+                                    required: true,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // CONTACT
+                        _sectionTitle(
+                          'Contact Information',
+                          Icons.contact_phone_outlined,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        LayoutBuilder(
+                          builder:
+                              (context, constraints) {
+                            final twoColumns =
+                                constraints.maxWidth >= 560;
+
+                            if (!twoColumns) {
+                              return Column(
+                                children: [
+                                  _textField(
+                                    controller:
+                                        phoneController,
+                                    label:
+                                        'Mobile Number',
+                                    icon:
+                                        Icons.phone_rounded,
+                                    keyboardType:
+                                        TextInputType.phone,
+                                    required: true,
+                                    isPhone: true,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _textField(
+                                    controller:
+                                        emailController,
+                                    label: 'Email',
+                                    icon:
+                                        Icons.email_outlined,
+                                    keyboardType:
+                                        TextInputType
+                                            .emailAddress,
+                                    required: true,
+                                    isEmail: true,
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: _textField(
+                                    controller:
+                                        phoneController,
+                                    label:
+                                        'Mobile Number',
+                                    icon:
+                                        Icons.phone_rounded,
+                                    keyboardType:
+                                        TextInputType.phone,
+                                    required: true,
+                                    isPhone: true,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: _textField(
+                                    controller:
+                                        emailController,
+                                    label: 'Email',
+                                    icon:
+                                        Icons.email_outlined,
+                                    keyboardType:
+                                        TextInputType
+                                            .emailAddress,
+                                    required: true,
+                                    isEmail: true,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // ACADEMIC
+                        _sectionTitle(
+                          'Academic Information',
+                          Icons.school_outlined,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        _academicInformationSection(),
+
+                        const SizedBox(height: 14),
+
+                        _dateField(
+                          controller:
+                              admissionDateController,
+                          label: 'Admission Date',
+                          icon:
+                              Icons.event_outlined,
+                          required: true,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        _dropdownField(
+                          label: 'Status',
+                          icon:
+                              Icons.toggle_on_outlined,
+                          value: selectedStatus,
+                          items: const [
+                            'ACTIVE',
+                            'INACTIVE',
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                selectedStatus = value;
+                              });
+                            }
+                          },
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // PARENT INFO
+                        if (selectedParent != null)
+                          Container(
+                            width: double.infinity,
+                            padding:
+                                const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color:
+                                  const Color(0xFFF0FDF4),
+                              borderRadius:
+                                  BorderRadius.circular(14),
+                              border: Border.all(
+                                color:
+                                    const Color(0xFFBBF7D0),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        const Color(0xFFDCFCE7),
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      10,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons
+                                        .family_restroom_rounded,
+                                    color:
+                                        Color(0xFF16A34A),
+                                    size: 19,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      const Text(
+                                        'Parent Linked',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight:
+                                              FontWeight.w800,
+                                          color:
+                                              Color(0xFF166534),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        selectedParent!
+                                            .displayName,
+                                        style:
+                                            const TextStyle(
+                                          fontSize: 13,
+                                          color:
+                                              Color(0xFF15803D),
+                                          fontWeight:
+                                              FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              _buildFooter(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // HEADER
+  // ============================================================
+
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+        24,
+        22,
+        18,
+        22,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF2563EB),
+            Color(0xFF1D4ED8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.22),
+              ),
             ),
-            child: Icon(
-              Icons.edit_outlined,
-              color: Colors.orange.shade700,
+            child: const Icon(
+              Icons.edit_note_rounded,
+              color: Colors.white,
+              size: 27,
             ),
           ),
-          const SizedBox(width: 12),
+
+          const SizedBox(width: 14),
+
           const Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Edit Student',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Update student information and academic details',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (!isSaving)
+            IconButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              tooltip: 'Close',
+              icon: const Icon(
+                Icons.close_rounded,
+                color: Colors.white,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // INFO BANNER
+  // ============================================================
+
+  Widget _buildInfoBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: const Color(0xFFBFDBFE),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFF2563EB),
+            size: 20,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
             child: Text(
-              'Edit Student',
+              'Fields marked with * are mandatory. '
+              'Parent selection is optional.',
               style: TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                color: Colors.blue.shade900,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
         ],
       ),
-
-      // ========================================================
-      // CONTENT
-      // ========================================================
-
-      content: SizedBox(
-        width: dialogWidth,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
-
-                // ==================================================
-                // PERSONAL INFORMATION
-                // ==================================================
-
-                _sectionTitle(
-                  'Personal Information',
-                  Icons.person_outline,
-                ),
-
-                const SizedBox(height: 14),
-
-                LayoutBuilder(
-                  builder:
-                      (context, constraints) {
-                    final twoColumns =
-                        constraints.maxWidth >= 560;
-
-                    if (!twoColumns) {
-                      return Column(
-                        children: [
-                          _textField(
-                            controller:
-                                firstNameController,
-                            label: 'First Name',
-                            icon:
-                                Icons.person_outline,
-                            required: true,
-                          ),
-                          const SizedBox(height: 14),
-                          _textField(
-                            controller:
-                                lastNameController,
-                            label: 'Last Name',
-                            icon:
-                                Icons.person_outline,
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _textField(
-                            controller:
-                                firstNameController,
-                            label: 'First Name',
-                            icon:
-                                Icons.person_outline,
-                            required: true,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _textField(
-                            controller:
-                                lastNameController,
-                            label: 'Last Name',
-                            icon:
-                                Icons.person_outline,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 14),
-
-                LayoutBuilder(
-                  builder:
-                      (context, constraints) {
-                    final twoColumns =
-                        constraints.maxWidth >= 560;
-
-                    if (!twoColumns) {
-                      return Column(
-                        children: [
-                          _dateField(
-                            controller:
-                                dobController,
-                            label:
-                                'Date of Birth',
-                            icon:
-                                Icons.cake_outlined,
-                          ),
-                          const SizedBox(height: 14),
-                          _dropdownField(
-                            label: 'Gender',
-                            icon:
-                                Icons.wc_outlined,
-                            value:
-                                selectedGender,
-                            items: const [
-                              'Male',
-                              'Female',
-                              'Other',
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  selectedGender =
-                                      value;
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _dateField(
-                            controller:
-                                dobController,
-                            label:
-                                'Date of Birth',
-                            icon:
-                                Icons.cake_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _dropdownField(
-                            label: 'Gender',
-                            icon:
-                                Icons.wc_outlined,
-                            value:
-                                selectedGender,
-                            items: const [
-                              'Male',
-                              'Female',
-                              'Other',
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  selectedGender =
-                                      value;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 14),
-
-                LayoutBuilder(
-                  builder:
-                      (context, constraints) {
-                    final twoColumns =
-                        constraints.maxWidth >= 560;
-
-                    if (!twoColumns) {
-                      return Column(
-                        children: [
-                          _dropdownField(
-                            label:
-                                'Blood Group',
-                            icon:
-                                Icons.bloodtype_outlined,
-                            value:
-                                selectedBloodGroup,
-                            items: const [
-                              'A+',
-                              'A-',
-                              'B+',
-                              'B-',
-                              'AB+',
-                              'AB-',
-                              'O+',
-                              'O-',
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  selectedBloodGroup =
-                                      value;
-                                });
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          _textField(
-                            controller:
-                                admissionNoController,
-                            label:
-                                'Admission No',
-                            icon:
-                                Icons.badge_outlined,
-                            required: true,
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _dropdownField(
-                            label:
-                                'Blood Group',
-                            icon:
-                                Icons.bloodtype_outlined,
-                            value:
-                                selectedBloodGroup,
-                            items: const [
-                              'A+',
-                              'A-',
-                              'B+',
-                              'B-',
-                              'AB+',
-                              'AB-',
-                              'O+',
-                              'O-',
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  selectedBloodGroup =
-                                      value;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _textField(
-                            controller:
-                                admissionNoController,
-                            label:
-                                'Admission No',
-                            icon:
-                                Icons.badge_outlined,
-                            required: true,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                // ==================================================
-                // CONTACT INFORMATION
-                // ==================================================
-
-                const SizedBox(height: 24),
-
-                _sectionTitle(
-                  'Contact Information',
-                  Icons.contact_phone_outlined,
-                ),
-
-                const SizedBox(height: 14),
-
-                LayoutBuilder(
-                  builder:
-                      (context, constraints) {
-                    final twoColumns =
-                        constraints.maxWidth >= 560;
-
-                    if (!twoColumns) {
-                      return Column(
-                        children: [
-                          _textField(
-                            controller:
-                                phoneController,
-                            label: 'Phone',
-                            icon:
-                                Icons.phone_outlined,
-                            keyboardType:
-                                TextInputType.phone,
-                          ),
-                          const SizedBox(height: 14),
-                          _textField(
-                            controller:
-                                emailController,
-                            label: 'Email',
-                            icon:
-                                Icons.email_outlined,
-                            keyboardType:
-                                TextInputType
-                                    .emailAddress,
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _textField(
-                            controller:
-                                phoneController,
-                            label: 'Phone',
-                            icon:
-                                Icons.phone_outlined,
-                            keyboardType:
-                                TextInputType.phone,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _textField(
-                            controller:
-                                emailController,
-                            label: 'Email',
-                            icon:
-                                Icons.email_outlined,
-                            keyboardType:
-                                TextInputType
-                                    .emailAddress,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                // ==================================================
-                // ACADEMIC INFORMATION
-                // ==================================================
-
-                const SizedBox(height: 24),
-
-                _sectionTitle(
-                  'Academic Information',
-                  Icons.school_outlined,
-                ),
-
-                const SizedBox(height: 14),
-
-                _academicInformationSection(),
-
-                const SizedBox(height: 14),
-
-                _dateField(
-                  controller:
-                      admissionDateController,
-                  label: 'Admission Date',
-                  icon:
-                      Icons.event_outlined,
-                  required: true,
-                ),
-
-                const SizedBox(height: 14),
-
-                _dropdownField(
-                  label: 'Status',
-                  icon:
-                      Icons.toggle_on_outlined,
-                  value: selectedStatus,
-                  items: const [
-                    'ACTIVE',
-                    'INACTIVE',
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedStatus = value;
-                      });
-                    }
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // ==================================================
-                // SELECTED PARENT INFO
-                // ==================================================
-
-                if (selectedParent != null)
-                  Container(
-                    width: double.infinity,
-                    padding:
-                        const EdgeInsets.all(14),
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          Colors.green.shade50,
-                      borderRadius:
-                          BorderRadius.circular(10),
-                      border: Border.all(
-                        color:
-                            Colors.green.shade100,
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.family_restroom,
-                          color:
-                              Colors.green.shade700,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Selected Parent: ${selectedParent!.displayName}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color:
-                                  Colors.green.shade800,
-                              fontWeight:
-                                  FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
-      ),
-
-      // ========================================================
-      // ACTIONS
-      // ========================================================
-
-      actions: [
-        TextButton(
-          onPressed: isSaving
-              ? null
-              : () {
-                  Navigator.of(context).pop();
-                },
-          child: const Text('Cancel'),
-        ),
-
-        const SizedBox(width: 8),
-
-        ElevatedButton.icon(
-          onPressed:
-              isSaving ? null : _updateStudent,
-          icon: isSaving
-              ? const SizedBox(
-                  width: 17,
-                  height: 17,
-                  child:
-                      CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(
-                  Icons.save_outlined,
-                  size: 18,
-                ),
-          label: Text(
-            isSaving
-                ? 'Updating...'
-                : 'Update Student',
-          ),
-          style:
-              ElevatedButton.styleFrom(
-            backgroundColor:
-                Colors.blue.shade700,
-            foregroundColor: Colors.white,
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 12,
-            ),
-            shape:
-                RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(8),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
   // ============================================================
-  // SECTION TITLE
+  // FOOTER
   // ============================================================
 
-  Widget _sectionTitle(
-    String title,
-    IconData icon,
-  ) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 19,
-          color: Colors.blue.shade700,
-        ),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade800,
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        24,
+        14,
+        24,
+        20,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: Color(0xFFE5E7EB),
           ),
         ),
-      ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: isSaving
+                  ? null
+                  : () {
+                      Navigator.of(context).pop();
+                    },
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                foregroundColor:
+                    const Color(0xFF374151),
+                side: const BorderSide(
+                  color: Color(0xFFD1D5DB),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(13),
+                ),
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: ElevatedButton(
+              onPressed:
+                  isSaving ? null : _updateStudent,
+              style: ElevatedButton.styleFrom(
+                minimumSize:
+                    const Size.fromHeight(50),
+                backgroundColor:
+                    const Color(0xFF2563EB),
+                disabledBackgroundColor:
+                    const Color(0xFF93C5FD),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(13),
+                ),
+              ),
+              child: AnimatedSwitcher(
+                duration:
+                    const Duration(milliseconds: 200),
+                child: isSaving
+                    ? const Row(
+                        key: ValueKey('updating'),
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 9),
+                          Text(
+                            'Updating...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      )
+                    : const Row(
+                        key: ValueKey('update'),
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.save_rounded,
+                            size: 19,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Update Student',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:typed_data';
 import '../models/subject_model.dart';
 import '../subject_performance_model.dart';
 
@@ -199,6 +200,47 @@ class SubjectService {
         e.response?.data?.toString() ??
             e.message ??
             'Failed to load class subjects',
+      );
+    }
+  }
+
+  // ============================================================
+  // IMPORT SUBJECTS FROM EXCEL
+  // POST /subjects/import?schoolId={schoolId}
+  // ============================================================
+
+  Future<Map<String, dynamic>> importSubjectsExcel({
+    required int schoolId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+      });
+
+      final response = await _dio.post(
+        '/api/v1/subjects/import?schoolId=$schoolId',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      if (response.data is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(response.data);
+      }
+
+      throw Exception('Invalid response received from server.');
+    } on DioException catch (e) {
+      final data = e.response?.data;
+
+      if (data is Map<String, dynamic>) {
+        throw Exception(
+          data['message'] ?? data['error'] ?? 'Failed to import subjects',
+        );
+      }
+
+      throw Exception(
+        data?.toString() ?? e.message ?? 'Failed to import subjects',
       );
     }
   }

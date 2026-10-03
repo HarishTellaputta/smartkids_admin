@@ -5,36 +5,43 @@ import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
+import '../../services/section_service.dart';
 import '../excel_reports/excel_file_picker.dart';
 import '../excel_reports/excel_import_dialogs.dart';
-import '../features/teachers/services/class_service.dart';
 
-class ClassesExcelCard extends StatefulWidget {
-  const ClassesExcelCard({super.key});
+class SectionsExcelCard extends StatefulWidget {
+  const SectionsExcelCard({super.key});
 
   @override
-  State<ClassesExcelCard> createState() => _ClassesExcelCardState();
+  State<SectionsExcelCard> createState() =>
+      _SectionsExcelCardState();
 }
 
-class _ClassesExcelCardState extends State<ClassesExcelCard> {
+class _SectionsExcelCardState
+    extends State<SectionsExcelCard> {
   bool _importing = false;
   bool _downloading = false;
 
   static const int schoolId = 1;
 
-  late final ClassService _classService;
+  late final SectionService _sectionService;
 
   @override
   void initState() {
     super.initState();
-    _classService = ClassService(ApiClient());
+
+    _sectionService = SectionService(
+      ApiClient(),
+    );
   }
 
   // ============================================================
   // DOWNLOAD
   // ============================================================
 
-  Future<void> _generateExcel(BuildContext context) async {
+  Future<void> _generateExcel(
+    BuildContext context,
+  ) async {
     if (_downloading) return;
 
     setState(() {
@@ -45,9 +52,10 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
       final excel = ex.Excel.createExcel();
 
       // IMPORTANT:
-      // Rename the default first sheet instead of creating
-      // another sheet. This prevents empty Sheet1 issue.
-      final defaultSheet = excel.getDefaultSheet();
+      // Rename the default first sheet instead of
+      // creating a second sheet.
+      final defaultSheet =
+          excel.getDefaultSheet();
 
       if (defaultSheet == null) {
         throw Exception(
@@ -57,21 +65,20 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
 
       excel.rename(
         defaultSheet,
-        'Classes',
+        'Sections',
       );
 
-      final sheet = excel['Classes'];
+      final sheet = excel['Sections'];
 
       // ========================================================
       // HEADER
       // ========================================================
 
       sheet.appendRow([
-        ex.TextCellValue('code'),
+        ex.TextCellValue('className'),
         ex.TextCellValue('name'),
-        ex.TextCellValue('grade'),
+        ex.TextCellValue('capacity'),
         ex.TextCellValue('description'),
-        ex.TextCellValue('year'),
       ]);
 
       // ========================================================
@@ -79,39 +86,43 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
       // ========================================================
 
       sheet.appendRow([
-        ex.TextCellValue('C1'),
         ex.TextCellValue('1st Class'),
-        ex.IntCellValue(1),
-        ex.TextCellValue('First Class'),
-        ex.IntCellValue(2026),
+        ex.TextCellValue('A'),
+        ex.IntCellValue(40),
+        ex.TextCellValue('Section A'),
       ]);
 
       sheet.appendRow([
-        ex.TextCellValue('C2'),
+        ex.TextCellValue('1st Class'),
+        ex.TextCellValue('B'),
+        ex.IntCellValue(40),
+        ex.TextCellValue('Section B'),
+      ]);
+
+      sheet.appendRow([
+        ex.TextCellValue('1st Class'),
+        ex.TextCellValue('C'),
+        ex.IntCellValue(40),
+        ex.TextCellValue('Section C'),
+      ]);
+
+      sheet.appendRow([
         ex.TextCellValue('2nd Class'),
-        ex.IntCellValue(2),
-        ex.TextCellValue('Second Class'),
-        ex.IntCellValue(2026),
-      ]);
-
-      sheet.appendRow([
-        ex.TextCellValue('C3'),
-        ex.TextCellValue('3rd Class'),
-        ex.IntCellValue(3),
-        ex.TextCellValue('Third Class'),
-        ex.IntCellValue(2026),
+        ex.TextCellValue('A'),
+        ex.IntCellValue(40),
+        ex.TextCellValue('Section A'),
       ]);
 
       final bytes = excel.encode();
 
       if (bytes == null) {
         throw Exception(
-          'Failed to generate Classes Excel.',
+          'Failed to generate Sections Excel.',
         );
       }
 
       await FileSaver.instance.saveFile(
-        name: 'classes_data_template',
+        name: 'sections_data_template',
         bytes: Uint8List.fromList(bytes),
         fileExtension: 'xlsx',
         mimeType: MimeType.microsoftExcel,
@@ -121,14 +132,14 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
 
       await ExcelImportDialogs.showTemplateDownloaded(
         context,
-        entityName: 'Classes',
+        entityName: 'Sections',
       );
     } catch (e) {
       if (!context.mounted) return;
 
       await ExcelImportDialogs.showFailed(
         context,
-        entityName: 'Classes',
+        entityName: 'Sections',
         message: _cleanErrorMessage(e),
       );
     } finally {
@@ -144,7 +155,9 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
   // IMPORT
   // ============================================================
 
-  Future<void> _importExcel(BuildContext context) async {
+  Future<void> _importExcel(
+    BuildContext context,
+  ) async {
     if (_importing) return;
 
     setState(() {
@@ -152,48 +165,78 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
     });
 
     try {
-      debugPrint('========================================');
-      debugPrint('CLASSES EXCEL IMPORT STARTED');
-      debugPrint('========================================');
+      debugPrint(
+        '========================================',
+      );
+      debugPrint(
+        'SECTIONS EXCEL IMPORT STARTED',
+      );
+      debugPrint(
+        '========================================',
+      );
 
-      final pickedFile = await ExcelFilePicker.pick();
+      final pickedFile =
+          await ExcelFilePicker.pick();
 
       if (pickedFile == null) {
-        debugPrint('CLASSES IMPORT CANCELLED');
+        debugPrint(
+          'SECTIONS IMPORT CANCELLED',
+        );
         return;
       }
 
       debugPrint(
-        'CLASS EXCEL FILE: ${pickedFile.name}',
+        'SELECTED FILE: ${pickedFile.name}',
       );
 
       debugPrint(
-        'CLASS EXCEL SIZE: ${pickedFile.bytes.length}',
+        'FILE SIZE: ${pickedFile.bytes.length} bytes',
       );
 
-      final data = await _classService.importClassesExcel(
+      final resultData =
+          await _sectionService
+              .importSectionsExcel(
         schoolId: schoolId,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
 
-      debugPrint('CLASSES IMPORT API SUCCESS');
-      debugPrint('RESPONSE: $data');
+      debugPrint(
+        '========================================',
+      );
+      debugPrint(
+        'SECTIONS IMPORT API SUCCESS',
+      );
+      debugPrint(
+        'RESPONSE: $resultData',
+      );
+      debugPrint(
+        '========================================',
+      );
 
       if (!context.mounted) return;
 
       await _showImportResult(
         context,
-        data,
+        resultData,
       );
     } catch (e) {
-      debugPrint('CLASSES IMPORT ERROR: $e');
+      debugPrint(
+        '========================================',
+      );
+      debugPrint(
+        'SECTIONS IMPORT ERROR',
+      );
+      debugPrint('$e');
+      debugPrint(
+        '========================================',
+      );
 
       if (!context.mounted) return;
 
       await ExcelImportDialogs.showFailed(
         context,
-        entityName: 'Classes',
+        entityName: 'Sections',
         message: _cleanErrorMessage(e),
       );
     } finally {
@@ -239,7 +282,7 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
     if (failed == 0) {
       await ExcelImportDialogs.showSuccess(
         context,
-        entityName: 'Classes',
+        entityName: 'Sections',
         total: total,
         created: created,
         updated: updated,
@@ -248,7 +291,7 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
     } else {
       await ExcelImportDialogs.showPartial(
         context,
-        entityName: 'Classes',
+        entityName: 'Sections',
         total: total,
         created: created,
         updated: updated,
@@ -280,32 +323,40 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
         0;
   }
 
-  List<String> _parseErrors(dynamic value) {
+  List<String> _parseErrors(
+    dynamic value,
+  ) {
     if (value is! List) {
       return <String>[];
     }
 
     return value
         .map(
-          (e) => e.toString(),
+          (error) => error.toString(),
         )
         .where(
-          (e) => e.trim().isNotEmpty,
+          (error) =>
+              error.trim().isNotEmpty,
         )
         .toList();
   }
 
-  String _cleanErrorMessage(Object error) {
-    final message = error.toString();
+  String _cleanErrorMessage(
+    Object error,
+  ) {
+    final message =
+        error.toString().trim();
 
-    if (message.startsWith('Exception: ')) {
+    if (message.startsWith(
+      'Exception: ',
+    )) {
       return message.substring(
         'Exception: '.length,
       );
     }
 
     return message.isEmpty
-        ? 'Something went wrong.'
+        ? 'Something went wrong while processing the Excel file.'
         : message;
   }
 
@@ -315,26 +366,28 @@ class _ClassesExcelCardState extends State<ClassesExcelCard> {
 
   @override
   Widget build(BuildContext context) {
-    return _ClassesCard(
+    return _SectionsCard(
       importing: _importing,
       downloading: _downloading,
-      onGenerate: () => _generateExcel(context),
-      onImport: () => _importExcel(context),
+      onGenerate:
+          () => _generateExcel(context),
+      onImport:
+          () => _importExcel(context),
     );
   }
 }
 
 // ================================================================
-// PREMIUM CLASSES CARD
+// PREMIUM SECTIONS CARD
 // ================================================================
 
-class _ClassesCard extends StatefulWidget {
+class _SectionsCard extends StatefulWidget {
   final VoidCallback onGenerate;
   final VoidCallback onImport;
   final bool importing;
   final bool downloading;
 
-  const _ClassesCard({
+  const _SectionsCard({
     required this.onGenerate,
     required this.onImport,
     required this.importing,
@@ -342,14 +395,13 @@ class _ClassesCard extends StatefulWidget {
   });
 
   @override
-  State<_ClassesCard> createState() => _ClassesCardState();
+  State<_SectionsCard> createState() =>
+      _SectionsCardState();
 }
 
-class _ClassesCardState extends State<_ClassesCard> {
+class _SectionsCardState
+    extends State<_SectionsCard> {
   bool _hovering = false;
-
-  bool get _busy =>
-      widget.importing || widget.downloading;
 
   String get _statusText {
     if (widget.downloading) {
@@ -402,7 +454,8 @@ class _ClassesCardState extends State<_ClassesCard> {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius:
+              BorderRadius.circular(18),
           border: Border.all(
             color: _hovering
                 ? const Color(0xFFD6E4FF)
@@ -413,7 +466,8 @@ class _ClassesCardState extends State<_ClassesCard> {
               color: Colors.black.withOpacity(
                 _hovering ? 0.075 : 0.035,
               ),
-              blurRadius: _hovering ? 22 : 12,
+              blurRadius:
+                  _hovering ? 22 : 12,
               offset: Offset(
                 0,
                 _hovering ? 8 : 4,
@@ -436,32 +490,38 @@ class _ClassesCardState extends State<_ClassesCard> {
                 Container(
                   width: 46,
                   height: 46,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                  decoration:
+                      BoxDecoration(
+                    gradient:
+                        const LinearGradient(
+                      begin:
+                          Alignment.topLeft,
+                      end: Alignment
+                          .bottomRight,
                       colors: [
                         Color(0xFF2563EB),
                         Color(0xFF4F46E5),
                       ],
                     ),
                     borderRadius:
-                        BorderRadius.circular(13),
+                        BorderRadius.circular(
+                      13,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(
+                        color:
+                            const Color(
                           0xFF2563EB,
                         ).withOpacity(0.20),
                         blurRadius: 12,
-                        offset: const Offset(
-                          0,
-                          5,
-                        ),
+                        offset:
+                            const Offset(0, 5),
                       ),
                     ],
                   ),
                   child: const Icon(
-                    Icons.class_rounded,
+                    Icons
+                        .account_tree_rounded,
                     color: Colors.white,
                     size: 23,
                   ),
@@ -472,20 +532,25 @@ class _ClassesCardState extends State<_ClassesCard> {
                 Expanded(
                   child: Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       Row(
                         children: [
                           const Expanded(
                             child: Text(
-                              'Classes',
+                              'Sections',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight:
-                                    FontWeight.w800,
+                                    FontWeight
+                                        .w800,
                                 color:
-                                    Color(0xFF111827),
-                                letterSpacing: -0.2,
+                                    Color(
+                                  0xFF111827,
+                                ),
+                                letterSpacing:
+                                    -0.2,
                               ),
                             ),
                           ),
@@ -502,16 +567,20 @@ class _ClassesCardState extends State<_ClassesCard> {
                               horizontal: 9,
                               vertical: 5,
                             ),
-                            decoration: BoxDecoration(
+                            decoration:
+                                BoxDecoration(
                               color:
                                   _statusBackground,
                               borderRadius:
                                   BorderRadius
-                                      .circular(20),
+                                      .circular(
+                                20,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize:
-                                  MainAxisSize.min,
+                                  MainAxisSize
+                                      .min,
                               children: [
                                 Container(
                                   width: 6,
@@ -532,7 +601,8 @@ class _ClassesCardState extends State<_ClassesCard> {
                                   _statusText,
                                   style:
                                       TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize:
+                                        9.5,
                                     fontWeight:
                                         FontWeight
                                             .w700,
@@ -549,10 +619,11 @@ class _ClassesCardState extends State<_ClassesCard> {
                       const SizedBox(height: 5),
 
                       const Text(
-                        'Manage class records using Excel',
+                        'Manage class sections using Excel',
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: Color(0xFF6B7280),
+                          color:
+                              Color(0xFF6B7280),
                           height: 1.3,
                         ),
                       ),
@@ -570,14 +641,18 @@ class _ClassesCardState extends State<_ClassesCard> {
 
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
+              padding:
+                  const EdgeInsets.symmetric(
                 horizontal: 11,
                 vertical: 9,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color:
+                    const Color(0xFFF8FAFC),
                 borderRadius:
-                    BorderRadius.circular(10),
+                    BorderRadius.circular(
+                  10,
+                ),
                 border: Border.all(
                   color:
                       const Color(0xFFEEF2F7),
@@ -586,18 +661,21 @@ class _ClassesCardState extends State<_ClassesCard> {
               child: Row(
                 children: [
                   const Icon(
-                    Icons.table_chart_rounded,
+                    Icons.account_tree_outlined,
                     size: 15,
-                    color: Color(0xFF64748B),
+                    color:
+                        Color(0xFF64748B),
                   ),
                   const SizedBox(width: 7),
                   const Expanded(
                     child: Text(
-                      'Code • Name • Grade • Description • Year',
+                      'Class • Section • Capacity • Description',
                       style: TextStyle(
                         fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B),
+                        fontWeight:
+                            FontWeight.w600,
+                        color:
+                            Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -615,13 +693,16 @@ class _ClassesCardState extends State<_ClassesCard> {
               children: [
                 // DOWNLOAD
                 Expanded(
-                  child: _PremiumActionButton(
+                  child:
+                      _PremiumSectionsActionButton(
                     label: widget.downloading
                         ? 'Downloading...'
                         : 'Download Sample',
-                    icon: Icons.download_rounded,
+                    icon:
+                        Icons.download_rounded,
                     primary: true,
-                    loading: widget.downloading,
+                    loading:
+                        widget.downloading,
                     onPressed:
                         widget.downloading
                             ? null
@@ -633,13 +714,16 @@ class _ClassesCardState extends State<_ClassesCard> {
 
                 // IMPORT
                 Expanded(
-                  child: _PremiumActionButton(
+                  child:
+                      _PremiumSectionsActionButton(
                     label: widget.importing
                         ? 'Importing...'
                         : 'Import Excel',
-                    icon: Icons.upload_file_rounded,
+                    icon:
+                        Icons.upload_file_rounded,
                     primary: false,
-                    loading: widget.importing,
+                    loading:
+                        widget.importing,
                     onPressed:
                         widget.importing
                             ? null
@@ -660,15 +744,18 @@ class _ClassesCardState extends State<_ClassesCard> {
                 const Icon(
                   Icons.description_outlined,
                   size: 13,
-                  color: Color(0xFF94A3B8),
+                  color:
+                      Color(0xFF94A3B8),
                 ),
                 const SizedBox(width: 5),
                 const Text(
                   '.xlsx format supported',
                   style: TextStyle(
                     fontSize: 9.5,
-                    color: Color(0xFF94A3B8),
-                    fontWeight: FontWeight.w500,
+                    color:
+                        Color(0xFF94A3B8),
+                    fontWeight:
+                        FontWeight.w500,
                   ),
                 ),
 
@@ -677,15 +764,18 @@ class _ClassesCardState extends State<_ClassesCard> {
                 const Icon(
                   Icons.lock_outline_rounded,
                   size: 12,
-                  color: Color(0xFF94A3B8),
+                  color:
+                      Color(0xFF94A3B8),
                 ),
                 const SizedBox(width: 4),
                 const Text(
                   'Secure import',
                   style: TextStyle(
                     fontSize: 9.5,
-                    color: Color(0xFF94A3B8),
-                    fontWeight: FontWeight.w500,
+                    color:
+                        Color(0xFF94A3B8),
+                    fontWeight:
+                        FontWeight.w500,
                   ),
                 ),
               ],
@@ -701,14 +791,15 @@ class _ClassesCardState extends State<_ClassesCard> {
 // PREMIUM ACTION BUTTON
 // ================================================================
 
-class _PremiumActionButton extends StatelessWidget {
+class _PremiumSectionsActionButton
+    extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool primary;
   final bool loading;
   final VoidCallback? onPressed;
 
-  const _PremiumActionButton({
+  const _PremiumSectionsActionButton({
     required this.label,
     required this.icon,
     required this.primary,
@@ -730,22 +821,25 @@ class _PremiumActionButton extends StatelessWidget {
           disabledForegroundColor:
               Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(
+          padding:
+              const EdgeInsets.symmetric(
             vertical: 12,
             horizontal: 8,
           ),
-          shape: RoundedRectangleBorder(
+          shape:
+              RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.circular(10),
           ),
         ),
         child: AnimatedSwitcher(
-          duration: const Duration(
-            milliseconds: 180,
-          ),
+          duration:
+              const Duration(milliseconds: 180),
           child: Row(
             key: ValueKey(
-              loading ? 'loading' : 'normal',
+              loading
+                  ? 'loading'
+                  : 'normal',
             ),
             mainAxisAlignment:
                 MainAxisAlignment.center,
@@ -800,22 +894,25 @@ class _PremiumActionButton extends StatelessWidget {
               : const Color(0xFFD4DDF0),
           width: 1.1,
         ),
-        padding: const EdgeInsets.symmetric(
+        padding:
+            const EdgeInsets.symmetric(
           vertical: 11,
           horizontal: 8,
         ),
-        shape: RoundedRectangleBorder(
+        shape:
+            RoundedRectangleBorder(
           borderRadius:
               BorderRadius.circular(10),
         ),
       ),
       child: AnimatedSwitcher(
-        duration: const Duration(
-          milliseconds: 180,
-        ),
+        duration:
+            const Duration(milliseconds: 180),
         child: Row(
           key: ValueKey(
-            loading ? 'loading' : 'normal',
+            loading
+                ? 'loading'
+                : 'normal',
           ),
           mainAxisAlignment:
               MainAxisAlignment.center,
@@ -824,7 +921,8 @@ class _PremiumActionButton extends StatelessWidget {
               const SizedBox(
                 width: 15,
                 height: 15,
-                child: CircularProgressIndicator(
+                child:
+                    CircularProgressIndicator(
                   strokeWidth: 2,
                 ),
               )

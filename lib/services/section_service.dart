@@ -150,6 +150,49 @@ class SectionService {
   }
 
   // ============================================================
+  // IMPORT SECTIONS EXCEL
+  // ============================================================
+
+  Future<Map<String, dynamic>> importSectionsExcel({
+    required int schoolId,
+    required List<int> fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+        ),
+      });
+
+      final response = await apiClient.dio.post(
+        '/api/v1/sections/import',
+        queryParameters: {
+          'schoolId': schoolId,
+        },
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+        ),
+      );
+
+      if (response.data is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(response.data);
+      }
+
+      return {
+        'message': 'Sections imported successfully.',
+        'data': response.data,
+      };
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    } catch (e) {
+      throw Exception('Failed to import sections Excel: $e');
+    }
+  }
+
+  // ============================================================
   // PARSE LIST
   // ============================================================
 

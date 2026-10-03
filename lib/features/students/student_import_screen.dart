@@ -132,10 +132,9 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
   // ============================================================
   Future<void> _importStudents() async {
     if (selectedFileBytes == null || selectedFileBytes!.isEmpty) {
-      setState(() {
-        errorMessage = 'Please select an Excel file first.';
-      });
-
+      await _showImportFailure(
+        'Please select an Excel file before starting the import.',
+      );
       return;
     }
 
@@ -149,11 +148,6 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       debugPrint('FILE NAME: $selectedFileName');
       debugPrint('FILE SIZE: ${selectedFileBytes!.length}');
 
-      // IMPORTANT:
-      // Use the existing StudentService.
-      // It already contains:
-      // 1. Backend base URL
-      // 2. JWT Authorization header
       final result = await widget.studentService.importStudentsExcel(
         bytes: selectedFileBytes!,
         fileName: selectedFileName ?? 'students.xlsx',
@@ -176,21 +170,30 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
 
       if (!mounted) return;
 
+      final message = _getBackendErrorMessage(e);
+
       setState(() {
         isImporting = false;
-        errorMessage = _getBackendErrorMessage(e);
+        errorMessage = message;
       });
+
+      await _showImportFailure(message);
     } catch (e) {
       debugPrint('IMPORT ERROR: $e');
 
       if (!mounted) return;
 
+      final message = e.toString().replaceFirst('Exception: ', '');
+
       setState(() {
         isImporting = false;
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = message;
       });
+
+      await _showImportFailure(message);
     }
   }
+
   // ============================================================
   // BACKEND ERROR MESSAGE
   // ============================================================
@@ -232,35 +235,477 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
   // ============================================================
 
   Future<void> _showImportSuccess(String message) async {
+    if (!mounted) return;
+
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 10),
-              Text('Import Successful'),
-            ],
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
           ),
-          content: Text(message),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.14),
+                    blurRadius: 35,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // --------------------------------------------------
+                  // SUCCESS HEADER
+                  // --------------------------------------------------
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
+                      ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(26),
+                        topRight: Radius.circular(26),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            color: Colors.white,
+                            size: 38,
+                          ),
+                        ),
 
-                // Return to StudentsScreen.
-                Navigator.pop(context, true);
-              },
-              child: const Text('Done'),
+                        const SizedBox(height: 16),
+
+                        const Text(
+                          'Import Successful',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+
+                        const SizedBox(height: 7),
+
+                        Text(
+                          'Student records have been imported successfully.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.90),
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // --------------------------------------------------
+                  // CONTENT
+                  // --------------------------------------------------
+                  Padding(
+                    padding: const EdgeInsets.all(26),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Import Summary',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // File information
+                        Container(
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF16A34A,
+                                  ).withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(11),
+                                ),
+                                child: const Icon(
+                                  Icons.description_outlined,
+                                  color: Color(0xFF16A34A),
+                                  size: 22,
+                                ),
+                              ),
+
+                              const SizedBox(width: 12),
+
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Excel File',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF6B7280),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      selectedFileName ?? 'students.xlsx',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF111827),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Backend response
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                color: Color(0xFF16A34A),
+                                size: 21,
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Text(
+                                  message,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF166534),
+                                    height: 1.45,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 22),
+
+                        // Done button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop();
+
+                              // Return to StudentsScreen
+                              Navigator.of(context).pop(true);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_rounded, size: 19),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Done',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         );
       },
     );
   }
 
+  Future<void> _showImportFailure(String message) async {
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.14),
+                    blurRadius: 35,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // --------------------------------------------------
+                  // ERROR HEADER
+                  // --------------------------------------------------
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
+                      ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(26),
+                        topRight: Radius.circular(26),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.17),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 38,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        const Text(
+                          'Import Failed',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+
+                        const SizedBox(height: 7),
+
+                        Text(
+                          'We could not import the student records.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.90),
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // --------------------------------------------------
+                  // ERROR CONTENT
+                  // --------------------------------------------------
+                  Padding(
+                    padding: const EdgeInsets.all(26),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Error Details',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        Container(
+                          width: double.infinity,
+                          constraints: const BoxConstraints(maxHeight: 220),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7F7),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  color: Color(0xFFDC2626),
+                                  size: 21,
+                                ),
+
+                                const SizedBox(width: 11),
+
+                                Expanded(
+                                  child: SelectableText(
+                                    message,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF991B1B),
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.lightbulb_outline_rounded,
+                                color: Color(0xFFD97706),
+                                size: 20,
+                              ),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Please check the Excel format and student data, then try again.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF92400E),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 22),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop();
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF374151),
+                              side: const BorderSide(color: Color(0xFFD1D5DB)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                            ),
+                            child: const Text(
+                              'Close',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
   // ============================================================
   // BUILD
   // ============================================================

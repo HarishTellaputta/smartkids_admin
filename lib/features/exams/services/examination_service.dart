@@ -579,63 +579,108 @@ class ExaminationService {
   }
 
   Future<List<ExamResultResponseModel>> getResults({
-  int? scheduleId,
-  int? studentId,
-}) async {
-  try {
-    final response = await _dio.get(
-      '/api/v1/examinations/results',
-      queryParameters: {
-        if (scheduleId != null) 'scheduleId': scheduleId,
-        if (studentId != null) 'studentId': studentId,
-      },
-    );
+    int? scheduleId,
+    int? studentId,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/api/v1/examinations/results',
+        queryParameters: {
+          if (scheduleId != null) 'scheduleId': scheduleId,
+          if (studentId != null) 'studentId': studentId,
+        },
+      );
 
-    final data = response.data;
+      final data = response.data;
 
-    if (data is List) {
-      return data
-          .map(
-            (e) => ExamResultResponseModel.fromJson(
-              Map<String, dynamic>.from(e),
-            ),
-          )
-          .toList();
+      if (data is List) {
+        return data
+            .map(
+              (e) => ExamResultResponseModel.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList();
+      }
+
+      return [];
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?.toString() ??
+            e.message ??
+            'Failed to load examination results',
+      );
     }
-
-    return [];
-  } on DioException catch (e) {
-    throw Exception(
-      e.response?.data?.toString() ??
-          e.message ??
-          'Failed to load examination results',
-    );
   }
-}
 
-Future<ExamResultResponseModel> setResultPublication({
-  required int id,
-  required bool published,
-}) async {
-  try {
-    final response = await _dio.patch(
-      '/api/v1/examinations/results/$id/publish',
-      queryParameters: {
-        'published': published,
-      },
-    );
+  Future<ExamResultResponseModel> setResultPublication({
+    required int id,
+    required bool published,
+  }) async {
+    try {
+      final response = await _dio.patch(
+        '/api/v1/examinations/results/$id/publish',
+        queryParameters: {'published': published},
+      );
 
-    return ExamResultResponseModel.fromJson(
-      Map<String, dynamic>.from(response.data),
-    );
-  } on DioException catch (e) {
-    throw Exception(
-      e.response?.data?.toString() ??
-          e.message ??
-          'Failed to update result publication',
-    );
+      return ExamResultResponseModel.fromJson(
+        Map<String, dynamic>.from(response.data),
+      );
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?.toString() ??
+            e.message ??
+            'Failed to update result publication',
+      );
+    }
   }
-}
 
+  // ============================================================
+  // PUBLISH / UNPUBLISH ALL RESULTS FOR AN EXAMINATION
+  // PATCH /api/v1/examinations/{examinationId}/results/publish
+  // ============================================================
 
+  Future<List<ExamResultResponseModel>> setExaminationResultsPublication({
+    required int examinationId,
+    required bool published,
+  }) async {
+    try {
+      print('========================================');
+      print('EXAMINATION RESULT PUBLICATION');
+      print('EXAMINATION ID: $examinationId');
+      print('PUBLISHED: $published');
+      print('========================================');
+
+      final response = await _dio.patch(
+        '/api/v1/examinations/$examinationId/results/publish',
+        queryParameters: {'published': published},
+      );
+
+      print('STATUS: ${response.statusCode}');
+      print('RESPONSE: ${response.data}');
+
+      final data = response.data;
+
+      if (data is List) {
+        return data
+            .whereType<Map>()
+            .map(
+              (item) => ExamResultResponseModel.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .toList();
+      }
+
+      return [];
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?.toString() ??
+            e.message ??
+            'Failed to update examination result publication',
+      );
+    } catch (e) {
+      throw Exception('Failed to update examination result publication: $e');
+    }
+  }
 }

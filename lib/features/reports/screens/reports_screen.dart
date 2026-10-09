@@ -57,13 +57,13 @@ class ReportsScreen extends StatelessWidget {
       //   color: const Color(0xFF2563EB),
       //   page: const ClassPerformanceScreen(),
       // ),
-      _ReportItem(
-        title: 'MCQ Performance',
-        subtitle: 'Online test and MCQ analytics',
-        icon: Icons.quiz_rounded,
-        color: const Color(0xFFDB2777),
-        page: const McqPerformanceScreen(),
-      ),
+      // _ReportItem(
+      //   title: 'MCQ Performance',
+      //   subtitle: 'Online test and MCQ analytics',
+      //   icon: Icons.quiz_rounded,
+      //   color: const Color(0xFFDB2777),
+      //   page: const McqPerformanceScreen(),
+      // ),
     ];
 
     return Scaffold(

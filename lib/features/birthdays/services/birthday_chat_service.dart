@@ -79,28 +79,18 @@ class BirthdayChatService {
     required String message,
     int? replyToMessageId,
   }) async {
-    try {
-      final Map<String, dynamic> data = {'message': message};
+    final response = await _apiClient.dio.post(
+      '/api/v1/birthday-chat/$studentId/messages',
+      data: {
+        'message': message,
+        if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+      },
+    );
 
-      if (replyToMessageId != null) {
-        data['replyToMessageId'] = replyToMessageId;
-      }
-
-      final response = await _apiClient.dio.post(
-        '/api/v1/birthday-chat/$studentId/messages',
-        data: data,
-      );
-
-      return BirthdayChatMessageModel.fromJson(
-        Map<String, dynamic>.from(response.data),
-      );
-    } on DioException catch (e) {
-      throw _handleDioError(e);
-    } catch (e) {
-      throw Exception('Failed to send message: $e');
-    }
+    return BirthdayChatMessageModel.fromJson(
+      Map<String, dynamic>.from(response.data),
+    );
   }
-
   // ============================================================
   // EDIT MESSAGE
   // ============================================================

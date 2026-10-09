@@ -60,6 +60,16 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen>
 
     WidgetsBinding.instance.addObserver(this);
 
+    _messageFocusNode.addListener(() {
+      if (_messageFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted && !_showEmojiPicker) {
+            _scrollToBottom();
+          }
+        });
+      }
+    });
+
     _initialize();
   }
 
@@ -163,11 +173,9 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen>
     }
   }
 
-  bool _isMyMessage(BirthdayChatMessageModel message) {
-    return _currentUserId != null &&
-        message.senderId != null &&
-        message.senderId == _currentUserId;
-  }
+ bool _isMyMessage(BirthdayChatMessageModel message) {
+  return message.senderId == 1;
+}
 
   // ============================================================
   // LOAD MESSAGES
@@ -602,113 +610,162 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen>
         .where((item) => item.reactedByCurrentUser)
         .toList();
 
-    await showModalBottomSheet(
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) {
-        return SafeArea(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _sheetHandle(),
+      builder: (sheetContext) {
+        bool isRemovingReactions = false;
 
-                const SizedBox(height: 18),
-
-                const Text(
-                  'React to this message',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF171A21),
-                  ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _sheetHandle(),
 
-                const SizedBox(height: 18),
+                    const SizedBox(height: 18),
 
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _availableReactions.map((reaction) {
-                    final existing = message.reactions.where(
-                      (item) => item.reaction == reaction,
-                    );
+                    const Text(
+                      'React to this message',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF171A21),
+                      ),
+                    ),
 
-                    final selected =
-                        existing.isNotEmpty &&
-                        existing.first.reactedByCurrentUser;
+                    const SizedBox(height: 18),
 
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(17),
-                      onTap: () async {
-                        Navigator.pop(context);
-
-                        await _toggleReaction(
-                          message: message,
-                          reaction: reaction,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: _availableReactions.map((reaction) {
+                        final existing = message.reactions.where(
+                          (item) => item.reaction == reaction,
                         );
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? const Color(0xFFEDE9FE)
-                              : const Color(0xFFF6F7FA),
+
+                        final selected = existing.any(
+                          (item) => item.reactedByCurrentUser,
+                        );
+
+                        return InkWell(
                           borderRadius: BorderRadius.circular(17),
-                          border: Border.all(
-                            color: selected
-                                ? const Color(0xFF7C3AED)
-                                : const Color(0xFFE4E7EC),
-                            width: selected ? 1.5 : 1,
+                          onTap: isRemovingReactions
+                              ? null
+                              : () async {
+                                  Navigator.pop(sheetContext);
+
+                                  await _toggleReaction(
+                                    message: message,
+                                    reaction: reaction,
+                                  );
+                                },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? const Color(0xFFEDE9FE)
+                                  : const Color(0xFFF6F7FA),
+                              borderRadius: BorderRadius.circular(17),
+                              border: Border.all(
+                                color: selected
+                                    ? const Color(0xFF7C3AED)
+                                    : const Color(0xFFE4E7EC),
+                                width: selected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                reaction,
+                                style: const TextStyle(fontSize: 26),
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            reaction,
-                            style: const TextStyle(fontSize: 26),
+                        );
+                      }).toList(),
+                    ),
+
+                    if (myReactions.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: isRemovingReactions
+                              ? null
+                              : () async {
+                                  setSheetState(() {
+                                    isRemovingReactions = true;
+                                  });
+
+                                  try {
+                                    for (final reaction in myReactions) {
+                                      await _service.removeReaction(
+                                        messageId: message.id!,
+                                        reaction: reaction.reaction,
+                                      );
+                                    }
+
+                                    if (sheetContext.mounted) {
+                                      Navigator.pop(sheetContext);
+                                    }
+
+                                    await _refreshMessagesSilently();
+
+                                    if (mounted) {
+                                      _showSnackBar('Reactions removed');
+                                    }
+                                  } catch (e) {
+                                    if (sheetContext.mounted) {
+                                      setSheetState(() {
+                                        isRemovingReactions = false;
+                                      });
+                                    }
+
+                                    if (mounted) {
+                                      _showSnackBar(
+                                        _cleanError(e),
+                                        isError: true,
+                                      );
+                                    }
+                                  }
+                                },
+                          icon: isRemovingReactions
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.remove_circle_outline),
+                          label: Text(
+                            isRemovingReactions
+                                ? 'Removing...'
+                                : 'Remove my reaction',
                           ),
+                          style: _outlineButtonStyle(),
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ],
+                  ],
                 ),
-
-                if (myReactions.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(context);
-
-                        for (final reaction in myReactions) {
-                          await _service.removeReaction(
-                            messageId: message.id!,
-                            reaction: reaction.reaction,
-                          );
-                        }
-
-                        await _refreshMessagesSilently();
-                      },
-                      icon: const Icon(Icons.remove_circle_outline),
-                      label: const Text('Remove my reaction'),
-                      style: _outlineButtonStyle(),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -911,6 +968,7 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
+      resizeToAvoidBottomInset: true,
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -1835,50 +1893,56 @@ class _BirthdayChatScreenState extends State<BirthdayChatScreen>
   }
 
   void _deletePreviousCharacter() {
-    final text = _messageController.text;
-    final selection = _messageController.selection;
+    final value = _messageController.value;
+    final text = value.text;
+    final selection = value.selection;
 
-    if (text.isEmpty) {
-      return;
-    }
+    if (text.isEmpty || !selection.isValid) return;
 
     final start = selection.start;
     final end = selection.end;
 
-    if (start < 0) {
-      return;
-    }
+    if (start < 0 || end < 0 || start > text.length) return;
 
-    // Delete selected text
-    if (start != end) {
-      final newText = text.replaceRange(start, end, '');
+    // Selected text unte selection ni delete cheyyali.
+    if (!selection.isCollapsed) {
+      final safeEnd = end.clamp(0, text.length);
+      final safeStart = start.clamp(0, text.length);
+
+      final newText = text.replaceRange(safeStart, safeEnd, '');
 
       _messageController.value = TextEditingValue(
         text: newText,
-        selection: TextSelection.collapsed(offset: start),
+        selection: TextSelection.collapsed(offset: safeStart),
       );
 
       setState(() {});
       return;
     }
 
-    if (start == 0) {
-      return;
+    if (start == 0) return;
+
+    // Cursor ki mundunna complete grapheme/emoji ni identify cheyyali.
+    var offset = 0;
+    var previousBoundary = 0;
+
+    for (final character in text.characters) {
+      final nextBoundary = offset + character.length;
+
+      if (nextBoundary >= start) {
+        previousBoundary = offset;
+        break;
+      }
+
+      offset = nextBoundary;
+      previousBoundary = offset;
     }
 
-    final characters = text.characters.toList();
-
-    if (characters.isEmpty) {
-      return;
-    }
-
-    characters.removeLast();
-
-    final newText = characters.join();
+    final newText = text.replaceRange(previousBoundary, start, '');
 
     _messageController.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: newText.length),
+      selection: TextSelection.collapsed(offset: previousBoundary),
     );
 
     setState(() {});

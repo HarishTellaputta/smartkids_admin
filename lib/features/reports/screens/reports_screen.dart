@@ -8,6 +8,7 @@ import 'student_performance_screen.dart';
 import 'class_performance_screen.dart';
 import 'mcq_performance_screen.dart';
 import '../../reports/screens/attendance_report_screen.dart';
+import '../../reports/screens/suggestions_complaints_screen.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -36,13 +37,13 @@ class ReportsScreen extends StatelessWidget {
         color: const Color(0xFF059669),
         page: const FeeReportScreen(),
       ),
-      // _ReportItem(
-      //   title: 'Academic Performance',
-      //   subtitle: 'Overall examination performance',
-      //   icon: Icons.bar_chart_rounded,
-      //   color: const Color(0xFF7C3AED),
-      //   page: const AcademicPerformanceScreen(),
-      // ),
+      _ReportItem(
+        title: 'Suggestions\n' '&\n' 'Complaints',
+        subtitle: 'View messages submitted by parents',
+        icon: Icons.feedback_rounded,
+        color: const Color(0xFF7C3AED),
+        page: const SuggestionsComplaintsScreen(),
+      ),
       // _ReportItem(
       //   title: 'Student Performance',
       //   subtitle: 'Individual student performance',
@@ -85,10 +86,7 @@ class ReportsScreen extends StatelessWidget {
               const SizedBox(height: 6),
               const Text(
                 'Analyze attendance, academics, examinations, fees and student performance.',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Color(0xFF6B7280),
-                ),
+                style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
               ),
               const SizedBox(height: 28),
 
@@ -96,8 +94,7 @@ class ReportsScreen extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: reports.length,
-                gridDelegate:
-                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 360,
                   mainAxisExtent: 175,
                   crossAxisSpacing: 18,
@@ -111,9 +108,7 @@ class ReportsScreen extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => item.page,
-                        ),
+                        MaterialPageRoute(builder: (_) => item.page),
                       );
                     },
                     child: Container(
@@ -121,9 +116,7 @@ class ReportsScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFFE5E7EB),
-                        ),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                         boxShadow: const [
                           BoxShadow(
                             color: Color(0x0A000000),
@@ -141,19 +134,13 @@ class ReportsScreen extends StatelessWidget {
                               color: item.color.withOpacity(.10),
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Icon(
-                              item.icon,
-                              color: item.color,
-                              size: 28,
-                            ),
+                            child: Icon(item.icon, color: item.color, size: 28),
                           ),
                           const SizedBox(width: 18),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
                                   item.title,

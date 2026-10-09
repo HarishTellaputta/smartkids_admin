@@ -1,6 +1,7 @@
 class ExaminationModel {
   final int? id;
   final int? academicYearId;
+  final String? academicYearName;
   final String name;
   final String description;
   final String examType;
@@ -10,6 +11,7 @@ class ExaminationModel {
   ExaminationModel({
     this.id,
     this.academicYearId,
+    this.academicYearName,
     required this.name,
     required this.description,
     required this.examType,
@@ -21,6 +23,7 @@ class ExaminationModel {
     return ExaminationModel(
       id: _toInt(json['id']),
       academicYearId: _toInt(json['academicYearId']),
+      academicYearName: json['academicYearName']?.toString(),
       name: json['name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       examType: json['examType']?.toString() ?? '',
@@ -43,6 +46,7 @@ class ExaminationModel {
   ExaminationModel copyWith({
     int? id,
     int? academicYearId,
+    String? academicYearName,
     String? name,
     String? description,
     String? examType,
@@ -52,6 +56,7 @@ class ExaminationModel {
     return ExaminationModel(
       id: id ?? this.id,
       academicYearId: academicYearId ?? this.academicYearId,
+      academicYearName: academicYearName ?? this.academicYearName,
       name: name ?? this.name,
       description: description ?? this.description,
       examType: examType ?? this.examType,

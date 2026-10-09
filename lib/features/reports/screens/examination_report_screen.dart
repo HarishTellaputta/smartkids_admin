@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
@@ -13,19 +12,17 @@ class ExaminationReportScreen extends StatefulWidget {
       _ExaminationReportScreenState();
 }
 
-class _ExaminationReportScreenState
-    extends State<ExaminationReportScreen> {
+class _ExaminationReportScreenState extends State<ExaminationReportScreen> {
   late final ReportService _service;
 
   List<ExaminationReportModel> _items = [];
 
-  DateTime _from = DateTime.now().subtract(
-    const Duration(days: 30),
-  );
+  DateTime _from = DateTime.now().subtract(const Duration(days: 30));
   DateTime _to = DateTime.now();
 
   bool _loading = false;
   String? _error;
+  String? _selectedClass;
 
   @override
   void initState() {
@@ -85,10 +82,7 @@ class _ExaminationReportScreenState
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString().replaceFirst(
-                'Exception: ',
-                '',
-              );
+          _error = e.toString().replaceFirst('Exception: ', '');
         });
       }
     } finally {
@@ -109,9 +103,7 @@ class _ExaminationReportScreenState
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF4F46E5),
-            ),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF4F46E5)),
           ),
           child: child!,
         );
@@ -121,18 +113,12 @@ class _ExaminationReportScreenState
     if (result == null) return;
 
     if (isFrom && result.isAfter(_to)) {
-      _showMessage(
-        'From date cannot be after To date.',
-        isError: true,
-      );
+      _showMessage('From date cannot be after To date.', isError: true);
       return;
     }
 
     if (!isFrom && result.isBefore(_from)) {
-      _showMessage(
-        'To date cannot be before From date.',
-        isError: true,
-      );
+      _showMessage('To date cannot be before From date.', isError: true);
       return;
     }
 
@@ -147,44 +133,151 @@ class _ExaminationReportScreenState
     _load();
   }
 
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
+  void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            isError ? const Color(0xFFDC2626) : null,
+        backgroundColor: isError ? const Color(0xFFDC2626) : null,
       ),
     );
   }
 
-  int get _totalExams => _items.length;
+  int get _totalExams => _filteredItems.length;
 
   int get _scheduledExams {
     return _items.where((item) {
       final status = item.status?.toLowerCase();
-      return status == 'scheduled' ||
-          status == 'upcoming';
+      return status == 'scheduled' || status == 'upcoming';
     }).length;
+  }
+
+  List<ExaminationReportModel> get _filteredItems {
+    if (_selectedClass == null || _selectedClass!.isEmpty) {
+      return _items;
+    }
+
+    return _items.where((item) {
+      return item.className?.toLowerCase() == _selectedClass!.toLowerCase();
+    }).toList();
+  }
+
+  List<String> get _classes {
+    final classes = _items
+        .map((item) => item.className)
+        .whereType<String>()
+        .where((value) => value.trim().isNotEmpty)
+        .toSet()
+        .toList();
+
+    classes.sort();
+    return classes;
   }
 
   int get _completedExams {
     return _items.where((item) {
       final status = item.status?.toLowerCase();
-      return status == 'completed' ||
-          status == 'complete';
+      return status == 'completed' || status == 'complete';
     }).length;
   }
 
   int get _cancelledExams {
     return _items.where((item) {
       final status = item.status?.toLowerCase();
-      return status == 'cancelled' ||
-          status == 'canceled';
+      return status == 'cancelled' || status == 'canceled';
     }).length;
+  }
+
+  Widget _classSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _selectedClass,
+          hint: const Text(
+            'All Classes',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF111827),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 18,
+            color: Color(0xFF6B7280),
+          ),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text(
+                'All Classes',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+            ..._classes.map(
+              (className) => DropdownMenuItem<String?>(
+                value: className,
+                child: Text(
+                  className,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedClass = value;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateFilters(bool mobile) {
+    final classFilter = _classSelector();
+
+    final widgets = [
+      classFilter,
+      _dateSelector(label: 'From Date', value: _from, onTap: () => _pick(true)),
+      _dateSelector(label: 'To Date', value: _to, onTap: () => _pick(false)),
+    ];
+
+    if (mobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          widgets[0],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: widgets[1]),
+              const SizedBox(width: 10),
+              Expanded(child: widgets[2]),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        widgets[0],
+        const SizedBox(width: 10),
+        widgets[1],
+        const SizedBox(width: 10),
+        widgets[2],
+      ],
+    );
   }
 
   @override
@@ -250,14 +343,9 @@ class _ExaminationReportScreenState
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(
-                      Icons.refresh_rounded,
-                      size: 21,
-                    ),
+                  : const Icon(Icons.refresh_rounded, size: 21),
             ),
           ),
         ],
@@ -332,42 +420,6 @@ class _ExaminationReportScreenState
     );
   }
 
-  Widget _buildDateFilters(bool mobile) {
-    final widgets = [
-      _dateSelector(
-        label: 'From Date',
-        value: _from,
-        onTap: () => _pick(true),
-      ),
-      _dateSelector(
-        label: 'To Date',
-        value: _to,
-        onTap: () => _pick(false),
-      ),
-    ];
-
-    if (mobile) {
-      return Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: widgets[0]),
-              const SizedBox(width: 10),
-              Expanded(child: widgets[1]),
-            ],
-          ),
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        widgets[0],
-        const SizedBox(width: 10),
-        widgets[1],
-      ],
-    );
-  }
 
   Widget _dateSelector({
     required String label,
@@ -378,16 +430,11 @@ class _ExaminationReportScreenState
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 11,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFE5E7EB),
-          ),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -490,8 +537,7 @@ class _ExaminationReportScreenState
       children: [
         for (int i = 0; i < cards.length; i++) ...[
           Expanded(child: cards[i]),
-          if (i != cards.length - 1)
-            const SizedBox(width: 14),
+          if (i != cards.length - 1) const SizedBox(width: 14),
         ],
       ],
     );
@@ -516,11 +562,7 @@ class _ExaminationReportScreenState
               color: iconBackground,
               borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 23,
-            ),
+            child: Icon(icon, color: iconColor, size: 23),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -566,8 +608,7 @@ class _ExaminationReportScreenState
               children: [
                 const Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Examination Records',
@@ -593,10 +634,7 @@ class _ExaminationReportScreenState
               ],
             ),
           ),
-          const Divider(
-            height: 1,
-            color: Color(0xFFE5E7EB),
-          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _content(isMobile),
         ],
       ),
@@ -605,16 +643,13 @@ class _ExaminationReportScreenState
 
   Widget _recordCount() {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        '${_items.length} Records',
+        '${_filteredItems.length} Records',
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
@@ -645,9 +680,7 @@ class _ExaminationReportScreenState
       return _emptyState();
     }
 
-    return isMobile
-        ? _mobileRecords()
-        : _desktopTable();
+    return isMobile ? _mobileRecords() : _desktopTable();
   }
 
   Widget _desktopTable() {
@@ -674,30 +707,16 @@ class _ExaminationReportScreenState
           DataColumn(label: Text('MAX MARKS')),
           DataColumn(label: Text('STATUS')),
         ],
-        rows: _items.map((item) {
+        rows: _filteredItems.map((item) {
           return DataRow(
             cells: [
-              DataCell(
-                _examName(item.examinationName),
-              ),
-              DataCell(
-                _normalText(item.className),
-              ),
-              DataCell(
-                _normalText(item.subjectName),
-              ),
-              DataCell(
-                _examDate(item.examDate),
-              ),
-              DataCell(
-                _normalText(item.startTime),
-              ),
-              DataCell(
-                _marks(item.maxMarks),
-              ),
-              DataCell(
-                _statusChip(item.status),
-              ),
+              DataCell(_examName(item.examinationName)),
+              DataCell(_normalText(item.className)),
+              DataCell(_normalText(item.subjectName)),
+              DataCell(_examDate(item.examDate)),
+              DataCell(_normalText(item.startTime)),
+              DataCell(_marks(item.maxMarks)),
+              DataCell(_statusChip(item.status)),
             ],
           );
         }).toList(),
@@ -711,8 +730,7 @@ class _ExaminationReportScreenState
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(14),
       itemCount: _items.length,
-      separatorBuilder: (_, __) =>
-          const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final item = _items[index];
 
@@ -721,28 +739,18 @@ class _ExaminationReportScreenState
           decoration: BoxDecoration(
             color: const Color(0xFFF9FAFB),
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(
-              color: const Color(0xFFE5E7EB),
-            ),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
           child: Column(
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: _examName(
-                      item.examinationName,
-                    ),
-                  ),
+                  Expanded(child: _examName(item.examinationName)),
                   _statusChip(item.status),
                 ],
               ),
               const SizedBox(height: 14),
-              _mobileInfoRow(
-                Icons.school_rounded,
-                'Class',
-                item.className,
-              ),
+              _mobileInfoRow(Icons.school_rounded, 'Class', item.className),
               _mobileInfoRow(
                 Icons.menu_book_rounded,
                 'Subject',
@@ -753,11 +761,7 @@ class _ExaminationReportScreenState
                 'Exam Date',
                 _formatExamDate(item.examDate),
               ),
-              _mobileInfoRow(
-                Icons.access_time_rounded,
-                'Time',
-                item.startTime,
-              ),
+              _mobileInfoRow(Icons.access_time_rounded, 'Time', item.startTime),
               _mobileInfoRow(
                 Icons.stars_rounded,
                 'Max Marks',
@@ -770,20 +774,12 @@ class _ExaminationReportScreenState
     );
   }
 
-  Widget _mobileInfoRow(
-    IconData icon,
-    String label,
-    String? value,
-  ) {
+  Widget _mobileInfoRow(IconData icon, String label, String? value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: const Color(0xFF9CA3AF),
-          ),
+          Icon(icon, size: 16, color: const Color(0xFF9CA3AF)),
           const SizedBox(width: 9),
           SizedBox(
             width: 72,
@@ -830,9 +826,7 @@ class _ExaminationReportScreenState
         ),
         const SizedBox(width: 10),
         ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 190,
-          ),
+          constraints: const BoxConstraints(maxWidth: 190),
           child: Text(
             value ?? '-',
             maxLines: 2,
@@ -904,18 +898,15 @@ class _ExaminationReportScreenState
     Color foreground;
     IconData icon;
 
-    if (normalized == 'completed' ||
-        normalized == 'complete') {
+    if (normalized == 'completed' || normalized == 'complete') {
       background = const Color(0xFFECFDF5);
       foreground = const Color(0xFF047857);
       icon = Icons.check_circle_rounded;
-    } else if (normalized == 'scheduled' ||
-        normalized == 'upcoming') {
+    } else if (normalized == 'scheduled' || normalized == 'upcoming') {
       background = const Color(0xFFEFF6FF);
       foreground = const Color(0xFF2563EB);
       icon = Icons.schedule_rounded;
-    } else if (normalized == 'cancelled' ||
-        normalized == 'canceled') {
+    } else if (normalized == 'cancelled' || normalized == 'canceled') {
       background = const Color(0xFFFEF2F2);
       foreground = const Color(0xFFDC2626);
       icon = Icons.cancel_rounded;
@@ -926,10 +917,7 @@ class _ExaminationReportScreenState
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
@@ -937,16 +925,10 @@ class _ExaminationReportScreenState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 13,
-            color: foreground,
-          ),
+          Icon(icon, size: 13, color: foreground),
           const SizedBox(width: 5),
           Text(
-            status?.isNotEmpty == true
-                ? _capitalize(status!)
-                : 'Unknown',
+            status?.isNotEmpty == true ? _capitalize(status!) : 'Unknown',
             style: TextStyle(
               fontSize: 10,
               color: foreground,
@@ -961,8 +943,7 @@ class _ExaminationReportScreenState
   String _capitalize(String value) {
     if (value.isEmpty) return value;
 
-    return value[0].toUpperCase() +
-        value.substring(1).toLowerCase();
+    return value[0].toUpperCase() + value.substring(1).toLowerCase();
   }
 
   Widget _emptyState() {
@@ -996,10 +977,7 @@ class _ExaminationReportScreenState
           const Text(
             'No examinations were found for the selected date range.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
         ],
       ),
@@ -1008,10 +986,7 @@ class _ExaminationReportScreenState
 
   Widget _errorState() {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 20,
-        vertical: 65,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 65),
       child: Column(
         children: [
           Container(
@@ -1038,34 +1013,23 @@ class _ExaminationReportScreenState
           ),
           const SizedBox(height: 7),
           ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 500,
-            ),
+            constraints: const BoxConstraints(maxWidth: 500),
             child: Text(
               _error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
           ),
           const SizedBox(height: 18),
           ElevatedButton.icon(
             onPressed: _load,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              size: 17,
-            ),
+            icon: const Icon(Icons.refresh_rounded, size: 17),
             label: const Text('Try Again'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4F46E5),
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -1080,9 +1044,7 @@ class _ExaminationReportScreenState
     return BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: const Color(0xFFE5E7EB),
-      ),
+      border: Border.all(color: const Color(0xFFE5E7EB)),
       boxShadow: const [
         BoxShadow(
           color: Color(0x08000000),
@@ -1093,4 +1055,3 @@ class _ExaminationReportScreenState
     );
   }
 }
-

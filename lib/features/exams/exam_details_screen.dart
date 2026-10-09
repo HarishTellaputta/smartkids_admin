@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 
@@ -29,11 +31,22 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
 
   ExaminationModel get exam => widget.exam;
 
+  // =========================================================
+  // FILTERS
+  // =========================================================
+
+  String? selectedClass;
+  String? selectedSection;
+
   @override
   void initState() {
     super.initState();
     _loadSchedules();
   }
+
+  // =========================================================
+  // LOAD SCHEDULES
+  // =========================================================
 
   Future<void> _loadSchedules() async {
     if (exam.id == null) {
@@ -44,8 +57,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     }
 
     try {
-      final result =
-          await widget.service.getSchedulesByExamination(exam.id!);
+      final result = await widget.service.getSchedulesByExamination(exam.id!);
 
       if (!mounted) return;
 
@@ -53,16 +65,109 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
         schedules = result;
         isLoadingSchedules = false;
         errorMessage = null;
+
+        _initializeFilters();
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         isLoadingSchedules = false;
-        errorMessage = e.toString();
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
+
+  // =========================================================
+  // INITIALIZE FILTERS
+  // =========================================================
+
+  void _initializeFilters() {
+    final classes = _classNames;
+
+    if (classes.isEmpty) {
+      selectedClass = null;
+      selectedSection = null;
+      return;
+    }
+
+    if (selectedClass == null || !classes.contains(selectedClass)) {
+      selectedClass = classes.first;
+    }
+
+    final sections = _sectionNamesForClass(selectedClass);
+
+    if (selectedSection != null &&
+        selectedSection != 'ALL' &&
+        !sections.contains(selectedSection)) {
+      selectedSection = null;
+    }
+  }
+
+  // =========================================================
+  // UNIQUE CLASS NAMES
+  // =========================================================
+
+  List<String> get _classNames {
+    final values = schedules
+        .map((schedule) => schedule.className.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+
+    values.sort(_naturalSort);
+
+    return values;
+  }
+
+  // =========================================================
+  // SECTION NAMES FOR SELECTED CLASS
+  // =========================================================
+
+  List<String> _sectionNamesForClass(String? className) {
+    if (className == null || className.trim().isEmpty) {
+      return [];
+    }
+
+    final values = schedules
+        .where((schedule) => schedule.className == className)
+        .map((schedule) => schedule.sectionName.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+
+    values.sort(_naturalSort);
+
+    return values;
+  }
+
+  // =========================================================
+  // FILTERED SCHEDULES
+  // =========================================================
+
+  List<ExamScheduleModel> get _filteredSchedules {
+    if (selectedClass == null) {
+      return [];
+    }
+
+    return schedules.where((schedule) {
+      final classMatches = schedule.className == selectedClass;
+
+      if (!classMatches) {
+        return false;
+      }
+
+      if (selectedSection == null || selectedSection == 'ALL') {
+        return true;
+      }
+
+      return schedule.sectionName == selectedSection;
+    }).toList();
+  }
+
+  // =========================================================
+  // REFRESH
+  // =========================================================
 
   Future<void> _refresh() async {
     setState(() {
@@ -72,6 +177,10 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
 
     await _loadSchedules();
   }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -84,10 +193,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.pop(context),
-          icon: const Icon(
-            Icons.arrow_back_rounded,
-            color: Color(0xFF0F172A),
-          ),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
         ),
         title: const Text(
           'Examination Details',
@@ -101,10 +207,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
           IconButton(
             tooltip: 'Refresh',
             onPressed: isLoadingSchedules ? null : _refresh,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: Color(0xFF475569),
-            ),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
           ),
           const SizedBox(width: 8),
         ],
@@ -113,9 +216,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
         padding: const EdgeInsets.all(24),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 1200,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1200),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -132,6 +233,10 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     );
   }
 
+  // =========================================================
+  // TOP HEADER
+  // =========================================================
+
   Widget _buildTopHeader() {
     return Row(
       children: [
@@ -140,7 +245,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                exam.name ?? 'Examination',
+                exam.name,
                 style: const TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
@@ -150,10 +255,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               const SizedBox(height: 6),
               Text(
                 'View examination information and complete schedule',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.blueGrey.shade500,
-                ),
+                style: TextStyle(fontSize: 13, color: Colors.blueGrey.shade500),
               ),
             ],
           ),
@@ -161,19 +263,13 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
         if (widget.onEdit != null)
           ElevatedButton.icon(
             onPressed: widget.onEdit,
-            icon: const Icon(
-              Icons.edit_outlined,
-              size: 18,
-            ),
+            icon: const Icon(Icons.edit_outlined, size: 18),
             label: const Text('Edit Examination'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(11),
               ),
@@ -183,6 +279,10 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     );
   }
 
+  // =========================================================
+  // EXAMINATION INFORMATION
+  // =========================================================
+
   Widget _buildDetailHeaderCard() {
     return Container(
       width: double.infinity,
@@ -190,9 +290,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -234,29 +332,21 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
             ],
           ),
           const SizedBox(height: 22),
-          const Divider(
-            height: 1,
-            color: Color(0xFFE2E8F0),
-          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
           const SizedBox(height: 20),
           Wrap(
             spacing: 18,
             runSpacing: 18,
             children: [
               _detailMetric(
-                icon: Icons.tag_rounded,
-                label: 'Exam ID',
-                value: exam.id?.toString() ?? '-',
-              ),
-              _detailMetric(
                 icon: Icons.calendar_today_outlined,
                 label: 'Year',
-                value: exam.year?.toString() ?? '-',
+                value: exam.year.toString(),
               ),
               _detailMetric(
                 icon: Icons.school_outlined,
                 label: 'Academic Year',
-                value: exam.academicYearId?.toString() ?? '-',
+                value: exam.academicYearName ?? '-',
               ),
               _detailMetric(
                 icon: Icons.category_outlined,
@@ -265,8 +355,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               ),
             ],
           ),
-          if (exam.description != null &&
-              exam.description!.trim().isNotEmpty) ...[
+          if (exam.description.trim().isNotEmpty) ...[
             const SizedBox(height: 22),
             Container(
               width: double.infinity,
@@ -274,9 +363,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                ),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +378,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    exam.description!,
+                    exam.description,
                     style: const TextStyle(
                       fontSize: 14,
                       height: 1.5,
@@ -306,6 +393,10 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
       ),
     );
   }
+
+  // =========================================================
+  // DETAIL METRIC
+  // =========================================================
 
   Widget _detailMetric({
     required IconData icon,
@@ -324,11 +415,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: const Color(0xFF475569),
-            ),
+            child: Icon(icon, size: 18, color: const Color(0xFF475569)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -361,6 +448,10 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
       ),
     );
   }
+
+  // =========================================================
+  // STATUS BADGE
+  // =========================================================
 
   Widget _statusBadge(String? status) {
     final normalized = status?.toUpperCase() ?? '';
@@ -396,10 +487,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
@@ -415,15 +503,19 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     );
   }
 
+  // =========================================================
+  // SCHEDULE SECTION
+  // =========================================================
+
   Widget _buildScheduleSection() {
+    final filteredCount = _filteredSchedules.length;
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -435,12 +527,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              22,
-              20,
-              22,
-              18,
-            ),
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
             child: Row(
               children: [
                 Container(
@@ -480,6 +567,24 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
                     ],
                   ),
                 ),
+                if (!isLoadingSchedules && _filteredSchedules.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: _downloadFilteredSchedule,
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: const Text('Download'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: const BorderSide(color: Color(0xFFBFDBFE)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -490,7 +595,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${schedules.length} Schedule${schedules.length == 1 ? '' : 's'}',
+                    '$filteredCount Schedule${filteredCount == 1 ? '' : 's'}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -501,23 +606,188 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               ],
             ),
           ),
-          const Divider(
-            height: 1,
-            color: Color(0xFFE2E8F0),
-          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+          // FILTERS
+          _buildFilters(),
+
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
           _buildScheduleContent(),
         ],
       ),
     );
   }
 
+  // =========================================================
+  // FILTERS
+  // =========================================================
+
+  Widget _buildFilters() {
+    final sections = _sectionNamesForClass(selectedClass);
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          // CLASS
+          SizedBox(
+            width: 250,
+            child: _buildDropdownContainer(
+              label: 'Class',
+              required: true,
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedClass,
+                  isExpanded: true,
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  hint: const Text('Select Class'),
+                  items: _classNames.map((className) {
+                    return DropdownMenuItem<String>(
+                      value: className,
+                      child: Text(className, overflow: TextOverflow.ellipsis),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+
+                    setState(() {
+                      selectedClass = value;
+                      selectedSection = null;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          // SECTION
+          SizedBox(
+            width: 250,
+            child: _buildDropdownContainer(
+              label: 'Section',
+              required: false,
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedSection,
+                  isExpanded: true,
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  hint: const Text('All Sections'),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: 'ALL',
+                      child: Text('All Sections'),
+                    ),
+                    ...sections.map((section) {
+                      return DropdownMenuItem<String>(
+                        value: section,
+                        child: Text(section, overflow: TextOverflow.ellipsis),
+                      );
+                    }),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedSection = value;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // FILTER SUMMARY
+          if (selectedClass != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.filter_alt_outlined,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    selectedSection == null || selectedSection == 'ALL'
+                        ? '$selectedClass • All Sections'
+                        : '$selectedClass • Section $selectedSection',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // DROPDOWN CONTAINER
+  // =========================================================
+
+  Widget _buildDropdownContainer({
+    required String label,
+    required bool required,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            text: label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF475569),
+            ),
+            children: [
+              if (required)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(color: Color(0xFFDC2626)),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 7),
+        Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  // =========================================================
+  // SCHEDULE CONTENT
+  // =========================================================
+
   Widget _buildScheduleContent() {
     if (isLoadingSchedules) {
       return const Padding(
         padding: EdgeInsets.all(50),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -546,10 +816,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -586,10 +853,39 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               Text(
                 'No subject schedules have been added for this examination.',
                 textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_filteredSchedules.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(50),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.filter_alt_off_outlined,
+                size: 48,
+                color: Color(0xFF94A3B8),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'No schedules found for this filter',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF94A3B8),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF475569),
                 ),
+              ),
+              SizedBox(height: 5),
+              Text(
+                'Try selecting another class or section.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
               ),
             ],
           ),
@@ -600,7 +896,13 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     return _scheduleTable();
   }
 
+  // =========================================================
+  // SCHEDULE TABLE
+  // =========================================================
+
   Widget _scheduleTable() {
+    final filtered = _filteredSchedules;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -624,12 +926,12 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
           DataColumn(label: Text('ROOM')),
           DataColumn(label: Text('STATUS')),
         ],
-        rows: schedules.map((schedule) {
+        rows: filtered.map((schedule) {
           return DataRow(
             cells: [
               DataCell(
                 Text(
-                  schedule.subjectName?.toString() ?? '-',
+                  schedule.subjectName.isNotEmpty ? schedule.subjectName : '-',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -639,7 +941,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               ),
               DataCell(
                 Text(
-                  schedule.classId?.toString() ?? '-',
+                  schedule.className.isNotEmpty ? schedule.className : '-',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF475569),
@@ -648,7 +950,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               ),
               DataCell(
                 Text(
-                  schedule.sectionId?.toString() ?? '-',
+                  schedule.sectionName.isNotEmpty ? schedule.sectionName : '-',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF475569),
@@ -675,7 +977,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               ),
               DataCell(
                 Text(
-                  schedule.maxMarks?.toString() ?? '-',
+                  schedule.maxMarks.toString(),
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -685,22 +987,24 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
               ),
               DataCell(
                 Text(
-                  schedule.roomNumber?.toString() ?? '-',
+                  schedule.roomNumber.isNotEmpty ? schedule.roomNumber : '-',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF475569),
                   ),
                 ),
               ),
-              DataCell(
-                _scheduleStatus(schedule.status),
-              ),
+              DataCell(_scheduleStatus(schedule.status)),
             ],
           );
         }).toList(),
       ),
     );
   }
+
+  // =========================================================
+  // SCHEDULE STATUS
+  // =========================================================
 
   Widget _scheduleStatus(String? status) {
     final normalized = status?.toUpperCase() ?? '';
@@ -731,10 +1035,7 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(15),
@@ -750,6 +1051,137 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     );
   }
 
+  // =========================================================
+  // DOWNLOAD FILTERED SCHEDULE
+  // =========================================================
+
+  void _downloadFilteredSchedule() {
+    final filtered = _filteredSchedules;
+
+    if (filtered.isEmpty) {
+      _showSnack('No schedule data available to download.');
+      return;
+    }
+
+    final rows = <List<String>>[];
+
+    rows.add([
+      'Examination',
+      'Class',
+      'Section',
+      'Subject',
+      'Exam Date',
+      'Start Time',
+      'Duration',
+      'Max Marks',
+      'Room Number',
+      'Status',
+    ]);
+
+    for (final schedule in filtered) {
+      rows.add([
+        exam.name,
+        schedule.className,
+        schedule.sectionName,
+        schedule.subjectName,
+        _formatDownloadDate(schedule.examDate),
+        _formatTime(schedule.startTime),
+        '${schedule.duration} minutes',
+        schedule.maxMarks.toString(),
+        schedule.roomNumber,
+        _prettyEnum(schedule.status),
+      ]);
+    }
+
+    final csv = rows.map((row) => row.map(_escapeCsv).join(',')).join('\n');
+
+    final bytes = utf8.encode('\uFEFF$csv');
+
+    final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
+
+    final url = html.Url.createObjectUrlFromBlob(blob);
+
+    final anchor = html.AnchorElement(href: url)
+      ..download = _downloadFileName()
+      ..style.display = 'none';
+
+    html.document.body?.children.add(anchor);
+
+    anchor.click();
+
+    anchor.remove();
+
+    html.Url.revokeObjectUrl(url);
+
+    _showSnack(
+      '${filtered.length} schedule${filtered.length == 1 ? '' : 's'} downloaded successfully.',
+    );
+  }
+
+  // =========================================================
+  // CSV ESCAPE
+  // =========================================================
+
+  String _escapeCsv(String value) {
+    final escaped = value.replaceAll('"', '""');
+
+    if (escaped.contains(',') ||
+        escaped.contains('"') ||
+        escaped.contains('\n') ||
+        escaped.contains('\r')) {
+      return '"$escaped"';
+    }
+
+    return escaped;
+  }
+
+  // =========================================================
+  // DOWNLOAD FILE NAME
+  // =========================================================
+
+  String _downloadFileName() {
+    final className = selectedClass ?? 'class';
+
+    final section = selectedSection == null || selectedSection == 'ALL'
+        ? 'all-sections'
+        : 'section-${selectedSection!}';
+
+    final examName = exam.name
+        .trim()
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+
+    final classFileName = className
+        .trim()
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+
+    return '${examName}_${classFileName}_${section}_schedule.csv';
+  }
+  // =========================================================
+  // DOWNLOAD DATE
+  // =========================================================
+
+  String _formatDownloadDate(String value) {
+    if (value.trim().isEmpty) {
+      return '-';
+    }
+
+    try {
+      final date = DateTime.parse(value);
+
+      return '${date.day.toString().padLeft(2, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.year}';
+    } catch (_) {
+      return value;
+    }
+  }
+
+  // =========================================================
+  // PRETTY ENUM
+  // =========================================================
+
   String _prettyEnum(String? value) {
     if (value == null || value.trim().isEmpty) {
       return '-';
@@ -762,10 +1194,15 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
         .map(
           (word) => word.isEmpty
               ? ''
-              : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+              : '${word[0].toUpperCase()}'
+                    '${word.substring(1).toLowerCase()}',
         )
         .join(' ');
   }
+
+  // =========================================================
+  // DATE FORMAT
+  // =========================================================
 
   String _formatApiDate(dynamic value) {
     if (value == null) return '-';
@@ -799,6 +1236,10 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
     }
   }
 
+  // =========================================================
+  // TIME FORMAT
+  // =========================================================
+
   String _formatTime(dynamic value) {
     if (value == null) return '-';
 
@@ -815,12 +1256,36 @@ class _ExamDetailsScreenState extends State<ExamDetailsScreen> {
       final minute = int.parse(parts[1]);
 
       final period = hour >= 12 ? 'PM' : 'AM';
+
       final displayHour = hour % 12 == 0 ? 12 : hour % 12;
 
-      return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
+      return '$displayHour:'
+          '${minute.toString().padLeft(2, '0')} '
+          '$period';
     } catch (_) {
       return text;
     }
   }
-}
 
+  // =========================================================
+  // NATURAL SORT
+  // =========================================================
+
+  int _naturalSort(String a, String b) {
+    return a.toLowerCase().compareTo(b.toLowerCase());
+  }
+
+  // =========================================================
+  // SNACKBAR
+  // =========================================================
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+  }
+}
